@@ -104,6 +104,8 @@ class SolarSystemSceneBuilder {
       id: planet.id,
       node: orbitNode,
       spinNode: spinNode,
+      radius: planet.radius,
+      isSun: planet.isSun,
     );
   }
 
