@@ -30,29 +30,65 @@ class ExplorerScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppTheme.space950,
       resizeToAvoidBottomInset: false,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Stack(children: [
-            const Positioned.fill(child: SolarSystemSceneView()),
-            const Positioned(top: 0, left: 0, right: 0, child: ExplorerTopBar()),
-            const ToastOverlay(),
-
-            if (ui.tab == ExplorerTab.playground)
-              const Positioned(left: 12, right: 12, top: 72, bottom: 86, child: PlaygroundPanel()),
-
-            if (ui.tab == ExplorerTab.missions)
-              const Positioned(left: 12, right: 12, top: 72, bottom: 86, child: MissionsPanel()),
-
-            if (ui.hasSelection && ui.tab == ExplorerTab.explore)
-              Positioned(left: 0, right: 0, bottom: 0, child: _DetailWrapper(planetId: ui.selectedPlanetId!)),
-
-            if (ui.tab == ExplorerTab.explore && !ui.hasSelection)
-              const Positioned(left: 12, right: 12, bottom: 82, child: ExplorerControlPills()),
-
-            const Positioned(left: 0, right: 0, bottom: 0, child: ExplorerBottomNav()),
-          ]),
-        ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth > 480 ? 480.0 : constraints.maxWidth;
+          return Center(
+            child: SizedBox(
+              width: width,
+              height: constraints.maxHeight,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  const SolarSystemSceneView(),
+                  const Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: ExplorerTopBar(),
+                  ),
+                  const ToastOverlay(),
+                  if (ui.tab == ExplorerTab.playground)
+                    const Positioned(
+                      left: 12,
+                      right: 12,
+                      top: 72,
+                      bottom: 86,
+                      child: PlaygroundPanel(),
+                    ),
+                  if (ui.tab == ExplorerTab.missions)
+                    const Positioned(
+                      left: 12,
+                      right: 12,
+                      top: 72,
+                      bottom: 86,
+                      child: MissionsPanel(),
+                    ),
+                  if (ui.hasSelection && ui.tab == ExplorerTab.explore)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: _DetailWrapper(planetId: ui.selectedPlanetId!),
+                    ),
+                  if (ui.tab == ExplorerTab.explore && !ui.hasSelection)
+                    const Positioned(
+                      left: 12,
+                      right: 12,
+                      bottom: 82,
+                      child: ExplorerControlPills(),
+                    ),
+                  const Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: ExplorerBottomNav(),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -69,15 +105,17 @@ class _DetailWrapper extends ConsumerWidget {
 
     return SizedBox(
       height: sheetHeight + 86,
-      child: Stack(children: [
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: sheetHeight,
-          child: PlanetDetailSheet(planet: planet),
-        ),
-      ]),
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: sheetHeight,
+            child: PlanetDetailSheet(planet: planet),
+          ),
+        ],
+      ),
     );
   }
 }
