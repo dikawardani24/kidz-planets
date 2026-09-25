@@ -79,23 +79,6 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     switch (experiment) {
       case 'sun':
         selectPlanet('sun');
-        showToast('☀️ Inspecting the blazing Sun');
-      case 'earth':
-        selectPlanet('earth');
-        showToast('🌍 Earth moved closer for this experiment');
-      case 'saturn':
-        selectPlanet('saturn');
-        showToast("🪐 Inspect Saturn's rings");
-      case 'earth-explore':
-        selectPlanet('earth');
-        showToast('🌎 Explore Earth in 3D');
-    }
-  }
-
-  void runExperiment(String experiment) {
-    switch (experiment) {
-      case 'sun':
-        selectPlanet('sun');
         showToast('Inspecting the blazing Sun');
       case 'earth':
         selectPlanet('earth');
