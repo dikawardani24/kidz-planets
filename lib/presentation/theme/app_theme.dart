@@ -11,6 +11,14 @@ abstract final class AppTheme {
   static const accentViolet = Color(0xFF8B7CFF);
   static const accentIndigo = Color(0xFF4F46E5);
 
+  static ThemeData get dark {
+    final base = ThemeData.dark(useMaterial3: true);
+    return base.copyWith(
+      scaffoldBackgroundColor: space950,
+      colorScheme: base.colorScheme.copyWith(primary: accentAmber, secondary: accentSky, surface: space900),
+    );
+  }
+
   static BoxDecoration get glassPanel => BoxDecoration(
     color: space800.withValues(alpha: 0.85),
     borderRadius: BorderRadius.circular(28),
