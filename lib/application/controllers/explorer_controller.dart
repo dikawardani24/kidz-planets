@@ -51,7 +51,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     _spinHintTimer?.cancel();
     _playModeTimer?.cancel();
     state = state.copyWith(
-      selectedPlanetId: null, focusedPlanetId: null, detailCardVisible: true,
+      selectedPlanetId: null, focusedPlanetId: null, detailTitleOverride: null, detailDescriptionOverride: null, detailCardVisible: true,
       spinHintVisible: false, playModeBannerVisible: false,
     );
   }
