@@ -129,8 +129,10 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
       _builder.setOrbitsVisible(visible);
 
   @override
-  void setPlanetOrbitRadius(String planetId, double radius) =>
-      _builder.setPlanetOrbitRadius(planetId, radius);
+  void setPlanetOrbitRadius(String planetId, double radius) {
+    _builder.setPlanetOrbitRadius(planetId, radius);
+    _animator?.setOrbitRadius(planetId, radius);
+  }
 
   @override
   void addSpinBoost(double amount) => _animator?.addSpinBoost(amount);
