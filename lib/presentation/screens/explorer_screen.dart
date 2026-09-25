@@ -74,34 +74,92 @@ class _DetailWrapper extends ConsumerWidget {
 }
 
 class _CelebrationModal extends ConsumerWidget {
-  const _CelebrationModal({required this.title, required this.description});
+  const _CelebrationModal({
+    required this.title,
+    required this.description,
+  });
+
   final String title;
   final String description;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       color: AppTheme.space950.withValues(alpha: .85),
-      child: Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(width: 80, height: 80, decoration: BoxDecoration(shape: BoxShape.circle, color: AppTheme.accentAmber.withValues(alpha: .20), border: Border.all(color: AppTheme.accentAmber, width: 2)),
-          alignment: Alignment.center, child: const Text('🎉', style: TextStyle(fontSize: 38))),
-        const SizedBox(height: 16),
-        Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: Colors.white)),
-        const SizedBox(height: 4),
-        Text(description, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, height: 1.4, color: Color(0xFFC7D2FE))),
-        const SizedBox(height: 22),
-        GestureDetector(
-          onTap: () => ref.read(explorerControllerProvider.notifier).closeCelebration(),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
-            decoration: const BoxDecoration(
-              borderRadius: BorderRadius.all(Radius.circular(999)),
-              gradient: LinearGradient(colors: [AppTheme.accentIndigo, Color(0xFF7C3AED)]),
-              boxShadow: [BoxShadow(color: Color(0x664F46E5), blurRadius: 18, offset: Offset(0, 7))],
-            ),
-            child: const Text('Continue Exploring 🚀', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppTheme.accentAmber.withValues(alpha: .20),
+                  border: Border.all(color: AppTheme.accentAmber, width: 2),
+                ),
+                alignment: Alignment.center,
+                child: const Text('🎉', style: TextStyle(fontSize: 38)),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 23,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                description,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 12,
+                  height: 1.4,
+                  color: Color(0xFFC7D2FE),
+                ),
+              ),
+              const SizedBox(height: 22),
+              GestureDetector(
+                onTap: () => ref
+                    .read(explorerControllerProvider.notifier)
+                    .closeCelebration(),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 26,
+                    vertical: 12,
+                  ),
+                  decoration: const BoxDecoration(
+                    borderRadius: BorderRadius.all(Radius.circular(999)),
+                    gradient: LinearGradient(
+                      colors: [AppTheme.accentIndigo, Color(0xFF7C3AED)],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color(0x664F46E5),
+                        blurRadius: 18,
+                        offset: Offset(0, 7),
+                      ),
+                    ],
+                  ),
+                  child: const Text(
+                    'Continue Exploring 🚀',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-      ])),
+      ),
     );
   }
 }
