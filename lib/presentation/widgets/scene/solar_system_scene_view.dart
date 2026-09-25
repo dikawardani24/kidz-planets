@@ -141,8 +141,11 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     final ui = ref.read(explorerControllerProvider);
     if (details.scale != 1.0) {
       if (ui.hasSelection) {
+        // detailZoom is a camera-distance multiplier: smaller means closer.
+        // Pinch out (scale > 1) moves the camera closer; pinch in (scale < 1)
+        // moves it farther away.
         ref.read(explorerControllerProvider.notifier).updateDetailCamera(
-          zoom: (_pinchStartZoom * details.scale).clamp(0.4, 2.6),
+          zoom: (_pinchStartZoom / details.scale).clamp(0.4, 2.6),
         );
       } else {
         final incrementalScale = details.scale / _lastScale;
