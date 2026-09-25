@@ -1,9 +1,7 @@
 import 'package:equatable/equatable.dart';
 
-/// Which bottom tab is active.
-enum ExplorerTab { explore, planets, missions }
+enum ExplorerTab { explore, playground, missions }
 
-/// Immutable UI state for the whole explorer screen (single source of truth).
 class ExplorerState extends Equatable {
   const ExplorerState({
     this.tab = ExplorerTab.explore,
@@ -67,46 +65,16 @@ class ExplorerState extends Equatable {
     );
   }
 
-  ExplorerState clearSelection() => copyWith(
-        selectedPlanetId: '__none__',
-        focusedPlanetId: null,
-      )._fixClearedSelection();
-
-  ExplorerState _fixClearedSelection() => ExplorerState(
-        tab: tab,
-        running: running,
-        speed: speed,
-        showOrbits: showOrbits,
-        showLabels: showLabels,
-        selectedPlanetId: null,
-        focusedPlanetId: null,
-        detailZoom: detailZoom,
-        detailTheta: detailTheta,
-        detailPhi: detailPhi,
-        missions: missions,
-        toasts: toasts,
-      );
-
   @override
   List<Object?> get props => [
-        tab,
-        running,
-        speed,
-        showOrbits,
-        showLabels,
-        selectedPlanetId,
-        focusedPlanetId,
-        detailZoom,
-        detailTheta,
-        detailPhi,
-        missions,
-        toasts,
+        tab, running, speed, showOrbits, showLabels,
+        selectedPlanetId, focusedPlanetId, detailZoom,
+        detailTheta, detailPhi, missions, toasts,
       ];
 }
 
 const _sentinel = Object();
 
-/// Riverpod-friendly mission row state.
 class MissionState extends Equatable {
   const MissionState({
     required this.id,
@@ -134,10 +102,8 @@ class MissionState extends Equatable {
   List<Object?> get props => [id, completed];
 }
 
-/// Transient toast banner.
 class ToastMessage extends Equatable {
   const ToastMessage({required this.key, required this.text});
-
   final int key;
   final String text;
 
