@@ -85,4 +85,3 @@ class _Stat extends StatelessWidget {
     ]),
   );
 }
-}
