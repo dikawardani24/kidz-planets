@@ -145,6 +145,15 @@ class SolarSystemSceneBuilder {
     orbitNodes[planet.id] = node;
   }
 
+  void setPlanetOrbitRadius(String planetId, double radius) {
+    final state = states[planetId];
+    if (state == null) return;
+    final angle = state.node.position.z == 0 && state.node.position.x == 0
+        ? 0.0
+        : math.atan2(state.node.position.z, state.node.position.x);
+    state.node.position = vm.Vector3(math.cos(angle) * radius, 0, math.sin(angle) * radius);
+  }
+
   void setOrbitsVisible(bool visible) {
     for (final node in orbitNodes.values) {
       node.visible = visible;
