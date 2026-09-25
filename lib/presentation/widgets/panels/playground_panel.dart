@@ -29,7 +29,7 @@ class PlaygroundPanel extends ConsumerWidget {
               SizedBox(height: 3),
               Text('Physics & orbital experiments in real 3D!', style: TextStyle(fontSize: 10.5, color: Color(0xFF9CA9D8))),
             ])),
-            GestureDetector(onTap: notifier.resetPlayground, child: AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+            GestureDetector(onTap: () { scene.setPlanetOrbitRadius('earth', 14.2); notifier.resetPlayground(); }, child: AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
               child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.refresh, size: 12, color: Colors.white70), SizedBox(width: 4), Text('Reset', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white70))])),
           ]),
           const SizedBox(height: 12),
