@@ -68,7 +68,7 @@ class SolarSystemAnimator {
         state.node.position = vm.Vector3(
           math.cos(angle) * radius,
           0,
-          math.sin(angle) * planet.orbitRadius,
+          math.sin(angle) * radius,
         );
       }
       // Self-spin: slow ambient + finger momentum.
