@@ -8,6 +8,7 @@ import '../widgets/overlays/toast_overlay.dart';
 import '../widgets/overlays/top_bar.dart';
 import '../widgets/panels/missions_panel.dart';
 import '../widgets/panels/planet_detail_sheet.dart';
+import '../widgets/panels/playground_panel.dart';
 import '../widgets/scene/solar_system_scene_view.dart';
 
 class ExplorerScreen extends ConsumerWidget {
