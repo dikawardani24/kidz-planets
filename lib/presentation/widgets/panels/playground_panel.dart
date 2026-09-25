@@ -34,11 +34,11 @@ class PlaygroundPanel extends ConsumerWidget {
           ]),
           const SizedBox(height: 12),
           Container(padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: AppTheme.accentAmber.withValues(alpha: .10), borderRadius: BorderRadius.circular(16), border: Border.all(color: AppTheme.accentAmber.withValues(alpha: .35))),
-          child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('🔥', style: TextStyle(fontSize: 20)), SizedBox(width: 9),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(ui.playgroundAlertIcon, style: const TextStyle(fontSize: 20)), const SizedBox(width: 9),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Sandbox Ready!', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFFFFE7A3))),
-              SizedBox(height: 2), Text('Run interactive NASA 3D experiments below.', style: TextStyle(fontSize: 10, color: Colors.white70)),
+              Text(ui.playgroundAlertTitle, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFFFFE7A3))),
+              const SizedBox(height: 2), Text(ui.playgroundAlertDescription, style: const TextStyle(fontSize: 10, color: Colors.white70)),
             ])),
           ])),
           const SizedBox(height: 10),
