@@ -24,7 +24,13 @@ class ExplorerScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: const Color(0xFF010206),
       resizeToAvoidBottomInset: false,
+      // NOTE: the inner Stack contains only Positioned children, so it has
+      // no intrinsic size. The Container MUST be forced to fill the screen
+      // (width/height infinity) otherwise the Stack collapses to zero and
+      // flutter_scene logs "draw region is zero-sized" + renders black.
       body: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 480), child: Container(
+        width: double.infinity,
+        height: double.infinity,
         decoration: BoxDecoration(border: Border.all(color: Colors.white.withValues(alpha: 0.08))),
         child: Stack(children: [
           const Positioned.fill(child: SolarSystemSceneView()),

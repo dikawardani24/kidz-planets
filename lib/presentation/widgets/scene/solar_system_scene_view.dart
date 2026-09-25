@@ -22,6 +22,9 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   String _loadingLabel = 'Warming up the rockets...';
   PerspectiveCamera? _lastCamera;
   List<PlanetLabelFrame> _labelFrames = const [];
+  // Previous cumulative scale within the active scale gesture. Used to turn
+  // the cumulative ScaleUpdateDetails.scale into an incremental delta.
+  double _prevScale = 1.0;
 
   @override
   void initState() {
@@ -53,33 +56,46 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     if (!_ready) return _LoadingView(label: _loadingLabel);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final size = Size(constraints.maxWidth, constraints.maxHeight);
+        // Under a Center+ConstrainedBox parent the max constraints can be
+        // unbounded; fall back to the real screen size so SceneView always
+        // gets a non-zero draw region.
+        var size = Size(constraints.maxWidth, constraints.maxHeight);
+        if (!size.isEmpty && size.width.isFinite && size.height.isFinite) {
+          // ignore: no-op — size is already usable
+        } else {
+          size = MediaQuery.sizeOf(context);
+        }
         return GestureDetector(
-          onPanUpdate: _onPanUpdate,
+          behavior: HitTestBehavior.opaque,
+          onScaleStart: _onScaleStart,
           onScaleUpdate: _onScaleUpdate,
+          onScaleEnd: _onScaleEnd,
           onTapUp: (d) => _onTapUp(d, size),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              SceneView(
-                controller.scene,
-                cameraBuilder: (elapsed) {
-                  final camera = controller.buildCamera(ui);
-                  _lastCamera = camera;
-                  return camera;
-                },
-                onTick: (elapsed, deltaSeconds) {
-                  controller.tick(deltaSeconds, ui);
-                  _refreshLabels(controller, size);
-                },
-              ),
-              _PlanetLabelsOverlay(
-                frames: _labelFrames,
-                planets: planets,
-                showLabels: ui.showLabels,
-                selectedId: ui.selectedPlanetId,
-              ),
-            ],
+          child: SizedBox.fromSize(
+            size: size.isEmpty ? null : size,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                SceneView(
+                  controller.scene,
+                  cameraBuilder: (elapsed) {
+                    final camera = controller.buildCamera(ui);
+                    _lastCamera = camera;
+                    return camera;
+                  },
+                  onTick: (elapsed, deltaSeconds) {
+                    controller.tick(deltaSeconds, ui);
+                    _refreshLabels(controller, size);
+                  },
+                ),
+                _PlanetLabelsOverlay(
+                  frames: _labelFrames,
+                  planets: planets,
+                  showLabels: ui.showLabels,
+                  selectedId: ui.selectedPlanetId,
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -104,35 +120,57 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     return true;
   }
 
-  void _onPanUpdate(DragUpdateDetails details) {
-    final controller = ref.read(solarSystemSceneControllerProvider);
-    final ui = ref.read(explorerControllerProvider);
-    if (ui.hasSelection) {
-      controller.addSpinBoost(details.delta.dx * 0.00012);
-      ref.read(explorerControllerProvider.notifier).updateDetailCamera(
-        theta: ui.detailTheta + details.delta.dx * 0.008,
-        phi: (ui.detailPhi + details.delta.dy * 0.005).clamp(-0.2, 1.3),
-      );
-    } else {
-      controller.orbitBy(details.delta.dx, details.delta.dy);
-    }
+  void _onScaleStart(ScaleStartDetails details) {
+    _prevScale = 1.0;
   }
 
+  void _onScaleEnd(ScaleEndDetails details) {
+    _prevScale = 1.0;
+  }
+
+  /// Unified drag + pinch handler.
+  ///
+  /// Flutter disallows combining a pan recognizer with a scale recognizer
+  /// (scale is a superset of pan), so single-finger drags arrive here via
+  /// [ScaleUpdateDetails.focalPointDelta] with `scale == 1.0`.
   void _onScaleUpdate(ScaleUpdateDetails details) {
     final controller = ref.read(solarSystemSceneControllerProvider);
     final ui = ref.read(explorerControllerProvider);
-    if (details.scale != 1.0) {
+    final notifier = ref.read(explorerControllerProvider.notifier);
+
+    // ScaleUpdateDetails.scale is cumulative from gesture start, so derive
+    // the incremental factor since the last update.
+    var incrementalScale = 1.0;
+    if (_prevScale != 0.0) {
+      incrementalScale = details.scale / _prevScale;
+    }
+    _prevScale = details.scale;
+
+    final isPinching = (incrementalScale - 1.0).abs() > 0.002;
+    if (isPinching) {
       if (ui.hasSelection) {
-        ref.read(explorerControllerProvider.notifier).updateDetailCamera(
-          zoom: (ui.detailZoom * details.scale).clamp(0.6, 2.6),
+        notifier.updateDetailCamera(
+          zoom: (ui.detailZoom * incrementalScale).clamp(0.6, 2.6),
         );
       } else {
-        controller.pinch(details.scale);
+        controller.pinch(incrementalScale);
       }
       return;
     }
-    if (details.pointerCount >= 2) {
-      controller.orbitBy(-details.focalPointDelta.dx, -details.focalPointDelta.dy);
+
+    final delta = details.focalPointDelta;
+    if (delta == Offset.zero) return;
+    if (ui.hasSelection) {
+      controller.addSpinBoost(delta.dx * 0.00012);
+      notifier.updateDetailCamera(
+        theta: ui.detailTheta + delta.dx * 0.008,
+        phi: (ui.detailPhi + delta.dy * 0.005).clamp(-0.2, 1.3),
+      );
+    } else if (details.pointerCount >= 2) {
+      // Preserve the previous two-finger drag direction.
+      controller.orbitBy(-delta.dx, -delta.dy);
+    } else {
+      controller.orbitBy(delta.dx, delta.dy);
     }
   }
 
