@@ -14,8 +14,13 @@ class ExplorerState extends Equatable {
     this.detailZoom = 1.0,
     this.detailTheta = 0.65,
     this.detailPhi = 0.28,
+    this.detailCardVisible = true,
+    this.spinHintVisible = false,
+    this.playModeBannerVisible = false,
     this.missions = const [],
     this.toasts = const [],
+    this.celebrationTitle,
+    this.celebrationDescription,
   });
 
   final ExplorerTab tab;
@@ -28,10 +33,16 @@ class ExplorerState extends Equatable {
   final double detailZoom;
   final double detailTheta;
   final double detailPhi;
+  final bool detailCardVisible;
+  final bool spinHintVisible;
+  final bool playModeBannerVisible;
   final List<MissionState> missions;
   final List<ToastMessage> toasts;
+  final String? celebrationTitle;
+  final String? celebrationDescription;
 
   bool get hasSelection => selectedPlanetId != null;
+  bool get celebrationVisible => celebrationTitle != null && celebrationDescription != null;
 
   ExplorerState copyWith({
     ExplorerTab? tab,
@@ -39,13 +50,18 @@ class ExplorerState extends Equatable {
     double? speed,
     bool? showOrbits,
     bool? showLabels,
-    String? selectedPlanetId,
+    Object? selectedPlanetId = _sentinel,
     Object? focusedPlanetId = _sentinel,
     double? detailZoom,
     double? detailTheta,
     double? detailPhi,
+    bool? detailCardVisible,
+    bool? spinHintVisible,
+    bool? playModeBannerVisible,
     List<MissionState>? missions,
     List<ToastMessage>? toasts,
+    Object? celebrationTitle = _sentinel,
+    Object? celebrationDescription = _sentinel,
   }) {
     return ExplorerState(
       tab: tab ?? this.tab,
@@ -53,51 +69,39 @@ class ExplorerState extends Equatable {
       speed: speed ?? this.speed,
       showOrbits: showOrbits ?? this.showOrbits,
       showLabels: showLabels ?? this.showLabels,
-      selectedPlanetId: selectedPlanetId ?? this.selectedPlanetId,
-      focusedPlanetId: identical(focusedPlanetId, _sentinel)
-          ? this.focusedPlanetId
-          : focusedPlanetId as String?,
+      selectedPlanetId: identical(selectedPlanetId, _sentinel) ? this.selectedPlanetId : selectedPlanetId as String?,
+      focusedPlanetId: identical(focusedPlanetId, _sentinel) ? this.focusedPlanetId : focusedPlanetId as String?,
       detailZoom: detailZoom ?? this.detailZoom,
       detailTheta: detailTheta ?? this.detailTheta,
       detailPhi: detailPhi ?? this.detailPhi,
+      detailCardVisible: detailCardVisible ?? this.detailCardVisible,
+      spinHintVisible: spinHintVisible ?? this.spinHintVisible,
+      playModeBannerVisible: playModeBannerVisible ?? this.playModeBannerVisible,
       missions: missions ?? this.missions,
       toasts: toasts ?? this.toasts,
+      celebrationTitle: identical(celebrationTitle, _sentinel) ? this.celebrationTitle : celebrationTitle as String?,
+      celebrationDescription: identical(celebrationDescription, _sentinel) ? this.celebrationDescription : celebrationDescription as String?,
     );
   }
 
   @override
   List<Object?> get props => [
-        tab, running, speed, showOrbits, showLabels,
-        selectedPlanetId, focusedPlanetId, detailZoom,
-        detailTheta, detailPhi, missions, toasts,
+        tab, running, speed, showOrbits, showLabels, selectedPlanetId, focusedPlanetId,
+        detailZoom, detailTheta, detailPhi, detailCardVisible, spinHintVisible,
+        playModeBannerVisible, missions, toasts, celebrationTitle, celebrationDescription,
       ];
 }
 
 const _sentinel = Object();
 
 class MissionState extends Equatable {
-  const MissionState({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.targetPlanetId,
-    this.completed = false,
-  });
-
+  const MissionState({required this.id, required this.title, required this.description, required this.targetPlanetId, this.completed = false});
   final int id;
   final String title;
   final String description;
   final String targetPlanetId;
   final bool completed;
-
-  MissionState copyWith({bool? completed}) => MissionState(
-        id: id,
-        title: title,
-        description: description,
-        targetPlanetId: targetPlanetId,
-        completed: completed ?? this.completed,
-      );
-
+  MissionState copyWith({bool? completed}) => MissionState(id: id, title: title, description: description, targetPlanetId: targetPlanetId, completed: completed ?? this.completed);
   @override
   List<Object?> get props => [id, completed];
 }
@@ -106,7 +110,6 @@ class ToastMessage extends Equatable {
   const ToastMessage({required this.key, required this.text});
   final int key;
   final String text;
-
   @override
   List<Object?> get props => [key, text];
 }
