@@ -14,6 +14,8 @@ class ExplorerState extends Equatable {
     this.detailZoom = 1.0,
     this.detailTheta = 0.65,
     this.detailPhi = 0.28,
+    this.detailTitleOverride,
+    this.detailDescriptionOverride,
     this.detailCardVisible = true,
     this.spinHintVisible = false,
     this.playModeBannerVisible = false,
@@ -36,6 +38,8 @@ class ExplorerState extends Equatable {
   final double detailZoom;
   final double detailTheta;
   final double detailPhi;
+  final String? detailTitleOverride;
+  final String? detailDescriptionOverride;
   final bool detailCardVisible;
   final bool spinHintVisible;
   final bool playModeBannerVisible;
@@ -61,6 +65,8 @@ class ExplorerState extends Equatable {
     double? detailZoom,
     double? detailTheta,
     double? detailPhi,
+    Object? detailTitleOverride = _sentinel,
+    Object? detailDescriptionOverride = _sentinel,
     bool? detailCardVisible,
     bool? spinHintVisible,
     bool? playModeBannerVisible,
@@ -83,6 +89,8 @@ class ExplorerState extends Equatable {
       detailZoom: detailZoom ?? this.detailZoom,
       detailTheta: detailTheta ?? this.detailTheta,
       detailPhi: detailPhi ?? this.detailPhi,
+      detailTitleOverride: identical(detailTitleOverride, _sentinel) ? this.detailTitleOverride : detailTitleOverride as String?,
+      detailDescriptionOverride: identical(detailDescriptionOverride, _sentinel) ? this.detailDescriptionOverride : detailDescriptionOverride as String?,
       detailCardVisible: detailCardVisible ?? this.detailCardVisible,
       spinHintVisible: spinHintVisible ?? this.spinHintVisible,
       playModeBannerVisible: playModeBannerVisible ?? this.playModeBannerVisible,
@@ -99,7 +107,7 @@ class ExplorerState extends Equatable {
   @override
   List<Object?> get props => [
         tab, running, speed, showOrbits, showLabels, selectedPlanetId, focusedPlanetId,
-        detailZoom, detailTheta, detailPhi, detailCardVisible, spinHintVisible,
+        detailZoom, detailTheta, detailPhi, detailTitleOverride, detailDescriptionOverride, detailCardVisible, spinHintVisible,
         playModeBannerVisible, playgroundAlertIcon, playgroundAlertTitle, playgroundAlertDescription, missions, toasts, celebrationTitle, celebrationDescription,
       ];
 }
