@@ -46,8 +46,6 @@ class ExplorerScreen extends ConsumerWidget {
               const Positioned(left: 12, right: 12, top: 64, bottom: 66, child: MissionsPanel()),
             if (ui.hasSelection && ui.tab == ExplorerTab.explore)
               Positioned(left: 16, right: 16, bottom: 70, child: _DetailWrapper(planetId: ui.selectedPlanetId!)),
-            if (ui.tab == ExplorerTab.explore && !ui.hasSelection)
-              const Positioned(left: 12, right: 12, bottom: 68, child: Center(child: ExplorerControlPills())),
             const ExplorerDetailHud(),
             const ExplorerBottomNav(),
             if (ui.celebrationVisible)
