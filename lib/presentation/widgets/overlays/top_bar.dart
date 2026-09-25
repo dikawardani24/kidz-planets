@@ -29,6 +29,33 @@ class ExplorerTopBar extends ConsumerWidget {
   }
 }
 
+class _CircleButton extends StatelessWidget {
+  const _CircleButton({required this.icon, required this.color, this.onTap});
+
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.black.withValues(alpha: 0.38),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+          boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 12)],
+        ),
+        alignment: Alignment.center,
+        child: Icon(icon, size: 18, color: color),
+      ),
+    );
+  }
+}
+
 class ExplorerInteractionOverlays extends ConsumerWidget {
   const ExplorerInteractionOverlays({super.key});
   @override
