@@ -186,7 +186,7 @@ class _PlanetLabelsOverlay extends StatelessWidget {
     return Stack(
       children: [
         for (final frame in frames)
-          if (frame.visible && byId.containsKey(frame.id))
+          if (frame.visible && frame.id != selectedId && byId.containsKey(frame.id))
             Positioned(
               left: frame.screenX - 60,
               top: frame.screenY - 18,
