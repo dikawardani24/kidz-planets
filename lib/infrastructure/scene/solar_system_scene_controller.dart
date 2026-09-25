@@ -29,6 +29,7 @@ abstract class SolarSystemSceneController {
   List<PlanetLabelFrame> projectLabels(
       PerspectiveCamera camera, Size viewSize);
   void setOrbitsVisible(bool visible);
+  void setPlanetOrbitRadius(String planetId, double radius);
   void addSpinBoost(double amount);
   void orbitBy(double dx, double dy);
   void pinch(double scale);
@@ -126,6 +127,10 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   @override
   void setOrbitsVisible(bool visible) =>
       _builder.setOrbitsVisible(visible);
+
+  @override
+  void setPlanetOrbitRadius(String planetId, double radius) =>
+      _builder.setPlanetOrbitRadius(planetId, radius);
 
   @override
   void addSpinBoost(double amount) => _animator?.addSpinBoost(amount);
