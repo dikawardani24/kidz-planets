@@ -58,6 +58,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
       detailZoom: 1.0,
       detailTheta: 0.65,
       detailPhi: 0.28,
+      isDetailCardVisible: true,
     );
     _checkMissions(id);
   }
@@ -78,8 +79,39 @@ class ExplorerController extends StateNotifier<ExplorerState> {
       detailZoom: state.detailZoom,
       detailTheta: state.detailTheta,
       detailPhi: state.detailPhi,
+      isDetailCardVisible: true,
       missions: state.missions,
       toasts: state.toasts,
+    );
+  }
+
+  /// Prototype parity with `focusOnPlanet()`: reset zoom + angle + card
+  /// visibility when a new planet is opened.
+  void resetDetailView() {
+    state = state.copyWith(
+      detailZoom: 1.0,
+      detailTheta: 0.65,
+      detailPhi: 0.28,
+      isDetailCardVisible: true,
+    );
+  }
+
+  /// Prototype parity with `toggleDetailCard()`: facts dialog <-> play mode.
+  void toggleDetailCard() {
+    if (!state.hasSelection) return;
+    final next = !state.isDetailCardVisible;
+    state = state.copyWith(isDetailCardVisible: next);
+    if (!next) {
+      showToast('🎮 Play Mode — tap the 👁 button to bring facts back!');
+    }
+  }
+
+  /// Prototype parity with `adjustDetailZoom(delta)`.
+  /// Prototype: zoomIn = -0.25, zoomOut = +0.25, clamped 0.4–2.6.
+  void adjustDetailZoom(double delta) {
+    if (!state.hasSelection) return;
+    state = state.copyWith(
+      detailZoom: (state.detailZoom + delta).clamp(0.4, 2.6),
     );
   }
 

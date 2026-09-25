@@ -16,6 +16,7 @@ class ExplorerState extends Equatable {
     this.detailZoom = 1.0,
     this.detailTheta = 0.65,
     this.detailPhi = 0.28,
+    this.isDetailCardVisible = true,
     this.missions = const [],
     this.toasts = const [],
   });
@@ -30,6 +31,9 @@ class ExplorerState extends Equatable {
   final double detailZoom;
   final double detailTheta;
   final double detailPhi;
+  /// Prototype parity: facts dialog vs minimized "play mode" pill.
+  /// `toggleDetailCard()` in prototype/index.html flips this.
+  final bool isDetailCardVisible;
   final List<MissionState> missions;
   final List<ToastMessage> toasts;
 
@@ -46,6 +50,7 @@ class ExplorerState extends Equatable {
     double? detailZoom,
     double? detailTheta,
     double? detailPhi,
+    bool? isDetailCardVisible,
     List<MissionState>? missions,
     List<ToastMessage>? toasts,
   }) {
@@ -62,6 +67,7 @@ class ExplorerState extends Equatable {
       detailZoom: detailZoom ?? this.detailZoom,
       detailTheta: detailTheta ?? this.detailTheta,
       detailPhi: detailPhi ?? this.detailPhi,
+      isDetailCardVisible: isDetailCardVisible ?? this.isDetailCardVisible,
       missions: missions ?? this.missions,
       toasts: toasts ?? this.toasts,
     );
@@ -83,6 +89,7 @@ class ExplorerState extends Equatable {
         detailZoom: detailZoom,
         detailTheta: detailTheta,
         detailPhi: detailPhi,
+        isDetailCardVisible: true,
         missions: missions,
         toasts: toasts,
       );
@@ -99,6 +106,7 @@ class ExplorerState extends Equatable {
         detailZoom,
         detailTheta,
         detailPhi,
+        isDetailCardVisible,
         missions,
         toasts,
       ];
