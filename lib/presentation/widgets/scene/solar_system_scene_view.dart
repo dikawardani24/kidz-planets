@@ -109,10 +109,13 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     final controller = ref.read(solarSystemSceneControllerProvider);
     final ui = ref.read(explorerControllerProvider);
     if (ui.hasSelection) {
-      controller.addSpinBoost(details.delta.dx * 0.00012);
+      final selectedId = ui.selectedPlanetId;
+      if (selectedId != null) {
+        controller.spinPlanet(selectedId, details.delta.dx * 0.009);
+      }
       ref.read(explorerControllerProvider.notifier).updateDetailCamera(
         theta: ui.detailTheta + details.delta.dx * 0.008,
-        phi: (ui.detailPhi + details.delta.dy * 0.005).clamp(-0.2, 1.3),
+        phi: (ui.detailPhi + details.delta.dy * 0.006).clamp(-0.45, 1.35),
       );
     } else {
       controller.orbitBy(details.delta.dx, details.delta.dy);
@@ -138,6 +141,18 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   }
 
   void _onTapUp(TapUpDetails details, Size size) {
+    final controller = ref.read(solarSystemSceneControllerProvider);
+    final camera = _lastCamera;
+    if (camera != null) {
+      final pickedId = controller.pickPlanet(details.localPosition, size, camera);
+      if (pickedId != null) {
+        ref.read(explorerControllerProvider.notifier).selectPlanet(pickedId);
+        return;
+      }
+    }
+
+    // Keep labels as a forgiving secondary target, matching the prototype's
+    // tappable planet labels without requiring an exact mesh hit.
     PlanetLabelFrame? best;
     var bestDistSq = 48.0 * 48.0;
     for (final frame in _labelFrames) {
@@ -145,10 +160,14 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
       final dx = frame.screenX - details.localPosition.dx;
       final dy = frame.screenY - details.localPosition.dy;
       final distSq = dx * dx + dy * dy;
-      if (distSq < bestDistSq) { bestDistSq = distSq; best = frame; }
+      if (distSq < bestDistSq) {
+        bestDistSq = distSq;
+        best = frame;
+      }
     }
-    if (best == null) return;
-    ref.read(explorerControllerProvider.notifier).selectPlanet(best.id);
+    if (best != null) {
+      ref.read(explorerControllerProvider.notifier).selectPlanet(best.id);
+    }
   }
 }
 
