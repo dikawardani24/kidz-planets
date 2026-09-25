@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/mission.dart';
+import '../../domain/entities/planet.dart';
 import '../state/explorer_state.dart';
 import '../state/simulation_clock.dart';
 
