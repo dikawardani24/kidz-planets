@@ -39,6 +39,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
         planets: planets,
         onProgress: (label) { if (mounted) setState(() => _loadingLabel = label); },
       );
+      controller.setOrbitsVisible(ref.read(explorerControllerProvider).showOrbits);
       if (mounted) setState(() => _ready = true);
     } catch (e) {
       if (mounted) setState(() => _loadingLabel = 'Oops! Could not load space: $e');
