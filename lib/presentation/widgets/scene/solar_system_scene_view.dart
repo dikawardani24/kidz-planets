@@ -58,7 +58,8 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
         return GestureDetector(
-          onPanUpdate: _onPanUpdate,
+          // Scale handles both one-finger drag and two-finger pinch.
+          // A separate Pan recognizer competes with Scale in Flutter's gesture arena.
           onScaleStart: _onScaleStart,
           onScaleUpdate: _onScaleUpdate,
           onScaleEnd: _onScaleEnd,
@@ -119,45 +120,45 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     _lastScale = 1.0;
   }
 
-  void _onPanUpdate(DragUpdateDetails details) {
-    final controller = ref.read(solarSystemSceneControllerProvider);
-    final ui = ref.read(explorerControllerProvider);
-    if (ui.hasSelection) {
-      final selectedId = ui.selectedPlanetId;
-      if (selectedId != null) {
-        controller.spinPlanet(selectedId, details.delta.dx * 0.009);
-      }
-      ref.read(explorerControllerProvider.notifier).updateDetailCamera(
-        theta: ui.detailTheta + details.delta.dx * 0.008,
-        phi: (ui.detailPhi + details.delta.dy * 0.006).clamp(-0.45, 1.35),
-      );
-    } else {
-      controller.orbitBy(details.delta.dx, details.delta.dy);
-    }
-  }
-
   void _onScaleUpdate(ScaleUpdateDetails details) {
     final controller = ref.read(solarSystemSceneControllerProvider);
     final ui = ref.read(explorerControllerProvider);
-    if (details.scale != 1.0) {
-      if (ui.hasSelection) {
-        // detailZoom is a camera-distance multiplier: smaller means closer.
-        // Pinch out (scale > 1) moves the camera closer; pinch in (scale < 1)
-        // moves it farther away.
-        ref.read(explorerControllerProvider.notifier).updateDetailCamera(
-          zoom: (_pinchStartZoom / details.scale).clamp(0.4, 2.6),
-        );
-      } else {
-        final incrementalScale = details.scale / _lastScale;
-        if (incrementalScale.isFinite && incrementalScale > 0) {
+
+    // Two pointers = pinch zoom. One pointer = orbit/spin.
+    final incrementalScale = details.scale / _lastScale;
+    if (details.pointerCount >= 2) {
+      if (incrementalScale.isFinite && incrementalScale > 0) {
+        if (ui.hasSelection) {
+          final currentZoom = ref.read(explorerControllerProvider).detailZoom;
+          ref.read(explorerControllerProvider.notifier).updateDetailCamera(
+                zoom: (currentZoom / incrementalScale).clamp(0.4, 2.6),
+              );
+        } else {
           controller.pinch(incrementalScale);
-          _lastScale = details.scale;
         }
+        _lastScale = details.scale;
       }
       return;
     }
-    if (details.pointerCount >= 2) {
-      controller.orbitBy(-details.focalPointDelta.dx, -details.focalPointDelta.dy);
+
+    if (details.pointerCount == 1) {
+      if (ui.hasSelection) {
+        final selectedId = ui.selectedPlanetId;
+        if (selectedId != null) {
+          controller.spinPlanet(selectedId, details.focalPointDelta.dx * 0.009);
+        }
+        final current = ref.read(explorerControllerProvider);
+        ref.read(explorerControllerProvider.notifier).updateDetailCamera(
+              theta: current.detailTheta + details.focalPointDelta.dx * 0.008,
+              phi: (current.detailPhi + details.focalPointDelta.dy * 0.006)
+                  .clamp(-0.45, 1.35),
+            );
+      } else {
+        controller.orbitBy(
+          details.focalPointDelta.dx,
+          details.focalPointDelta.dy,
+        );
+      }
     }
   }
 
