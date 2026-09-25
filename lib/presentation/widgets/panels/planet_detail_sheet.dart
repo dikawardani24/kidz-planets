@@ -72,10 +72,17 @@ class _Stat extends StatelessWidget {
   Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(9),
     decoration: BoxDecoration(color: AppTheme.space800.withValues(alpha: .80), borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.white.withValues(alpha: .05))),
     child: Row(children: [
-      Icon(icon, size: 14, color: AppTheme.accentAmber), const SizedBox(width: 7),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title.toUpperCase(), style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.w700, color: Color(0xFFA5B4FC))),
-        const SizedBox(height: 1), Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: Colors.white)),
-      ])),
-    ]);
+      Icon(icon, size: 14, color: AppTheme.accentAmber),
+      const SizedBox(width: 7),
+      Expanded(child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title.toUpperCase(), style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.w700, color: Color(0xFFA5B4FC))),
+          const SizedBox(height: 1),
+          Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: Colors.white)),
+        ],
+      )),
+    ]),
+  );
+}
 }
