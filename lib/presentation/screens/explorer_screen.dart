@@ -31,7 +31,7 @@ class ExplorerScreen extends ConsumerWidget {
       backgroundColor: AppTheme.space950,
       resizeToAvoidBottomInset: false,
       body: LayoutBuilder(builder: (context, constraints) {
-        final width = constraints.maxWidth > 390 ? 390.0 : constraints.maxWidth;
+        final width = constraints.maxWidth >= 600 ? 390.0 : constraints.maxWidth;
         return Center(child: SizedBox(
           width: width,
           height: constraints.maxHeight,
