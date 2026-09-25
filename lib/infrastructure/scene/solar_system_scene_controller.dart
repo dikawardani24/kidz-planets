@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_scene/scene.dart';
+import 'package:vector_math/vector_math.dart' as vm;
 
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/simulation_clock.dart';
@@ -136,6 +137,14 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
 
   @override
   void addSpinBoost(double amount) => _animator?.addSpinBoost(amount);
+
+  @override
+  void spinPlanet(String planetId, double delta) {
+    final render = _builder.states[planetId];
+    if (render == null) return;
+    render.spinNode.rotation = render.spinNode.rotation *
+        vm.Quaternion.axisAngle(vm.Vector3(0, 1, 0), delta);
+  }
 
   @override
   void orbitBy(double dx, double dy) => _rig.orbitBy(dx, dy);
