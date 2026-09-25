@@ -17,7 +17,7 @@ class ExplorerBottomNav extends ConsumerWidget {
         border: Border.all(color: Colors.white.withValues(alpha: 0.14))),
       child: Row(children: [
         _NavItem(icon: Icons.explore, label: 'Explore', selected: ui.tab == ExplorerTab.explore, onTap: () => notifier.setTab(ExplorerTab.explore)),
-        _NavItem(icon: Icons.public, label: 'Planets', selected: ui.tab == ExplorerTab.planets, onTap: () => notifier.setTab(ExplorerTab.planets)),
+        _NavItem(icon: Icons.science_rounded, label: 'Playground', selected: ui.tab == ExplorerTab.playground, onTap: () => notifier.setTab(ExplorerTab.planets)),
         _NavItem(icon: Icons.emoji_events, label: 'Missions', badge: completed > 0 ? '$completed' : null,
           selected: ui.tab == ExplorerTab.missions, onTap: () => notifier.setTab(ExplorerTab.missions)),
       ]))));
