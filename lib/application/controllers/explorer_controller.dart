@@ -36,7 +36,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   void selectPlanet(String id) {
     state = state.copyWith(
       selectedPlanetId: id, focusedPlanetId: id, detailZoom: 1.0,
-      detailTheta: 0.65, detailPhi: 0.28, detailCardVisible: true,
+      detailTheta: 0.65, detailPhi: 0.28, detailTitleOverride: null, detailDescriptionOverride: null, detailCardVisible: true,
       playModeBannerVisible: false, spinHintVisible: true,
     );
     _spinHintTimer?.cancel();
@@ -75,6 +75,15 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   void resetDetailView() {
     if (!state.hasSelection) return;
     state = state.copyWith(detailZoom: 1.0, detailTheta: 0.65, detailPhi: 0.28);
+  }
+
+  void showHotspot(Hotspot hotspot) {
+    state = state.copyWith(detailTitleOverride: hotspot.title, detailDescriptionOverride: hotspot.description);
+    final polar = hotspot.title.contains('Polar') || hotspot.title.contains('Ice');
+    final rings = hotspot.title.contains('Ring') || hotspot.title.contains('Cassini') || hotspot.title.contains('Tilt');
+    final storm = hotspot.title.contains('Storm') || hotspot.title.contains('Spot') || hotspot.title.contains('Flares');
+    updateDetailCamera(phi: polar ? .95 : rings ? .65 : state.detailPhi, zoom: rings ? .85 : state.detailZoom);
+    if (storm) showToast(hotspot.title);
   }
 
   void updateDetailCamera({double? zoom, double? theta, double? phi}) {
