@@ -109,6 +109,14 @@
             </span>
         </div>
 
+        <!-- PLAY MODE TOAST BANNER -->
+        <div id="play-mode-banner" class="absolute top-16 left-0 right-0 text-center pointer-events-none z-30 transition-all duration-400 opacity-0 -translate-y-2">
+            <span class="text-xs font-semibold text-amber-200 bg-space-950/90 px-4 py-1.5 rounded-full border border-amber-500/50 backdrop-blur-md shadow-2xl inline-flex items-center gap-1.5">
+                <i class="fa-solid fa-gamepad text-amber-400"></i>
+                <span>Play Mode Active: Spin & explore freely!</span>
+            </span>
+        </div>
+
         <!-- DETAIL SWIPE & ZOOM HINT BANNER -->
         <div id="detail-spin-hint" class="absolute top-16 left-0 right-0 text-center pointer-events-none z-20 transition-all duration-500 opacity-0">
             <span class="text-[11px] font-semibold text-amber-200 bg-space-950/85 px-4 py-1.5 rounded-full border border-amber-500/40 backdrop-blur-md shadow-xl inline-flex items-center gap-2">
@@ -132,6 +140,10 @@
             <button onclick="adjustDetailZoom(0.25)" class="glass-pill w-10 h-10 rounded-full flex items-center justify-center text-white hover:bg-white/20 active:scale-90 transition shadow-lg border border-white/25" title="Zoom Out (Further)">
                 <i class="fa-solid fa-magnifying-glass-minus text-sm text-indigo-300"></i>
             </button>
+            <!-- Toggle Info Card / Play Mode Button -->
+            <button id="hud-toggle-info-btn" onclick="toggleDetailCard()" class="glass-pill w-10 h-10 rounded-full flex items-center justify-center text-white hover:bg-white/20 active:scale-90 transition shadow-lg border border-white/25" title="Toggle Facts Dialog / Play Mode">
+                <i id="hud-toggle-info-icon" class="fa-solid fa-circle-info text-sm text-indigo-300"></i>
+            </button>
             <!-- Reset View Button -->
             <button onclick="resetDetailView()" class="glass-pill w-9 h-9 rounded-full flex items-center justify-center text-indigo-200 hover:text-white active:scale-90 transition shadow-md border border-white/20" title="Reset View Angle & Zoom">
                 <i class="fa-solid fa-arrows-rotate text-xs"></i>
@@ -151,9 +163,17 @@
                             <span id="detail-card-tag" class="text-[11px] text-indigo-300 font-medium">Our Home Planet</span>
                         </div>
                     </div>
-                    <button onclick="closePlanetDetail()" class="glass-pill w-8 h-8 rounded-full flex items-center justify-center text-indigo-200 hover:text-white active:scale-95 transition">
-                        <i class="fa-solid fa-xmark text-xs"></i>
-                    </button>
+                    <div class="flex items-center space-x-1.5">
+                        <!-- Play Mode / Minimize Button -->
+                        <button onclick="toggleDetailCard()" class="glass-pill px-2.5 py-1.5 rounded-full flex items-center space-x-1.5 text-xs text-amber-200 hover:text-white hover:bg-white/10 active:scale-95 transition border border-amber-500/30 shadow-sm" title="Hide facts dialog to play freely">
+                            <i class="fa-solid fa-gamepad text-xs text-amber-400"></i>
+                            <span class="font-heading font-bold text-[11px]">Play Mode</span>
+                        </button>
+                        <!-- Close / Back to Solar System Button -->
+                        <button onclick="closePlanetDetail()" class="glass-pill w-8 h-8 rounded-full flex items-center justify-center text-indigo-200 hover:text-red-300 active:scale-95 transition" title="Back to Solar System">
+                            <i class="fa-solid fa-xmark text-xs"></i>
+                        </button>
+                    </div>
                 </div>
                 <p id="detail-card-desc" class="text-xs text-indigo-100/90 leading-relaxed mb-3">Earth is the only world in our solar system with liquid oceans and abundant life.</p>
                 <div class="grid grid-cols-2 gap-2 mb-3">
@@ -174,6 +194,18 @@
                 </div>
                 <!-- Hotspot Interactive Buttons -->
                 <div id="hotspot-buttons-container" class="flex flex-wrap gap-1.5"></div>
+            </div>
+
+            <!-- ================= MINIMIZED INFO PILL (PLAY MODE) ================= -->
+            <div id="detail-minimized-pill" class="absolute bottom-20 left-1/2 -translate-x-1/2 pointer-events-auto transition-all duration-300 opacity-0 pointer-events-none translate-y-6 z-20">
+                <button onclick="toggleDetailCard()" class="glass-pill px-4 py-2 rounded-full shadow-2xl flex items-center space-x-2.5 border border-amber-500/40 hover:bg-white/15 active:scale-95 transition backdrop-blur-xl">
+                    <span id="minimized-pill-icon" class="text-base">🌍</span>
+                    <span id="minimized-pill-title" class="font-heading font-bold text-xs text-white">Earth Facts</span>
+                    <span class="bg-indigo-600/80 text-[10px] font-semibold text-indigo-100 px-2 py-0.5 rounded-full flex items-center space-x-1 border border-indigo-400/30">
+                        <i class="fa-solid fa-circle-info text-[9px]"></i>
+                        <span>Show</span>
+                    </span>
+                </button>
             </div>
 
             <!-- ================= PLAYGROUND SANDBOX PANEL ================= -->
@@ -717,6 +749,8 @@
         let initialPinchZoom = 1.0;
         const activeTouches = new Map();
         let spinHintTimeout = null;
+        let isDetailCardVisible = true;
+        let playModeBannerTimeout = null;
 
         window.onload = function() {
             initThreeJS();
@@ -1399,6 +1433,12 @@
             document.getElementById('stat-size').innerText = item.data.diameter;
             document.getElementById('stat-temp').innerText = item.data.temp;
 
+            // Update minimized play mode pill
+            const minIcon = document.getElementById('minimized-pill-icon');
+            const minTitle = document.getElementById('minimized-pill-title');
+            if (minIcon) minIcon.innerText = item.data.id === 'sun' ? '☀️' : (item.data.id === 'saturn' ? '🪐' : '🌍');
+            if (minTitle) minTitle.innerText = `${item.data.name} Facts`;
+
             const hotspotContainer = document.getElementById('hotspot-buttons-container');
             hotspotContainer.innerHTML = '';
             if (item.data.hotspots) {
@@ -1425,13 +1465,14 @@
                 });
             }
 
-            const card = document.getElementById('planet-info-card');
-            card.classList.remove('translate-y-[120%]', 'opacity-0');
             document.getElementById('interaction-hint').style.opacity = '0';
 
             // Show Detail Controls HUD and Spin Hint
             const hud = document.getElementById('detail-controls-hud');
             if (hud) hud.classList.remove('opacity-0', 'pointer-events-none', 'translate-x-4');
+
+            // Apply visibility of card or minimized pill based on user toggle state
+            applyDetailCardVisibility();
 
             const hint = document.getElementById('detail-spin-hint');
             if (hint) {
@@ -1443,12 +1484,58 @@
             }
         }
 
+        function toggleDetailCard() {
+            if (!selectedPlanetItem) return;
+            isDetailCardVisible = !isDetailCardVisible;
+            applyDetailCardVisibility();
+        }
+
+        function applyDetailCardVisibility() {
+            const card = document.getElementById('planet-info-card');
+            const pill = document.getElementById('detail-minimized-pill');
+            const hudIcon = document.getElementById('hud-toggle-info-icon');
+
+            if (!selectedPlanetItem) {
+                if (card) card.classList.add('translate-y-[120%]', 'opacity-0');
+                if (pill) pill.classList.add('opacity-0', 'pointer-events-none', 'translate-y-6');
+                return;
+            }
+
+            if (isDetailCardVisible) {
+                // Show facts card, hide minimized pill
+                if (card) card.classList.remove('translate-y-[120%]', 'opacity-0');
+                if (pill) pill.classList.add('opacity-0', 'pointer-events-none', 'translate-y-6');
+                if (hudIcon) {
+                    hudIcon.className = 'fa-solid fa-circle-info text-sm text-indigo-300';
+                    hudIcon.parentElement.title = 'Hide Facts Dialog (Play Mode)';
+                }
+            } else {
+                // Play mode: Hide facts card, show compact minimized pill
+                if (card) card.classList.add('translate-y-[120%]', 'opacity-0');
+                if (pill) pill.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-6');
+                if (hudIcon) {
+                    hudIcon.className = 'fa-solid fa-eye-slash text-sm text-amber-400';
+                    hudIcon.parentElement.title = 'Show Facts Dialog';
+                }
+
+                // Show Play Mode toast notification
+                const toast = document.getElementById('play-mode-banner');
+                if (toast) {
+                    toast.classList.remove('opacity-0', '-translate-y-2');
+                    clearTimeout(playModeBannerTimeout);
+                    playModeBannerTimeout = setTimeout(() => {
+                        toast.classList.add('opacity-0', '-translate-y-2');
+                    }, 2500);
+                }
+            }
+        }
+
         function closePlanetDetail() {
             selectedPlanetItem = null;
             isFocusing = false;
+            isDetailCardVisible = true; // reset for next inspection
+            applyDetailCardVisibility();
 
-            const card = document.getElementById('planet-info-card');
-            card.classList.add('translate-y-[120%]', 'opacity-0');
             document.getElementById('interaction-hint').style.opacity = '1';
 
             const hud = document.getElementById('detail-controls-hud');
@@ -1457,6 +1544,10 @@
             const hint = document.getElementById('detail-spin-hint');
             if (hint) hint.classList.add('opacity-0');
             clearTimeout(spinHintTimeout);
+
+            const toast = document.getElementById('play-mode-banner');
+            if (toast) toast.classList.add('opacity-0', '-translate-y-2');
+            clearTimeout(playModeBannerTimeout);
         }
 
         function adjustDetailZoom(delta) {
