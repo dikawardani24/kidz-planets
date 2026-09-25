@@ -92,6 +92,23 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     }
   }
 
+  void runExperiment(String experiment) {
+    switch (experiment) {
+      case 'sun':
+        selectPlanet('sun');
+        showToast('Inspecting the blazing Sun');
+      case 'earth':
+        selectPlanet('earth');
+        showToast('Earth experiment started');
+      case 'saturn':
+        selectPlanet('saturn');
+        showToast("Inspect Saturn's rings");
+      case 'earth-explore':
+        selectPlanet('earth');
+        showToast('Explore Earth in 3D');
+    }
+  }
+
   void completeFirstPendingFor(String planetId) {
     final idx = state.missions.indexWhere((m) => m.targetPlanetId == planetId);
     if (idx < 0 || state.missions[idx].completed) return;
