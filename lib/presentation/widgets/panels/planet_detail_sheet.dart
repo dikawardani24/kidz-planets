@@ -23,7 +23,7 @@ class PlanetDetailSheet extends ConsumerWidget {
           Text(planet.isSun ? '☀️' : planet.id == 'saturn' ? '🪐' : '🌍', style: const TextStyle(fontSize: 24)),
           const SizedBox(width: 9),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(planet.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white)),
+            Text(ui.detailTitleOverride ?? planet.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white)),
             const SizedBox(height: 2), Text(planet.tag, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Color(0xFFA5B4FC))),
           ])),
           GestureDetector(onTap: notifier.toggleDetailCard, child: AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
@@ -32,7 +32,7 @@ class PlanetDetailSheet extends ConsumerWidget {
           GestureDetector(onTap: notifier.closeDetail, child: AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.all(7), child: const Icon(Icons.close, size: 14, color: Color(0xFFC7D2FE)))),
         ]),
         const SizedBox(height: 9),
-        Text(planet.fact, style: const TextStyle(fontSize: 10.5, height: 1.45, color: Color(0xFFE0E7FF))),
+        Text(ui.detailDescriptionOverride ?? planet.fact, style: const TextStyle(fontSize: 10.5, height: 1.45, color: Color(0xFFE0E7FF))),
         const SizedBox(height: 9),
         Row(children: [
           Expanded(child: _Stat(icon: Icons.straighten, title: 'Diameter', value: planet.diameter)),
@@ -41,13 +41,7 @@ class PlanetDetailSheet extends ConsumerWidget {
         const SizedBox(height: 9),
         Wrap(spacing: 6, runSpacing: 6, children: [
           for (final h in planet.hotspots)
-            GestureDetector(onTap: () {
-              final polar = h.title.contains('Polar') || h.title.contains('Ice');
-              final rings = h.title.contains('Ring') || h.title.contains('Cassini') || h.title.contains('Tilt');
-              final storm = h.title.contains('Storm') || h.title.contains('Spot') || h.title.contains('Flares');
-              notifier.updateDetailCamera(phi: polar ? .95 : rings ? .65 : ui.detailPhi, zoom: rings ? .85 : ui.detailZoom);
-              if (storm) notifier.showToast(h.title);
-            }, child: AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+            GestureDetector(onTap: () => notifier.showHotspot(h), child: AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
               child: Row(mainAxisSize: MainAxisSize.min, children: [Text(h.icon, style: const TextStyle(fontSize: 11)), const SizedBox(width: 4), Text(h.title, style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: Colors.white))]))),
         ]),
         const SizedBox(height: 8),
