@@ -22,6 +22,8 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   String _loadingLabel = 'Warming up the rockets...';
   PerspectiveCamera? _lastCamera;
   List<PlanetLabelFrame> _labelFrames = const [];
+  double _lastScale = 1.0;
+  double _pinchStartZoom = 1.0;
 
   @override
   void initState() {
@@ -57,7 +59,9 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
         return GestureDetector(
           onPanUpdate: _onPanUpdate,
+          onScaleStart: _onScaleStart,
           onScaleUpdate: _onScaleUpdate,
+          onScaleEnd: _onScaleEnd,
           onTapUp: (d) => _onTapUp(d, size),
           child: Stack(
             fit: StackFit.expand,
@@ -105,6 +109,16 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     return true;
   }
 
+  void _onScaleStart(ScaleStartDetails details) {
+    final ui = ref.read(explorerControllerProvider);
+    _lastScale = 1.0;
+    _pinchStartZoom = ui.detailZoom;
+  }
+
+  void _onScaleEnd(ScaleEndDetails details) {
+    _lastScale = 1.0;
+  }
+
   void _onPanUpdate(DragUpdateDetails details) {
     final controller = ref.read(solarSystemSceneControllerProvider);
     final ui = ref.read(explorerControllerProvider);
@@ -128,10 +142,14 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     if (details.scale != 1.0) {
       if (ui.hasSelection) {
         ref.read(explorerControllerProvider.notifier).updateDetailCamera(
-          zoom: (ui.detailZoom * details.scale).clamp(0.6, 2.6),
+          zoom: (_pinchStartZoom * details.scale).clamp(0.4, 2.6),
         );
       } else {
-        controller.pinch(details.scale);
+        final incrementalScale = details.scale / _lastScale;
+        if (incrementalScale.isFinite && incrementalScale > 0) {
+          controller.pinch(incrementalScale);
+          _lastScale = details.scale;
+        }
       }
       return;
     }
