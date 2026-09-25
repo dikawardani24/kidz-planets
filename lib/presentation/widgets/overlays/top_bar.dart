@@ -61,45 +61,6 @@ class _Banner extends StatelessWidget {
   ))));
 }
 
-class ExplorerDetailHud extends ConsumerWidget {
-  const ExplorerDetailHud({super.key});
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final ui = ref.watch(explorerControllerProvider);
-    final notifier = ref.read(explorerControllerProvider.notifier);
-    if (!ui.hasSelection) return const SizedBox.shrink();
-    final percent = (100 / ui.detailZoom).round();
-    return Positioned(top: 76, right: 14, child: Column(children: [
-      _HudButton(icon: Icons.zoom_in, onTap: () => notifier.adjustDetailZoom(-.25)),
-      const SizedBox(height: 8),
-      AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        child: Text(percent.toString() + '%', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppTheme.accentAmber))),
-      const SizedBox(height: 8),
-      _HudButton(icon: Icons.zoom_out, onTap: () => notifier.adjustDetailZoom(.25)),
-      const SizedBox(height: 8),
-      _HudButton(icon: ui.detailCardVisible ? Icons.info_outline : Icons.visibility_off, iconColor: ui.detailCardVisible ? AppTheme.accentSky : AppTheme.accentAmber, onTap: notifier.toggleDetailCard),
-      const SizedBox(height: 8),
-      _HudButton(icon: Icons.refresh, small: true, onTap: notifier.resetDetailView),
-    ]));
-  }
-}
-
-class _HudButton extends StatelessWidget {
-  const _HudButton({required this.icon, required this.onTap, this.iconColor = Colors.white, this.small = false});
-  final IconData icon; final VoidCallback onTap; final Color iconColor; final bool small;
-  @override
-  Widget build(BuildContext context) => GestureDetector(onTap: onTap, child: AppTheme.glass(pill: true, radius: BorderRadius.circular(999),
-    padding: EdgeInsets.all(small ? 9 : 10), child: Icon(icon, size: small ? 14 : 18, color: iconColor)));
-}
-
-class _CircleButton extends StatelessWidget {
-  const _CircleButton({required this.icon, this.color = Colors.white, this.onTap});
-  final IconData icon; final Color color; final VoidCallback? onTap;
-  @override
-  Widget build(BuildContext context) => GestureDetector(onTap: onTap, child: AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.all(9),
-    child: Icon(icon, size: 15, color: color)));
-}
-
 class ExplorerControlPills extends ConsumerWidget {
   const ExplorerControlPills({super.key});
   @override
