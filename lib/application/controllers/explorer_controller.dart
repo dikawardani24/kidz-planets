@@ -108,7 +108,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
 
   void resetPlayground() {
     _clock.setSpeed(1.0);
-    state = state.copyWith(speed: 1.0, showOrbits: true, showLabels: true);
+    state = state.copyWith(speed: 1.0, showOrbits: true, showLabels: true, playgroundAlertIcon: '🔥', playgroundAlertTitle: 'Sandbox Ready!', playgroundAlertDescription: 'Run interactive NASA 3D experiments below.');
     showToast('🔥 Sandbox Ready! Run interactive NASA 3D experiments below.');
   }
 
@@ -140,7 +140,10 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     });
   }
 
-  void _setExperimentAlert(String title, String description) => showToast('$title $description');
+  void _setExperimentAlert(String title, String description) {
+    final icon = title.isNotEmpty ? title.characters.first : '🔥';
+    state = state.copyWith(playgroundAlertIcon: icon, playgroundAlertTitle: title, playgroundAlertDescription: description);
+  }
 
   void _checkMission(String planetId) {
     final idx = state.missions.indexWhere((m) => m.targetPlanetId == planetId && !m.completed);
