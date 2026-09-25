@@ -17,6 +17,9 @@ class ExplorerState extends Equatable {
     this.detailCardVisible = true,
     this.spinHintVisible = false,
     this.playModeBannerVisible = false,
+    this.playgroundAlertIcon = '🔥',
+    this.playgroundAlertTitle = 'Sandbox Ready!',
+    this.playgroundAlertDescription = 'Run interactive NASA 3D experiments below.',
     this.missions = const [],
     this.toasts = const [],
     this.celebrationTitle,
@@ -36,6 +39,9 @@ class ExplorerState extends Equatable {
   final bool detailCardVisible;
   final bool spinHintVisible;
   final bool playModeBannerVisible;
+  final String playgroundAlertIcon;
+  final String playgroundAlertTitle;
+  final String playgroundAlertDescription;
   final List<MissionState> missions;
   final List<ToastMessage> toasts;
   final String? celebrationTitle;
@@ -58,6 +64,9 @@ class ExplorerState extends Equatable {
     bool? detailCardVisible,
     bool? spinHintVisible,
     bool? playModeBannerVisible,
+    String? playgroundAlertIcon,
+    String? playgroundAlertTitle,
+    String? playgroundAlertDescription,
     List<MissionState>? missions,
     List<ToastMessage>? toasts,
     Object? celebrationTitle = _sentinel,
@@ -77,6 +86,9 @@ class ExplorerState extends Equatable {
       detailCardVisible: detailCardVisible ?? this.detailCardVisible,
       spinHintVisible: spinHintVisible ?? this.spinHintVisible,
       playModeBannerVisible: playModeBannerVisible ?? this.playModeBannerVisible,
+      playgroundAlertIcon: playgroundAlertIcon ?? this.playgroundAlertIcon,
+      playgroundAlertTitle: playgroundAlertTitle ?? this.playgroundAlertTitle,
+      playgroundAlertDescription: playgroundAlertDescription ?? this.playgroundAlertDescription,
       missions: missions ?? this.missions,
       toasts: toasts ?? this.toasts,
       celebrationTitle: identical(celebrationTitle, _sentinel) ? this.celebrationTitle : celebrationTitle as String?,
@@ -88,7 +100,7 @@ class ExplorerState extends Equatable {
   List<Object?> get props => [
         tab, running, speed, showOrbits, showLabels, selectedPlanetId, focusedPlanetId,
         detailZoom, detailTheta, detailPhi, detailCardVisible, spinHintVisible,
-        playModeBannerVisible, missions, toasts, celebrationTitle, celebrationDescription,
+        playModeBannerVisible, playgroundAlertIcon, playgroundAlertTitle, playgroundAlertDescription, missions, toasts, celebrationTitle, celebrationDescription,
       ];
 }
 
