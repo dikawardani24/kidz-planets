@@ -33,7 +33,7 @@ class PlaygroundPanel extends ConsumerWidget {
               child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.refresh, size: 12, color: Colors.white70), SizedBox(width: 4), Text('Reset', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white70))])),
           ]),
           const SizedBox(height: 12),
-          Container(padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: AppTheme.accentAmber.withValues(alpha: .10), borderRadius: BorderRadius.circular(16), border: Border.all(color: AppTheme.accentAmber.withValues(alpha: .35)),
+          Container(padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: AppTheme.accentAmber.withValues(alpha: .10), borderRadius: BorderRadius.circular(16), border: Border.all(color: AppTheme.accentAmber.withValues(alpha: .35))),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(ui.playgroundAlertIcon, style: const TextStyle(fontSize: 20)), const SizedBox(width: 9),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
