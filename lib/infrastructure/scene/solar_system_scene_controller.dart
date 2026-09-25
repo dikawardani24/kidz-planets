@@ -141,6 +141,30 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   void addSpinBoost(double amount) => _animator?.addSpinBoost(amount);
 
   @override
+  String? pickPlanet(
+    Offset screenPosition,
+    Size viewSize,
+    PerspectiveCamera camera,
+  ) {
+    if (!_built || viewSize.isEmpty) return null;
+    final ray = camera.screenPointToRay(screenPosition, viewSize);
+    final hit = _scene.raycast(
+      ray,
+      where: (node) => node.name.endsWith(':mesh'),
+    );
+    if (hit == null) return null;
+    Node? node = hit.node;
+    while (node != null && node.parent != _scene.root) {
+      node = node.parent;
+    }
+    if (node == null) return null;
+    for (final entry in _builder.states.entries) {
+      if (identical(entry.value.node, node)) return entry.key;
+    }
+    return null;
+  }
+
+  @override
   void spinPlanet(String planetId, double delta) {
     final render = _builder.states[planetId];
     if (render == null) return;
