@@ -32,6 +32,8 @@ abstract class SolarSystemSceneController {
   void setOrbitsVisible(bool visible);
   void setPlanetOrbitRadius(String planetId, double radius);
   void addSpinBoost(double amount);
+  String? pickPlanet(Offset screenPosition, Size viewSize, PerspectiveCamera camera);
+  void spinPlanet(String planetId, double delta);
   void orbitBy(double dx, double dy);
   void pinch(double scale);
   void dispose();
