@@ -21,7 +21,7 @@ class ExplorerTopBar extends ConsumerWidget {
           alignment: Alignment.center, child: const Text('P', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white))),
         const SizedBox(width: 12),
         const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Space Explorer', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white, height: 1.0)),
+          Text('NASA Space Explorer', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white, height: 1.0)),
           SizedBox(height: 2),
           Text('Tap a planet to explore!', style: TextStyle(fontSize: 12, color: Colors.white70)),
         ])),
