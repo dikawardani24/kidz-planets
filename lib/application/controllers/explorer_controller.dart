@@ -141,7 +141,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   }
 
   void _setExperimentAlert(String title, String description) {
-    final icon = title.isNotEmpty ? title.characters.first : '🔥';
+    final icon = title.startsWith('☀️') ? '☀️' : title.startsWith('🪐') ? '🪐' : title.startsWith('🌪️') ? '🌪️' : '🔥';
     state = state.copyWith(playgroundAlertIcon: icon, playgroundAlertTitle: title, playgroundAlertDescription: description);
   }
 
