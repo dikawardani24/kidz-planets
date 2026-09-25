@@ -8,7 +8,6 @@ import '../widgets/overlays/toast_overlay.dart';
 import '../widgets/overlays/top_bar.dart';
 import '../widgets/panels/missions_panel.dart';
 import '../widgets/panels/planet_detail_sheet.dart';
-import '../widgets/panels/planets_panel.dart';
 import '../widgets/scene/solar_system_scene_view.dart';
 
 class ExplorerScreen extends ConsumerWidget {
@@ -39,8 +38,8 @@ class ExplorerScreen extends ConsumerWidget {
               const ExplorerBottomNav(),
             ],
           ])),
-          if (ui.tab == ExplorerTab.planets)
-            Positioned(left: 0, right: 0, bottom: 0, top: 120, child: const PlanetsGridPanel()),
+          if (ui.tab == ExplorerTab.playground)
+            const Positioned(left: 12, right: 12, top: 72, bottom: 86, child: PlaygroundPanel()),
           if (ui.tab == ExplorerTab.missions)
             Positioned(left: 0, right: 0, bottom: 0, top: 120, child: const MissionsPanel()),
           if (ui.hasSelection && ui.tab == ExplorerTab.explore)
