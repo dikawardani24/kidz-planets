@@ -4,13 +4,6 @@ import '../../domain/entities/planet.dart';
 
 /// Speaks short, kid-friendly facts for the selected solar-system body.
 class PlanetTtsService {
-  PlanetTtsService() {
-    _tts.setSpeechRate(0.42);
-    _tts.setPitch(1.08);
-    _tts.setVolume(1.0);
-    _tts.setLanguage('en-US');
-  }
-
   final FlutterTts _tts = FlutterTts();
 
   Future<void> speakPlanet(Planet planet) async {
@@ -20,6 +13,9 @@ class PlanetTtsService {
   Future<void> speak(String title, String description) async {
     try {
       await _tts.stop();
+      await _tts.setSpeechRate(0.42);
+      await _tts.setPitch(1.08);
+      await _tts.setVolume(1.0);
       await _tts.setLanguage('en-US');
       await _tts.speak('$title. $description');
     } catch (_) {
