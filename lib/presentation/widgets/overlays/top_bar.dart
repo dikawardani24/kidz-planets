@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../theme/app_theme.dart';
 
@@ -8,40 +9,83 @@ class ExplorerTopBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ui = ref.watch(explorerControllerProvider);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-      decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
-        colors: [Colors.black.withValues(alpha: 0.72), Colors.transparent])),
-      child: SafeArea(bottom: false, child: Row(children: [
-        Container(width: 44, height: 44,
-          decoration: BoxDecoration(shape: BoxShape.circle,
-            gradient: const LinearGradient(colors: [Color(0xFFFBBF24), Color(0xFFF97316)]),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 2),
-            boxShadow: const [BoxShadow(color: Color(0x66FBBF24), blurRadius: 14, spreadRadius: 1)]),
-          alignment: Alignment.center, child: const Text('P', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white))),
-        const SizedBox(width: 12),
-        const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Space Explorer', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white, height: 1.0)),
-          SizedBox(height: 2),
-          Text('Tap a planet to explore!', style: TextStyle(fontSize: 12, color: Colors.white70)),
-        ])),
-        _RoundIconButton(icon: ui.running ? Icons.pause : Icons.play_arrow,
-          onTap: () => ref.read(explorerControllerProvider.notifier).toggleRunning()),
-      ])),
+    final notifier = ref.read(explorerControllerProvider.notifier);
+    return SafeArea(bottom: false, child: Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
+      child: Row(children: [
+        AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Container(width: 28, height: 28, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFFF97316), Color(0xFF4F46E5)])),
+              alignment: Alignment.center, child: const Icon(Icons.wb_sunny, size: 14, color: Colors.white)),
+            const SizedBox(width: 10),
+            const Text('NASA Space Explorer', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: .2, color: Colors.white)),
+          ])),
+        const Spacer(),
+        _CircleButton(icon: ui.running ? Icons.pause : Icons.play_arrow, color: AppTheme.accentSky, onTap: notifier.toggleRunning),
+        const SizedBox(width: 8),
+        const _CircleButton(icon: Icons.emoji_people, color: AppTheme.accentAmber),
+      ]),
+    ));
+  }
+}
+
+class _CircleButton extends StatelessWidget {
+  const _CircleButton({required this.icon, required this.color, this.onTap});
+
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.black.withValues(alpha: 0.38),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+          boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 12)],
+        ),
+        alignment: Alignment.center,
+        child: Icon(icon, size: 18, color: color),
+      ),
     );
   }
 }
 
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({required this.icon, required this.onTap});
-  final IconData icon; final VoidCallback onTap;
+class ExplorerInteractionOverlays extends ConsumerWidget {
+  const ExplorerInteractionOverlays({super.key});
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(onTap: onTap, child: Container(width: 40, height: 40,
-      decoration: BoxDecoration(color: AppTheme.space800.withValues(alpha: 0.85), shape: BoxShape.circle,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2))),
-      child: Icon(icon, color: Colors.white, size: 20)));
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ui = ref.watch(explorerControllerProvider);
+    if (ui.hasSelection && ui.spinHintVisible) {
+      return const _Banner(top: 64, borderColor: Color(0x66F59E0B), background: Color(0xD9040712), textColor: Color(0xFFFFE7A3),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [Text('👆 Swipe to spin'), SizedBox(width: 8), Text('•', style: TextStyle(color: AppTheme.accentViolet)), SizedBox(width: 8), Text('🤏 Pinch or +/- to zoom')]));
+    }
+    if (ui.playModeBannerVisible) {
+      return const _Banner(top: 64, borderColor: Color(0x80F59E0B), background: Color(0xE6040712), textColor: Color(0xFFFFE7A3),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.gamepad, size: 13, color: AppTheme.accentAmber), SizedBox(width: 6), Text('Play Mode Active: Spin & explore freely!')]));
+    }
+    if (!ui.hasSelection && ui.tab == ExplorerTab.explore) {
+      return const _Banner(top: 62, borderColor: Color(0x664F46E5), background: Color(0xBF010206), textColor: Color(0xDDBFC6FF),
+        child: Text('✨ Tap the Sun or any planet to inspect NASA 3D details'));
+    }
+    return const SizedBox.shrink();
   }
+}
+
+class _Banner extends StatelessWidget {
+  const _Banner({required this.top, required this.borderColor, required this.background, required this.textColor, required this.child});
+  final double top; final Color borderColor; final Color background; final Color textColor; final Widget child;
+  @override
+  Widget build(BuildContext context) => Positioned(top: top, left: 0, right: 0, child: IgnorePointer(child: Center(child: Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+    decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(999), border: Border.all(color: borderColor), boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 14)]),
+    child: DefaultTextStyle(style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: textColor), child: child),
+  ))));
 }
 
 class ExplorerControlPills extends ConsumerWidget {
@@ -50,40 +94,25 @@ class ExplorerControlPills extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ui = ref.watch(explorerControllerProvider);
     final notifier = ref.read(explorerControllerProvider.notifier);
-    return Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, children: [
-      _SpeedPill(speed: ui.speed, onChanged: notifier.setSpeed),
-      _TogglePill(label: 'Orbits', active: ui.showOrbits, onTap: notifier.toggleOrbits),
-      _TogglePill(label: 'Labels', active: ui.showLabels, onTap: notifier.toggleLabels),
-    ]);
-  }
-}
-
-class _TogglePill extends StatelessWidget {
-  const _TogglePill({required this.label, required this.active, required this.onTap});
-  final String label; final bool active; final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(onTap: onTap, child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(color: active ? AppTheme.accentViolet.withValues(alpha: 0.9) : AppTheme.space700.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(999), border: Border.all(color: Colors.white.withValues(alpha: 0.18))),
-      child: Text('$label ${active ? "ON" : "OFF"}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white))));
-  }
-}
-
-class _SpeedPill extends StatelessWidget {
-  const _SpeedPill({required this.speed, required this.onChanged});
-  final double speed; final ValueChanged<double> onChanged;
-  @override
-  Widget build(BuildContext context) {
-    return Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(color: AppTheme.space700.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.18))),
+    return AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.rocket_launch, size: 14, color: AppTheme.accentAmber),
-        SizedBox(width: 110, child: Slider(value: speed, min: 0, max: 3, divisions: 6,
-          activeColor: AppTheme.accentAmber, inactiveColor: Colors.white24, onChanged: onChanged)),
-        Text('${speed.toStringAsFixed(1)}x', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+        const Icon(Icons.speed, size: 14, color: AppTheme.accentSky),
+        SizedBox(width: 105, child: Slider(value: ui.speed.clamp(0, 4), min: 0, max: 4, divisions: 8, activeColor: AppTheme.accentAmber, inactiveColor: Colors.white24, onChanged: notifier.setSpeed)),
+        Text(ui.speed.toStringAsFixed(1) + 'x', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppTheme.accentAmber)),
+        const SizedBox(width: 6),
+        _MiniToggle(label: 'Orbits', active: ui.showOrbits, onTap: notifier.toggleOrbits),
+        const SizedBox(width: 5),
+        _MiniToggle(label: 'Labels', active: ui.showLabels, onTap: notifier.toggleLabels),
       ]));
   }
+}
+
+class _MiniToggle extends StatelessWidget {
+  const _MiniToggle({required this.label, required this.active, required this.onTap});
+  final String label; final bool active; final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => GestureDetector(onTap: onTap, child: Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    decoration: BoxDecoration(color: active ? AppTheme.accentViolet.withValues(alpha: .55) : Colors.white.withValues(alpha: .05), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white.withValues(alpha: .10))),
+    child: Text(label + ': ' + (active ? 'On' : 'Off'), style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: Colors.white))));
 }

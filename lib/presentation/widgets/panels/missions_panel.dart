@@ -11,40 +11,36 @@ class MissionsPanel extends ConsumerWidget {
     final ui = ref.watch(explorerControllerProvider);
     final notifier = ref.read(explorerControllerProvider.notifier);
     final completed = ui.missions.where((m) => m.completed).length;
-    return Container(
-      decoration: BoxDecoration(color: AppTheme.space900.withValues(alpha: 0.96), borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.14)))),
-      child: SafeArea(top: false, child: Column(children: [
+    final progress = ui.missions.isEmpty ? 0.0 : completed / ui.missions.length;
+    return AppTheme.glass(radius: BorderRadius.circular(24), padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
+      child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [Icon(Icons.rocket_launch, color: AppTheme.accentSky, size: 18), SizedBox(width: 7), Text('Space Missions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white))]),
+            SizedBox(height: 3), Text('Explore and verify NASA worlds!', style: TextStyle(fontSize: 10.5, color: Color(0xFF9CA9D8))),
+          ])),
+          AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.star, size: 11, color: AppTheme.accentAmber), const SizedBox(width: 5), Text(completed.toString() + ' / ' + ui.missions.length.toString(), style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppTheme.accentAmber))])),
+        ]),
         const SizedBox(height: 10),
-        Container(width: 44, height: 5, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(99))),
-        Padding(padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-          child: Row(children: [Expanded(child: Text('Space Missions  $completed/${ui.missions.length}',
-            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Colors.white))),
-            GestureDetector(onTap: () => notifier.setTab(ExplorerTab.explore),
-              child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(999)),
-                child: const Text('Close', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white70))))])),
-        Flexible(child: ListView.separated(padding: const EdgeInsets.fromLTRB(16, 10, 16, 18), itemCount: ui.missions.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
-          itemBuilder: (context, i) {
-            final m = ui.missions[i];
-            return GestureDetector(onTap: () { notifier.setTab(ExplorerTab.explore); notifier.selectPlanet(m.targetPlanetId); },
-              child: Container(padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: m.completed ? const Color(0xFF14532D).withValues(alpha: 0.75) : AppTheme.space800,
-                  borderRadius: BorderRadius.circular(18), border: Border.all(color: m.completed ? const Color(0xFF22C55E) : Colors.white.withValues(alpha: 0.12))),
-                child: Row(children: [
-                  Container(width: 40, height: 40, alignment: Alignment.center,
-                    decoration: BoxDecoration(color: m.completed ? const Color(0xFF22C55E) : Colors.white12, shape: BoxShape.circle),
-                    child: Text(m.completed ? '✓' : '${i + 1}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white))),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(m.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white)),
-                    const SizedBox(height: 2),
-                    Text(m.description, style: const TextStyle(fontSize: 12, color: Colors.white70)),
-                  ])),
-                  const Icon(Icons.chevron_right, color: Colors.white38),
-                ])));
-          })),
+        ClipRRect(borderRadius: BorderRadius.circular(99), child: Container(height: 9, color: AppTheme.space800, child: FractionallySizedBox(alignment: Alignment.centerLeft, widthFactor: progress, child: Container(decoration: const BoxDecoration(gradient: LinearGradient(colors: [AppTheme.accentIndigo, AppTheme.accentAmber])))))),
+        const SizedBox(height: 10),
+        ...ui.missions.map((m) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Container(
+          padding: const EdgeInsets.all(11),
+          decoration: BoxDecoration(color: m.completed ? const Color(0x1A22C55E) : AppTheme.space800.withValues(alpha: .82), borderRadius: BorderRadius.circular(15), border: Border.all(color: m.completed ? const Color(0x6622C55E) : Colors.white.withValues(alpha: .10))),
+          child: Row(children: [
+            Container(width: 34, height: 34, alignment: Alignment.center, decoration: BoxDecoration(color: m.completed ? const Color(0x3322C55E) : const Color(0x334F46E5), borderRadius: BorderRadius.circular(11), border: Border.all(color: m.completed ? const Color(0x6622C55E) : const Color(0x664F46E5))),
+              child: m.completed ? const Icon(Icons.check, size: 15, color: Color(0xFF86EFAC)) : Text(m.id.toString(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFC7D2FE)))),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(m.title, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Colors.white)),
+              const SizedBox(height: 2), Text(m.description, style: const TextStyle(fontSize: 9.5, color: Colors.white60)),
+            ])),
+            GestureDetector(onTap: () { notifier.setTab(ExplorerTab.explore); notifier.selectPlanet(m.targetPlanetId); },
+              child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: m.completed ? const Color(0x3322C55E) : AppTheme.accentIndigo, borderRadius: BorderRadius.circular(999)),
+                child: Text(m.completed ? 'Done' : 'Find →', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: m.completed ? const Color(0xFF86EFAC) : Colors.white)))),
+          ]),
+        ))),
       ])));
   }
 }

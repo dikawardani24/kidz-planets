@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_scene/scene.dart';
+import 'package:vector_math/vector_math.dart' as vm;
 
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/simulation_clock.dart';
@@ -29,7 +30,10 @@ abstract class SolarSystemSceneController {
   List<PlanetLabelFrame> projectLabels(
       PerspectiveCamera camera, Size viewSize);
   void setOrbitsVisible(bool visible);
+  void setPlanetOrbitRadius(String planetId, double radius);
   void addSpinBoost(double amount);
+  String? pickPlanet(Offset screenPosition, Size viewSize, PerspectiveCamera camera);
+  void spinPlanet(String planetId, double delta);
   void orbitBy(double dx, double dy);
   void pinch(double scale);
   void dispose();
@@ -128,7 +132,45 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
       _builder.setOrbitsVisible(visible);
 
   @override
+  void setPlanetOrbitRadius(String planetId, double radius) {
+    _builder.setPlanetOrbitRadius(planetId, radius);
+    _animator?.setOrbitRadius(planetId, radius);
+  }
+
+  @override
   void addSpinBoost(double amount) => _animator?.addSpinBoost(amount);
+
+  @override
+  String? pickPlanet(
+    Offset screenPosition,
+    Size viewSize,
+    PerspectiveCamera camera,
+  ) {
+    if (!_built || viewSize.isEmpty) return null;
+    final ray = camera.screenPointToRay(screenPosition, viewSize);
+    final hit = _scene.raycast(
+      ray,
+      where: (node) => node.name.endsWith(':mesh'),
+    );
+    if (hit == null) return null;
+    Node? node = hit.node;
+    while (node != null && node.parent != _scene.root) {
+      node = node.parent;
+    }
+    if (node == null) return null;
+    for (final entry in _builder.states.entries) {
+      if (identical(entry.value.node, node)) return entry.key;
+    }
+    return null;
+  }
+
+  @override
+  void spinPlanet(String planetId, double delta) {
+    final render = _builder.states[planetId];
+    if (render == null) return;
+    render.spinNode.rotation = render.spinNode.rotation *
+        vm.Quaternion.axisAngle(vm.Vector3(0, 1, 0), delta);
+  }
 
   @override
   void orbitBy(double dx, double dy) => _rig.orbitBy(dx, dy);

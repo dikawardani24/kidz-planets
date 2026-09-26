@@ -22,6 +22,8 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   String _loadingLabel = 'Warming up the rockets...';
   PerspectiveCamera? _lastCamera;
   List<PlanetLabelFrame> _labelFrames = const [];
+  double _lastScale = 1.0;
+  double _pinchStartZoom = 1.0;
 
   @override
   void initState() {
@@ -39,6 +41,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
         planets: planets,
         onProgress: (label) { if (mounted) setState(() => _loadingLabel = label); },
       );
+      controller.setOrbitsVisible(ref.read(explorerControllerProvider).showOrbits);
       if (mounted) setState(() => _ready = true);
     } catch (e) {
       if (mounted) setState(() => _loadingLabel = 'Oops! Could not load space: $e');
@@ -55,8 +58,11 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
         return GestureDetector(
-          onPanUpdate: _onPanUpdate,
+          // Scale handles both one-finger drag and two-finger pinch.
+          // A separate Pan recognizer competes with Scale in Flutter's gesture arena.
+          onScaleStart: _onScaleStart,
           onScaleUpdate: _onScaleUpdate,
+          onScaleEnd: _onScaleEnd,
           onTapUp: (d) => _onTapUp(d, size),
           child: Stack(
             fit: StackFit.expand,
@@ -104,39 +110,71 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     return true;
   }
 
-  void _onPanUpdate(DragUpdateDetails details) {
-    final controller = ref.read(solarSystemSceneControllerProvider);
+  void _onScaleStart(ScaleStartDetails details) {
     final ui = ref.read(explorerControllerProvider);
-    if (ui.hasSelection) {
-      controller.addSpinBoost(details.delta.dx * 0.00012);
-      ref.read(explorerControllerProvider.notifier).updateDetailCamera(
-        theta: ui.detailTheta + details.delta.dx * 0.008,
-        phi: (ui.detailPhi + details.delta.dy * 0.005).clamp(-0.2, 1.3),
-      );
-    } else {
-      controller.orbitBy(details.delta.dx, details.delta.dy);
-    }
+    _lastScale = 1.0;
+    _pinchStartZoom = ui.detailZoom;
+  }
+
+  void _onScaleEnd(ScaleEndDetails details) {
+    _lastScale = 1.0;
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details) {
     final controller = ref.read(solarSystemSceneControllerProvider);
     final ui = ref.read(explorerControllerProvider);
-    if (details.scale != 1.0) {
-      if (ui.hasSelection) {
-        ref.read(explorerControllerProvider.notifier).updateDetailCamera(
-          zoom: (ui.detailZoom * details.scale).clamp(0.6, 2.6),
-        );
-      } else {
-        controller.pinch(details.scale);
+
+    // Two pointers = pinch zoom. One pointer = orbit/spin.
+    final incrementalScale = details.scale / _lastScale;
+    if (details.pointerCount >= 2) {
+      if (incrementalScale.isFinite && incrementalScale > 0) {
+        if (ui.hasSelection) {
+          final currentZoom = ref.read(explorerControllerProvider).detailZoom;
+          ref.read(explorerControllerProvider.notifier).updateDetailCamera(
+                zoom: (currentZoom / incrementalScale).clamp(0.4, 2.6),
+              );
+        } else {
+          controller.pinch(incrementalScale);
+        }
+        _lastScale = details.scale;
       }
       return;
     }
-    if (details.pointerCount >= 2) {
-      controller.orbitBy(-details.focalPointDelta.dx, -details.focalPointDelta.dy);
+
+    if (details.pointerCount == 1) {
+      if (ui.hasSelection) {
+        final selectedId = ui.selectedPlanetId;
+        if (selectedId != null) {
+          controller.spinPlanet(selectedId, details.focalPointDelta.dx * 0.009);
+        }
+        final current = ref.read(explorerControllerProvider);
+        ref.read(explorerControllerProvider.notifier).updateDetailCamera(
+              theta: current.detailTheta + details.focalPointDelta.dx * 0.008,
+              phi: (current.detailPhi + details.focalPointDelta.dy * 0.006)
+                  .clamp(-0.45, 1.35),
+            );
+      } else {
+        controller.orbitBy(
+          details.focalPointDelta.dx,
+          details.focalPointDelta.dy,
+        );
+      }
     }
   }
 
   void _onTapUp(TapUpDetails details, Size size) {
+    final controller = ref.read(solarSystemSceneControllerProvider);
+    final camera = _lastCamera;
+    if (camera != null) {
+      final pickedId = controller.pickPlanet(details.localPosition, size, camera);
+      if (pickedId != null) {
+        ref.read(explorerControllerProvider.notifier).selectPlanet(pickedId);
+        return;
+      }
+    }
+
+    // Keep labels as a forgiving secondary target, matching the prototype's
+    // tappable planet labels without requiring an exact mesh hit.
     PlanetLabelFrame? best;
     var bestDistSq = 48.0 * 48.0;
     for (final frame in _labelFrames) {
@@ -144,10 +182,14 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
       final dx = frame.screenX - details.localPosition.dx;
       final dy = frame.screenY - details.localPosition.dy;
       final distSq = dx * dx + dy * dy;
-      if (distSq < bestDistSq) { bestDistSq = distSq; best = frame; }
+      if (distSq < bestDistSq) {
+        bestDistSq = distSq;
+        best = frame;
+      }
     }
-    if (best == null) return;
-    ref.read(explorerControllerProvider.notifier).selectPlanet(best.id);
+    if (best != null) {
+      ref.read(explorerControllerProvider.notifier).selectPlanet(best.id);
+    }
   }
 }
 
@@ -186,7 +228,7 @@ class _PlanetLabelsOverlay extends StatelessWidget {
     return Stack(
       children: [
         for (final frame in frames)
-          if (frame.visible && byId.containsKey(frame.id))
+          if (frame.visible && frame.id != selectedId && byId.containsKey(frame.id))
             Positioned(
               left: frame.screenX - 60,
               top: frame.screenY - 18,

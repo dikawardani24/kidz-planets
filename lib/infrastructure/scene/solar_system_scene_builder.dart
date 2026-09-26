@@ -38,6 +38,12 @@ class SolarSystemSceneBuilder {
     required List<Planet> planets,
     required void Function(String label) onProgress,
   }) async {
+    // Match the prototype's space lighting: the Sun is the primary light
+    // source, while only a small amount of ambient IBL keeps the shadow side
+    // from becoming completely black.
+    scene.environmentIntensity = 0.14;
+    _buildSunLight(scene);
+
     onProgress('Painting stars…');
     await _buildStars(scene);
     final total = planets.length;
@@ -52,6 +58,25 @@ class SolarSystemSceneBuilder {
         _buildOrbit(scene, planet);
       }
     }
+  }
+
+  void _buildSunLight(Scene scene) {
+    // The planets orbit around world origin, so a point light at the Sun gives
+    // every planet a physically meaningful day/night side as it moves around
+    // the system. Unlike a directional light, the illumination direction
+    // changes naturally with each planet's position.
+    final sunLight = Node(name: 'sun:light')
+      ..addComponent(
+        PointLightComponent(
+          PointLight(
+            color: vm.Vector3(1.0, 0.86, 0.62),
+            intensity: 20.0,
+            range: 80.0,
+            falloffExponent: 1.0,
+          ),
+        ),
+      );
+    scene.add(sunLight);
   }
 
   Future<void> _buildStars(Scene scene) async {
@@ -104,6 +129,8 @@ class SolarSystemSceneBuilder {
       id: planet.id,
       node: orbitNode,
       spinNode: spinNode,
+      radius: planet.radius,
+      isSun: planet.isSun,
     );
   }
 
@@ -143,6 +170,15 @@ class SolarSystemSceneBuilder {
     node.raycastable = false;
     scene.add(node);
     orbitNodes[planet.id] = node;
+  }
+
+  void setPlanetOrbitRadius(String planetId, double radius) {
+    final state = states[planetId];
+    if (state == null) return;
+    final angle = state.node.position.z == 0 && state.node.position.x == 0
+        ? 0.0
+        : math.atan2(state.node.position.z, state.node.position.x);
+    state.node.position = vm.Vector3(math.cos(angle) * radius, 0, math.sin(angle) * radius);
   }
 
   void setOrbitsVisible(bool visible) {
