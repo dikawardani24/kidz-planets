@@ -30,6 +30,7 @@ class PlanetDetailSheet extends ConsumerWidget {
                 ? _DetailContent(
                     planet: planet,
                     ui: ui,
+                    onSpeak: () => ref.read(planetTtsServiceProvider).replay(planet),
                     onPlayMode: notifier.toggleDetailCard,
                     onClose: notifier.closeDetail,
                     onHotspot: (hotspot) {
@@ -71,6 +72,7 @@ class _DetailContent extends StatelessWidget {
 
   final Planet planet;
   final ExplorerState ui;
+  final VoidCallback onSpeak;
   final VoidCallback onPlayMode;
   final VoidCallback onClose;
   final ValueChanged<Hotspot> onHotspot;
@@ -119,6 +121,37 @@ class _DetailContent extends StatelessWidget {
                     ],
                   ),
                 ),
+                GestureDetector(
+                  onTap: onSpeak,
+                  child: AppTheme.glass(
+                    pill: true,
+                    radius: BorderRadius.circular(999),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 6,
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.volume_up_rounded,
+                          size: 12,
+                          color: AppTheme.accentSky,
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          'Listen',
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFFDDEAFE),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 5),
                 GestureDetector(
                   onTap: onPlayMode,
                   child: AppTheme.glass(
