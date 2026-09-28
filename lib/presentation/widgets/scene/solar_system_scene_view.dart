@@ -275,6 +275,7 @@ class _PlanetLabelsOverlay extends StatelessWidget {
   final List<PlanetLabelFrame> frames;
   final List<Planet> planets;
   final bool showLabels;
+  final bool zoomAllowsLabels;
   final String? selectedId;
   @override
   Widget build(BuildContext context) {
