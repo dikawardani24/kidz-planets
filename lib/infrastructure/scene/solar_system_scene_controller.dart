@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_scene/scene.dart';
@@ -36,6 +37,7 @@ abstract class SolarSystemSceneController {
   void spinPlanet(String planetId, double delta);
   void rotatePlanet(String planetId, double dx, double dy);
   void rotateSolarSystem(double dx, double dy);
+  void setRotationVelocity({String? planetId, required double angularX, required double angularY});
   void orbitBy(double dx, double dy);
   void pinch(double scale);
   void dispose();
@@ -71,6 +73,9 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   LabelProjector? _projector;
   bool _built = false;
   Future<void>? _buildFuture;
+  double _rotationVelocityX = 0.0;
+  double _rotationVelocityY = 0.0;
+  String? _rotationVelocityPlanetId;
 
   @override
   Scene get scene => _scene;
@@ -113,6 +118,28 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
     _clock.tick(deltaSeconds);
     final focused = ui.focusedPlanetId;
     _animator?.setFocusedPlanet(focused);
+
+    if (_rotationVelocityX.abs() > 0.0001 ||
+        _rotationVelocityY.abs() > 0.0001) {
+      if (_rotationVelocityPlanetId != null) {
+        _builder.rotatePlanetAngularVelocity(
+          _rotationVelocityPlanetId!,
+          _rotationVelocityX,
+          _rotationVelocityY,
+          deltaSeconds,
+        );
+      } else {
+        _builder.rotateSolarSystemAngularVelocity(
+          _rotationVelocityX,
+          _rotationVelocityY,
+          deltaSeconds,
+        );
+      }
+      final damping = math.pow(0.055, deltaSeconds).toDouble();
+      _rotationVelocityX *= damping;
+      _rotationVelocityY *= damping;
+    }
+
     _animator?.tick(deltaSeconds);
     if (focused != null) {
       _rig.focusOn(focused, _builder, deltaSeconds: deltaSeconds);
@@ -183,6 +210,17 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
       _builder.rotateSolarSystem(dx, dy);
 
   @override
+  void setRotationVelocity({
+    String? planetId,
+    required double angularX,
+    required double angularY,
+  }) {
+    _rotationVelocityPlanetId = planetId;
+    _rotationVelocityX = angularX;
+    _rotationVelocityY = angularY;
+  }
+
+  @override
   void orbitBy(double dx, double dy) => _rig.orbitBy(dx, dy);
 
   @override
@@ -190,6 +228,8 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
 
   @override
   void dispose() {
+    _rotationVelocityX = 0.0;
+    _rotationVelocityY = 0.0;
     _animator?.detach();
     _textures.dispose();
     _geometries.dispose();
