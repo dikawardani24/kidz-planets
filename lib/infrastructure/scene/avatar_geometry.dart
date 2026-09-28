@@ -1,49 +1,43 @@
 import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
-/// Geometry for the sleek Sci-Fi Robot / Space Drone companion.
+/// Geometry for the Chubby Cartoon Rocket Ship Mascot.
 ///
-/// Clean, high-tech, adorable floating robot buddy with a digital visor screen,
-/// glowing antenna, thruster ring, and compact chassis.
+/// A brand new, unique shape: a friendly little cartoon rocket ship with
+/// a round nosecone, porthole window, little wings/fins, and engine thruster.
 class AvatarGeometryFactory {
   AvatarGeometryFactory();
 
   final Map<String, MeshGeometry> _cache = {};
 
-  /// Main robot spherical chassis.
-  MeshGeometry chassis() => _cache.putIfAbsent(
-        'chassis',
-        () => SphereGeometry(radius: 0.17, segments: 24, rings: 16),
+  /// Main rocket fuselage body.
+  MeshGeometry rocketBody() => _cache.putIfAbsent(
+        'rocket-body',
+        () => CapsuleGeometry(radius: 0.14, height: 0.32, radialSegments: 22, capRings: 6),
       );
 
-  /// Digital visor screen face.
-  MeshGeometry visorScreen() => _cache.putIfAbsent(
-        'visor-screen',
-        () => CapsuleGeometry(radius: 0.11, height: 0.13, radialSegments: 18, capRings: 6),
+  /// Rounded rocket nosecone.
+  MeshGeometry noseCone() => _cache.putIfAbsent(
+        'nose-cone',
+        () => SphereGeometry(radius: 0.14, segments: 20, rings: 10),
       );
 
-  /// Floating anti-gravity / thruster ring around the base.
-  MeshGeometry thrusterRing() => _cache.putIfAbsent(
-        'thruster-ring',
-        () => CapsuleGeometry(radius: 0.14, height: 0.05, radialSegments: 16, capRings: 3),
+  /// Front porthole window.
+  MeshGeometry porthole() => _cache.putIfAbsent(
+        'porthole',
+        () => SphereGeometry(radius: 0.075, segments: 18, rings: 12),
       );
 
-  /// Floating side sensor pods / arms.
-  MeshGeometry sidePod() => _cache.putIfAbsent(
-        'side-pod',
-        () => SphereGeometry(radius: 0.045, segments: 12, rings: 8),
+  /// Rocket side fins / wings.
+  MeshGeometry fin() => _cache.putIfAbsent(
+        'fin',
+        () => CuboidGeometry(vm.Vector3(0.06, 0.12, 0.03)),
       );
 
-  /// Top comms antenna stem.
-  MeshGeometry antennaStem() => _cache.putIfAbsent(
-        'antenna-stem',
-        () => CapsuleGeometry(radius: 0.012, height: 0.12, radialSegments: 6, capRings: 2),
-      );
-
-  /// Top antenna glowing beacon orb.
-  MeshGeometry antennaTip() => _cache.putIfAbsent(
-        'antenna-tip',
-        () => SphereGeometry(radius: 0.032, segments: 12, rings: 8),
+  /// Rocket engine base nozzle.
+  MeshGeometry engineNozzle() => _cache.putIfAbsent(
+        'engine-nozzle',
+        () => CapsuleGeometry(radius: 0.08, height: 0.06, radialSegments: 16, capRings: 3),
       );
 
   /// Stand-in for the mission target.

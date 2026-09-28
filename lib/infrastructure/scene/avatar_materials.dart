@@ -1,36 +1,38 @@
 import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
-/// Materials for the sleek Sci-Fi Robot / Space Drone companion.
+/// Materials for the Chubby Cartoon Rocket Ship Mascot.
 class AvatarMaterialFactory {
   AvatarMaterialFactory();
 
-  /// Chassis: polished metallic white / silver PBR material.
-  PhysicallyBasedMaterial chassis() {
+  /// Rocket body: vibrant, glossy space red.
+  PhysicallyBasedMaterial rocketBody() {
     return PhysicallyBasedMaterial()
-      ..baseColorFactor = vm.Vector4(0.92, 0.94, 0.98, 1.0)
-      ..metallicFactor = 0.40
-      ..roughnessFactor = 0.25;
-  }
-
-  /// Metallic trim / accents.
-  PhysicallyBasedMaterial trim() {
-    return PhysicallyBasedMaterial()
-      ..baseColorFactor = vm.Vector4(0.18, 0.45, 0.85, 1.0)
-      ..metallicFactor = 0.50
+      ..baseColorFactor = vm.Vector4(0.95, 0.22, 0.25, 1.0)
+      ..metallicFactor = 0.20
       ..roughnessFactor = 0.30;
   }
 
-  /// Digital visor screen: glowing high-tech cyan/blue display.
-  UnlitMaterial visorScreen() {
-    return UnlitMaterial()
-      ..baseColorFactor = vm.Vector4(0.08, 0.75, 0.98, 1.0);
+  /// Nosecone & accents: crisp white.
+  PhysicallyBasedMaterial whiteAccent() {
+    return PhysicallyBasedMaterial()
+      ..baseColorFactor = vm.Vector4(0.97, 0.98, 1.0, 1.0)
+      ..metallicFactor = 0.10
+      ..roughnessFactor = 0.25;
   }
 
-  /// Antenna glowing beacon.
-  UnlitMaterial beacon() {
+  /// Fins: sunny yellow.
+  PhysicallyBasedMaterial fins() {
+    return PhysicallyBasedMaterial()
+      ..baseColorFactor = vm.Vector4(0.98, 0.82, 0.15, 1.0)
+      ..metallicFactor = 0.15
+      ..roughnessFactor = 0.40;
+  }
+
+  /// Porthole window: glowing cyan/blue glass.
+  UnlitMaterial porthole() {
     return UnlitMaterial()
-      ..baseColorFactor = vm.Vector4(0.98, 0.82, 0.15, 1.0);
+      ..baseColorFactor = vm.Vector4(0.12, 0.75, 0.98, 1.0);
   }
 
   /// Stand-in for the mission target.

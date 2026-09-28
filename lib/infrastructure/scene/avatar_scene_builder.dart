@@ -10,10 +10,11 @@ import '../../application/state/explorer_state.dart';
 import 'avatar_geometry.dart';
 import 'avatar_materials.dart';
 
-/// Builds and owns the sleek Sci-Fi Robot / Space Drone companion graph.
+/// Builds and owns the Chubby Cartoon Rocket Ship Mascot graph.
 ///
-/// Clean, adorable, high-tech floating robot buddy with a glowing digital visor screen,
-/// anti-gravity thruster ring, comms antenna, and dynamic planetary reactions.
+/// A delightful, adorable miniature rocket ship with a glossy red body,
+/// crisp white nosecone, glowing porthole window, sunny yellow fins,
+/// and dynamic planetary reactions.
 class AvatarSceneBuilder {
   AvatarSceneBuilder({
     required this.geometries,
@@ -27,11 +28,7 @@ class AvatarSceneBuilder {
   final Node bodyRoot = Node(name: 'avatar-body');
   final Node targetPivot = Node(name: 'avatar-target');
 
-  Node? _antennaNode;
-  Node? _leftPod;
-  Node? _rightPod;
-
-  UnlitMaterial? _visorMaterial;
+  UnlitMaterial? _portholeMaterial;
   UnlitMaterial? _targetMaterial;
 
   void build(Scene scene) {
@@ -58,48 +55,46 @@ class AvatarSceneBuilder {
   }
 
   void _buildBody() {
-    final chassisMat = materials.chassis();
-    final trimMat = materials.trim();
-    final visorMat = materials.visorScreen();
-    final beaconMat = materials.beacon();
+    final bodyMat = materials.rocketBody();
+    final whiteMat = materials.whiteAccent();
+    final finMat = materials.fins();
+    final portholeMat = materials.porthole();
 
-    _visorMaterial = visorMat;
+    _portholeMaterial = portholeMat;
 
-    // Main spherical robot chassis
+    // Rocket fuselage body
     bodyRoot.add(
-      _mesh('chassis', geometries.chassis(), chassisMat)
-        ..position = vm.Vector3(0, 0.05, 0),
+      _mesh('fuselage', geometries.rocketBody(), bodyMat)
+        ..position = vm.Vector3(0, 0, 0),
     );
 
-    // Digital visor screen face
+    // Rounded nosecone
     bodyRoot.add(
-      _mesh('visor', geometries.visorScreen(), visorMat)
-        ..position = vm.Vector3(0, 0.05, -0.145),
-    );
-
-    // Anti-gravity thruster ring at base
-    bodyRoot.add(
-      _mesh('thruster-ring', geometries.thrusterRing(), trimMat)
-        ..position = vm.Vector3(0, -0.14, 0),
-    );
-
-    // Side floating sensor pods
-    _leftPod = _mesh('pod-left', geometries.sidePod(), trimMat)
-      ..position = vm.Vector3(-0.20, 0.05, 0);
-    _rightPod = _mesh('pod-right', geometries.sidePod(), trimMat)
-      ..position = vm.Vector3(0.20, 0.05, 0);
-    bodyRoot
-      ..add(_leftPod!)
-      ..add(_rightPod!);
-
-    // Antenna stem and glowing beacon
-    bodyRoot.add(
-      _mesh('antenna-stem', geometries.antennaStem(), trimMat)
+      _mesh('nosecone', geometries.noseCone(), whiteMat)
         ..position = vm.Vector3(0, 0.22, 0),
     );
-    _antennaNode = _mesh('antenna-tip', geometries.antennaTip(), beaconMat)
-      ..position = vm.Vector3(0, 0.30, 0);
-    bodyRoot.add(_antennaNode!);
+
+    // Front porthole window
+    bodyRoot.add(
+      _mesh('porthole', geometries.porthole(), portholeMat)
+        ..position = vm.Vector3(0, 0.05, -0.12),
+    );
+
+    // Side fins / wings
+    bodyRoot.add(
+      _mesh('fin-left', geometries.fin(), finMat)
+        ..position = vm.Vector3(-0.16, -0.10, 0),
+    );
+    bodyRoot.add(
+      _mesh('fin-right', geometries.fin(), finMat)
+        ..position = vm.Vector3(0.16, -0.10, 0),
+    );
+
+    // Engine nozzle at base
+    bodyRoot.add(
+      _mesh('engine', geometries.engineNozzle(), whiteMat)
+        ..position = vm.Vector3(0, -0.22, 0),
+    );
   }
 
   void _buildTarget() {
@@ -151,64 +146,51 @@ class AvatarSceneBuilder {
         selectedPlanetId == 'venus';
 
     if (isIceWorld) {
-      // Shivering / vibrating when cold
       hover = math.sin(t * 30.0) * 0.008;
       tilt = math.sin(t * 20.0) * 0.08;
     } else if (isHotWorld) {
-      // Fast bobbing when hot
       hover = math.sin(t * 8.0) * 0.03;
       tilt = 0.15;
     } else if (idleAction == AvatarIdleAction.dancing) {
-      hover = math.sin(t * 9.0).abs() * 0.06;
-      tilt = math.sin(t * 6.0) * 0.25;
+      hover = math.sin(t * 9.0).abs() * 0.07;
+      tilt = math.sin(t * 6.0) * 0.3;
     } else if (idleAction == AvatarIdleAction.thinking) {
       hover = math.sin(t * 2.0) * 0.01;
       tilt = -0.15;
     } else if (idleAction == AvatarIdleAction.sitting) {
-      hover = -0.10;
+      hover = -0.12;
+    } else if (idleAction == AvatarIdleAction.flying) {
+      // Rocket banking forward when flying!
+      hover = math.sin(t * 6.0) * 0.04;
+      tilt = 0.35; // Bank forward in flight
     } else {
-      // Gentle floating hover
-      hover = math.sin(t * 3.0) * 0.018;
+      hover = math.sin(t * 3.0) * 0.02;
     }
 
     bodyRoot
-      ..position = vm.Vector3(0, hover + 0.02, 0)
+      ..position = vm.Vector3(0, hover, 0)
       ..rotation = vm.Quaternion.axisAngle(vm.Vector3(0, 0, 1), tilt);
 
-    // Antenna pulse
-    final pulseRate = isIceWorld ? 15.0 : (isHotWorld ? 12.0 : 3.0);
-    _antennaNode?.position = vm.Vector3(
-      math.sin(t * pulseRate) * 0.03,
-      0.30,
-      0,
-    );
-
-    _setVisorColor(mood, idleAction, selectedPlanetId);
+    _setPortholeColor(mood, idleAction, selectedPlanetId);
   }
 
-  void _setVisorColor(AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId) {
-    final material = _visorMaterial;
+  void _setPortholeColor(AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId) {
+    final material = _portholeMaterial;
     if (material == null) return;
     final color = switch (selectedPlanetId) {
-      'neptune' || 'uranus' || 'pluto' => const Color(0xFF38BDF8), // Freezing ice blue
-      'sun' || 'mercury' || 'venus' => const Color(0xFFFBBF24), // Scorching orange/yellow
+      'neptune' || 'uranus' || 'pluto' => const Color(0xFF38BDF8),
+      'sun' || 'mercury' || 'venus' => const Color(0xFFFBBF24),
       _ => switch (idleAction) {
           AvatarIdleAction.dancing => const Color(0xFF10B981),
           AvatarIdleAction.thinking => const Color(0xFF8B5CF6),
           AvatarIdleAction.sitting => const Color(0xFF64748B),
           AvatarIdleAction.flying => const Color(0xFF06B6D4),
           AvatarIdleAction.sendingHeart => const Color(0xFFEC4899),
-          AvatarIdleAction.none => switch (mood) {
-              AvatarMood.instruction => const Color(0xFF38BDF8),
-              AvatarMood.searching => const Color(0xFF0EA5E9),
-              AvatarMood.wrong => const Color(0xFF7C3AED),
-              AvatarMood.retry => const Color(0xFF8B7CFF),
-              AvatarMood.success => const Color(0xFFF59E0B),
-            },
+          AvatarIdleAction.none => const Color(0xFF12B981),
         },
     };
-    if (_visorColor == color) return;
-    _visorColor = color;
+    if (_portholeColor == color) return;
+    _portholeColor = color;
     material.baseColorFactor = vm.Vector4(
       color.r.toDouble(),
       color.g.toDouble(),
@@ -217,7 +199,7 @@ class AvatarSceneBuilder {
     );
   }
 
-  Color? _visorColor;
+  Color? _portholeColor;
 
   void showTarget({required bool visible, required Color color}) {
     targetPivot.visible = visible;

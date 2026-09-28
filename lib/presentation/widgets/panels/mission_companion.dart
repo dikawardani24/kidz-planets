@@ -16,9 +16,7 @@ const double kCompanionEdge = 8;
 const double kMoveHandleSize = 40;
 const Offset kMoveHandleOffset = Offset(118, 108);
 
-/// The persistent 3D mission companion.
-/// Flies non-stop all over the screen in overview mode, but gracefully
-/// settles at the bottom of the screen when the user focuses on a planet.
+/// The persistent 3D Chubby Cartoon Rocket Ship mission companion.
 class MissionCompanion extends ConsumerStatefulWidget {
   const MissionCompanion({super.key, this.controllerFactory});
 
@@ -46,14 +44,13 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
 
     _flightTicker = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1000),
     )..repeat();
 
     _flightTicker.addListener(() {
       if (!mounted) return;
       final ui = ref.read(explorerControllerProvider);
       final pose = ref.read(avatarControllerProvider);
-      // Only fly around when NOT focused on a planet
       if (!ui.hasSelection && pose.idleAction == AvatarIdleAction.flying) {
         ref.read(avatarControllerProvider.notifier).updateFlight(
               0.016,
@@ -98,7 +95,6 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
 
         final hasFocus = ui.hasSelection;
 
-        // When focused on a planet, dock neatly at the bottom center of the screen
         final bottomAnchor = Offset(
           (viewport.width / 2 - kCompanionBoxWidth / 2)
               .clamp(kCompanionEdge, viewport.width - kCompanionBoxWidth - kCompanionEdge),
@@ -270,6 +266,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
   }
 }
 
+/// Compact, tightly-coupled rocket exhaust flame right at the rocket base.
 class _RocketExhaustFlame extends StatelessWidget {
   const _RocketExhaustFlame({required this.progress});
   final double progress;
@@ -278,27 +275,27 @@ class _RocketExhaustFlame extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       clipBehavior: Clip.none,
-      children: List.generate(6, (i) {
-        final factor = (progress + i * 0.18) % 1.0;
-        final size = 60.0 * (1.0 - factor * 0.35);
+      children: List.generate(5, (i) {
+        final factor = (progress + i * 0.2) % 1.0;
+        final size = 48.0 * (1.0 - factor * 0.4);
         final opacity = (1.0 - factor).clamp(0.0, 1.0);
         return Positioned(
           left: kCompanionBoxWidth / 2 -
               size / 2 +
-              (math.sin(i + progress * math.pi * 4) * 20),
-          top: kCompanionBoxHeight - 10 + (factor * 90),
+              (math.sin(i + progress * math.pi * 4) * 8),
+          top: kCompanionBoxHeight - 68 + (factor * 40), // Starts right at the engine nozzle
           child: Opacity(
             opacity: opacity * 0.95,
             child: Container(
               width: size,
-              height: size * 1.6,
+              height: size * 1.4,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
                     const Color(0xFFFFFFFF).withValues(alpha: 0.98),
                     const Color(0xFF38BDF8).withValues(alpha: 0.92),
-                    const Color(0xFF0284C7).withValues(alpha: 0.55),
+                    const Color(0xFF0284C7).withValues(alpha: 0.50),
                     Colors.transparent,
                   ],
                   stops: const [0.0, 0.3, 0.7, 1.0],
