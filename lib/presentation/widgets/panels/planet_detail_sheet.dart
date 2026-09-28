@@ -22,23 +22,32 @@ class PlanetDetailSheet extends ConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AnimatedSize(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.topCenter,
-            child: ui.detailCardVisible
-                ? _DetailContent(
-                    planet: planet,
-                    ui: ui,
-                    onSpeak: () => ref.read(planetNarrationServiceProvider).replay(planet),
-                    onPlayMode: notifier.toggleDetailCard,
-                    onClose: notifier.closeDetail,
-                    onHotspot: (hotspot) {
-                      ref.read(planetNarrationServiceProvider).speakHotspot(hotspot);
-                      notifier.showHotspot(hotspot);
-                    },
-                  )
-                : const SizedBox.shrink(),
+          // Flexible so the scrolling detail card yields height when the
+          // viewport is short. Without it the card, zoom bar and collapse
+          // button add up to more than the sheet allows and the Column
+          // overflows.
+          Flexible(
+            child: AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: ui.detailCardVisible
+                  ? _DetailContent(
+                      planet: planet,
+                      ui: ui,
+                      onSpeak: () =>
+                          ref.read(planetNarrationServiceProvider).replay(planet),
+                      onPlayMode: notifier.toggleDetailCard,
+                      onClose: notifier.closeDetail,
+                      onHotspot: (hotspot) {
+                        ref
+                            .read(planetNarrationServiceProvider)
+                            .speakHotspot(hotspot);
+                        notifier.showHotspot(hotspot);
+                      },
+                    )
+                  : const SizedBox.shrink(),
+            ),
           ),
           if (ui.detailCardVisible) const SizedBox(height: 8),
           _DetailZoomBar(
