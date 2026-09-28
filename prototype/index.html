@@ -735,6 +735,13 @@
         // Accumulated orbit angles are intentionally unbounded so horizontal rotation can continue forever.
         let solarOrbitTheta = 0.9;
         let solarOrbitPhi = 0.45;
+
+        // True virtual-trackball rotations. These rotate the actual scene/planet,
+        // rather than orbiting the camera around spherical theta/phi angles.
+        const solarTrackballQuat = new THREE.Quaternion();
+        const detailTrackballQuat = new THREE.Quaternion();
+        const trackballAxis = new THREE.Vector3();
+        const trackballDeltaQuat = new THREE.Quaternion();
         let isFocusing = false;
         let solarProminences = null;
         let sunInnerCorona = null;
@@ -1289,6 +1296,25 @@
             renderer.render(scene, camera);
         }
 
+        function applyTrackballRotation(object, deltaX, deltaY, accumulator) {
+            // Map screen drag to a virtual trackball axis. The axis lies in the
+            // camera-facing plane, so diagonal drags produce natural 3D rotation.
+            const length = Math.hypot(deltaX, deltaY);
+            if (length < 0.001) return;
+
+            trackballAxis.set(deltaY, deltaX, 0).normalize();
+
+            // Keep the response proportional to drag distance. There is no angle
+            // clamp or modulo: repeated drags can accumulate indefinitely.
+            const angle = length * 0.009;
+            trackballDeltaQuat.setFromAxisAngle(trackballAxis, angle);
+
+            // World-space accumulation gives globe-like manipulation: the object
+            // keeps its existing orientation instead of resetting at the poles.
+            accumulator.copy(trackballDeltaQuat).multiply(accumulator);
+            object.quaternion.copy(accumulator).normalize();
+        }
+
         function setupTouchAndMouse() {
             const container = document.getElementById('webgl-container');
 
@@ -1438,6 +1464,8 @@
             detailZoom = 1.0;
             detailCamTheta = 0.65;
             detailCamPhi = 0.28;
+            detailTrackballQuat.identity();
+            if (selectedPlanetItem) selectedPlanetItem.mesh.quaternion.identity();
             planetSpinVelocity = 0.008 * simulationSpeed;
             updateZoomIndicator();
 
@@ -1578,6 +1606,7 @@
             detailZoom = 1.0;
             detailCamTheta = 0.65;
             detailCamPhi = 0.28;
+            detailTrackballQuat.copy(selectedPlanetItem.mesh.quaternion);
             planetSpinVelocity = 0.008 * simulationSpeed;
             updateZoomIndicator();
         }
