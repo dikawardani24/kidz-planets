@@ -103,9 +103,11 @@ class _DetailContent extends StatelessWidget {
                 Text(
                   planet.isSun
                       ? '☀️'
-                      : planet.id == 'saturn'
-                          ? '🪐'
-                          : '🌍',
+                      : planet.isMoon
+                          ? '🌕'
+                          : planet.id == 'saturn'
+                              ? '🪐'
+                              : '🌍',
                   style: const TextStyle(fontSize: 24),
                 ),
                 const SizedBox(width: 9),
