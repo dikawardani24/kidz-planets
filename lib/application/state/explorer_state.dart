@@ -26,6 +26,7 @@ class ExplorerState extends Equatable {
     this.toasts = const [],
     this.celebrationTitle,
     this.celebrationDescription,
+    this.activeMissionId = 1,
   });
 
   final ExplorerTab tab;
@@ -50,6 +51,7 @@ class ExplorerState extends Equatable {
   final List<ToastMessage> toasts;
   final String? celebrationTitle;
   final String? celebrationDescription;
+  final int? activeMissionId;
 
   bool get hasSelection => selectedPlanetId != null;
   bool get celebrationVisible => celebrationTitle != null && celebrationDescription != null;
@@ -77,6 +79,7 @@ class ExplorerState extends Equatable {
     List<ToastMessage>? toasts,
     Object? celebrationTitle = _sentinel,
     Object? celebrationDescription = _sentinel,
+    Object? activeMissionId = _sentinel,
   }) {
     return ExplorerState(
       tab: tab ?? this.tab,
@@ -101,6 +104,7 @@ class ExplorerState extends Equatable {
       toasts: toasts ?? this.toasts,
       celebrationTitle: identical(celebrationTitle, _sentinel) ? this.celebrationTitle : celebrationTitle as String?,
       celebrationDescription: identical(celebrationDescription, _sentinel) ? this.celebrationDescription : celebrationDescription as String?,
+      activeMissionId: identical(activeMissionId, _sentinel) ? this.activeMissionId : activeMissionId as int?,
     );
   }
 
@@ -108,7 +112,7 @@ class ExplorerState extends Equatable {
   List<Object?> get props => [
         tab, running, speed, showOrbits, showLabels, selectedPlanetId, focusedPlanetId,
         detailZoom, detailTheta, detailPhi, detailTitleOverride, detailDescriptionOverride, detailCardVisible, spinHintVisible,
-        playModeBannerVisible, playgroundAlertIcon, playgroundAlertTitle, playgroundAlertDescription, missions, toasts, celebrationTitle, celebrationDescription,
+        playModeBannerVisible, playgroundAlertIcon, playgroundAlertTitle, playgroundAlertDescription, missions, toasts, celebrationTitle, celebrationDescription, activeMissionId,
       ];
 }
 
