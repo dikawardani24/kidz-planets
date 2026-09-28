@@ -3,69 +3,99 @@ import 'package:vector_math/vector_math.dart' as vm;
 
 /// Materials for the mission companion (SRP: materials only).
 ///
-/// The suit is a lit PBR material so it responds to the scene light and reads
-/// as a real 3D object rather than a flat sticker. The visor, badge, and
-/// target are unlit: they are the character's face and its signal to the child,
-/// and they need to stay legible at any angle, in any mood, and at ~120px.
+/// Provides rich PBR and unlit materials for a distinct, polished astronaut suit.
 class AvatarMaterialFactory {
   AvatarMaterialFactory();
 
-  /// Suit: matte white dielectric, a touch of metallic so it catches a
-  /// highlight and does not go flat.
+  /// Suit: matte white dielectric with subtle specularity.
   PhysicallyBasedMaterial suit() {
-    final material = PhysicallyBasedMaterial()
-      ..baseColorFactor = vm.Vector4(0.93, 0.95, 1.0, 1.0)
-      ..metallicFactor = 0.10
-      ..roughnessFactor = 0.45;
-    return material;
+    return PhysicallyBasedMaterial()
+      ..baseColorFactor = vm.Vector4(0.95, 0.96, 1.0, 1.0)
+      ..metallicFactor = 0.08
+      ..roughnessFactor = 0.40;
   }
 
-  /// Coloured trim: boots, antenna stem, and suit accents.
+  /// Helmet dome: smooth, glossy white helmet shell.
+  PhysicallyBasedMaterial helmetDome() {
+    return PhysicallyBasedMaterial()
+      ..baseColorFactor = vm.Vector4(0.97, 0.98, 1.0, 1.0)
+      ..metallicFactor = 0.15
+      ..roughnessFactor = 0.25;
+  }
+
+  /// Coloured trim: boots, gloves, belt, shoulder pauldrons, and suit accents.
   PhysicallyBasedMaterial trim() {
-    final material = PhysicallyBasedMaterial()
-      ..baseColorFactor = vm.Vector4(0.28, 0.36, 0.62, 1.0)
-      ..metallicFactor = 0.05
-      ..roughnessFactor = 0.60;
-    return material;
-  }
-
-  /// Backpack, kept darker so the silhouette has depth from behind too.
-  PhysicallyBasedMaterial pack() {
-    final material = PhysicallyBasedMaterial()
-      ..baseColorFactor = vm.Vector4(0.72, 0.75, 0.82, 1.0)
-      ..metallicFactor = 0.20
+    return PhysicallyBasedMaterial()
+      ..baseColorFactor = vm.Vector4(0.24, 0.35, 0.70, 1.0)
+      ..metallicFactor = 0.15
       ..roughnessFactor = 0.50;
-    return material;
   }
 
-  /// Helmet: near-transparent, so the head reads inside it.
-  UnlitMaterial glass() {
-    final material = UnlitMaterial()
-      ..baseColorFactor = vm.Vector4(0.72, 0.85, 1.0, 0.28);
-    return material;
+  /// Belt accent material.
+  PhysicallyBasedMaterial belt() {
+    return PhysicallyBasedMaterial()
+      ..baseColorFactor = vm.Vector4(0.18, 0.22, 0.30, 1.0)
+      ..metallicFactor = 0.25
+      ..roughnessFactor = 0.45;
   }
 
-  /// The visor. Its colour is swapped per mood by the builder, which is this
-  /// character's closest equivalent to a facial expression.
+  /// Boot soles: heavy dark grip material.
+  PhysicallyBasedMaterial sole() {
+    return PhysicallyBasedMaterial()
+      ..baseColorFactor = vm.Vector4(0.12, 0.14, 0.18, 1.0)
+      ..metallicFactor = 0.05
+      ..roughnessFactor = 0.85;
+  }
+
+  /// Backpack and life support equipment.
+  PhysicallyBasedMaterial pack() {
+    return PhysicallyBasedMaterial()
+      ..baseColorFactor = vm.Vector4(0.78, 0.81, 0.88, 1.0)
+      ..metallicFactor = 0.25
+      ..roughnessFactor = 0.45;
+  }
+
+  /// Oxygen tanks on backpack: sleek metallic silver-blue.
+  PhysicallyBasedMaterial tank() {
+    return PhysicallyBasedMaterial()
+      ..baseColorFactor = vm.Vector4(0.85, 0.89, 0.95, 1.0)
+      ..metallicFactor = 0.45
+      ..roughnessFactor = 0.30;
+  }
+
+  /// Chest control panel module.
+  PhysicallyBasedMaterial chestPanel() {
+    return PhysicallyBasedMaterial()
+      ..baseColorFactor = vm.Vector4(0.20, 0.24, 0.32, 1.0)
+      ..metallicFactor = 0.35
+      ..roughnessFactor = 0.38;
+  }
+
+  /// Kid-friendly vibrant unlit buttons for the chest console.
+  UnlitMaterial buttonRed() => UnlitMaterial()
+    ..baseColorFactor = vm.Vector4(0.96, 0.25, 0.25, 1.0);
+
+  UnlitMaterial buttonGreen() => UnlitMaterial()
+    ..baseColorFactor = vm.Vector4(0.15, 0.88, 0.42, 1.0);
+
+  UnlitMaterial buttonYellow() => UnlitMaterial()
+    ..baseColorFactor = vm.Vector4(0.98, 0.82, 0.12, 1.0);
+
+  /// The visor. Sleek modern obsidian dark mirror finish (SpaceX EVA style).
   UnlitMaterial visor() {
-    final material = UnlitMaterial()
-      ..baseColorFactor = vm.Vector4(0.12, 0.23, 0.54, 1.0);
-    return material;
+    return UnlitMaterial()
+      ..baseColorFactor = vm.Vector4(0.08, 0.10, 0.15, 1.0);
   }
 
-  /// Chest badge and antenna tip: small unlit accents that stay readable from
-  /// any angle.
+  /// Chest badge and antenna tip.
   UnlitMaterial badge() {
-    final material = UnlitMaterial()
-      ..baseColorFactor = vm.Vector4(0.98, 0.75, 0.14, 1.0);
-    return material;
+    return UnlitMaterial()
+      ..baseColorFactor = vm.Vector4(0.98, 0.72, 0.12, 1.0);
   }
 
-  /// Stand-in for the mission target. Tinted to the real planet's colour at
-  /// runtime, so it is recognisably the same world the child is exploring.
+  /// Stand-in for the mission target.
   UnlitMaterial target() {
-    final material = UnlitMaterial()
+    return UnlitMaterial()
       ..baseColorFactor = vm.Vector4(0.22, 0.74, 1.0, 1.0);
-    return material;
   }
 }

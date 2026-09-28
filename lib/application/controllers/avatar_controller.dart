@@ -1,27 +1,102 @@
-import 'dart:ui' show Offset;
+import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' show Offset, Size;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/avatar_state.dart';
 
-/// Owns the companion's pose and place on screen (SRP: one narrow surface for
-/// avatar interaction).
-///
-/// Position and rotation live here rather than in the mission state on
-/// purpose. A mission only decides the companion's expression and animation;
-/// this controller decides where the child parked it and which way it is
-/// turned. That separation is what makes "move" and "rotate" independent
-/// gestures, and it is why neither is reset when the mission changes, a wrong
-/// answer comes back, or a celebration starts.
+/// Owns the companion's pose, screen position, and continuous non-stop flying behaviors.
 class AvatarController extends StateNotifier<AvatarState> {
-  AvatarController() : super(const AvatarState());
+  AvatarController()
+      : super(const AvatarState(
+          idleAction: AvatarIdleAction.flying,
+          flightStyle: FlightStyle.circle,
+        )) {
+    _startFlightStyleSwitcher();
+  }
 
-  /// Rotates the companion by a drag delta in pixels.
-  ///
-  /// Yaw accumulates freely so a child can spin it the full 360° and keep
-  /// going. Pitch is clamped, because a full vertical flip makes the character
-  /// unreadable rather than playful. This never touches [AvatarState
-  /// .screenPosition]: turning is not moving.
+  Timer? _styleTimer;
+  final math.Random _random = math.Random();
+  Offset? _lastMaxPosition;
+  Size? _lastViewport;
+
+  void _startFlightStyleSwitcher() {
+    // Switch flight patterns (circle -> zigzag -> edge) every 6 seconds for variety
+    _styleTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+      final styles = FlightStyle.values;
+      final nextStyle = styles[_random.nextInt(styles.length)];
+      state = state.copyWith(
+        idleAction: AvatarIdleAction.flying,
+        flightStyle: nextStyle,
+      );
+    });
+  }
+
+  /// Updates continuous non-stop flight movement along chosen path (edge, zigzag, circle)
+  void updateFlight(double dt, Size viewport, Offset maxPosition) {
+    _lastViewport = viewport;
+    _lastMaxPosition = maxPosition;
+
+    final newTime = state.flightTime + dt;
+    final t = newTime * 1.8; // brisk, lively flight speed
+
+    Offset pos;
+    final w = maxPosition.dx;
+    final h = maxPosition.dy;
+
+    switch (state.flightStyle) {
+      case FlightStyle.circle:
+        final cx = w / 2;
+        final cy = h / 2;
+        final rx = w * 0.40;
+        final ry = h * 0.35;
+        final x = cx + rx * math.cos(t);
+        final y = cy + ry * math.sin(t * 1.3);
+        pos = Offset(x.clamp(0.0, w), y.clamp(0.0, h));
+        break;
+
+      case FlightStyle.zigzag:
+        final progress = (t * 0.5) % 2.0;
+        final x = progress <= 1.0 ? progress * w : (2.0 - progress) * w;
+        final y = h * 0.5 + (math.sin(t * 5.0) * h * 0.4);
+        pos = Offset(x.clamp(0.0, w), y.clamp(0.0, h));
+        break;
+
+      case FlightStyle.edge:
+        final perimeter = 2 * (w + h);
+        final dist = (t * 140.0) % perimeter;
+        double x = 0, y = 0;
+        if (dist < w) {
+          x = dist;
+          y = 0;
+        } else if (dist < w + h) {
+          x = w;
+          y = dist - w;
+        } else if (dist < 2 * w + h) {
+          x = w - (dist - (w + h));
+          y = h;
+        } else {
+          x = 0;
+          y = h - (dist - (2 * w + h));
+        }
+        pos = Offset(x.clamp(0.0, w), y.clamp(0.0, h));
+        break;
+    }
+
+    state = state.copyWith(
+      screenPosition: pos,
+      flightTime: newTime,
+      idleAction: AvatarIdleAction.flying, // Always flying non-stop!
+    );
+  }
+
+  @override
+  void dispose() {
+    _styleTimer?.cancel();
+    super.dispose();
+  }
+
   void rotateBy({required double dx, required double dy}) {
     const yawPerPixel = 0.012;
     const pitchPerPixel = 0.008;
@@ -32,15 +107,11 @@ class AvatarController extends StateNotifier<AvatarState> {
     );
   }
 
-  /// Moves the companion by a drag delta in pixels, kept inside the viewport.
-  ///
-  /// Clamping to [maxPosition] is what stops the child pushing the companion
-  /// off screen, where they could not grab it again to bring it back. It also
-  /// never touches yaw or pitch: moving is not turning.
   void moveBy({
     required Offset delta,
     required Offset maxPosition,
   }) {
+    _lastMaxPosition = maxPosition;
     final current = state.screenPosition;
     if (current == null) return;
     state = state.copyWith(
@@ -51,14 +122,22 @@ class AvatarController extends StateNotifier<AvatarState> {
     );
   }
 
-  /// Commits the starting spot, computed once the real viewport is known.
-  void placeAt(Offset position) {
-    state = state.copyWith(screenPosition: position);
+  void placeAt(Offset position, {Offset? maxPosition}) {
+    if (maxPosition != null) {
+      _lastMaxPosition = maxPosition;
+      state = state.copyWith(
+        screenPosition: Offset(
+          position.dx.clamp(0.0, maxPosition.dx),
+          position.dy.clamp(0.0, maxPosition.dy),
+        ),
+      );
+    } else {
+      state = state.copyWith(screenPosition: position);
+    }
   }
 
-  /// Returns the companion to its starting spot without touching its rotation,
-  /// so a "put it back" action does not also undo how the child turned it.
-  void resetPositionTo(Offset position) => placeAt(position);
+  void resetPositionTo(Offset position, {Offset? maxPosition}) =>
+      placeAt(position, maxPosition: maxPosition);
 }
 
 final avatarControllerProvider =

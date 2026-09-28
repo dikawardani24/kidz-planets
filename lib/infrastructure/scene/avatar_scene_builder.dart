@@ -11,25 +11,6 @@ import 'avatar_geometry.dart';
 import 'avatar_materials.dart';
 
 /// Builds and owns the companion's flutter_scene graph (SRP: scene only).
-///
-/// The character is built from primitives rather than loaded from a file: it
-/// keeps the download and the texture-memory budget at zero, it renders on
-/// every device the app already supports, and it means the companion can never
-/// fail to appear. Everything here is deliberately small — a few dozen
-/// triangles, one light, no shadows — because this scene is an overlay that
-/// draws on top of the solar system, not a second hero render.
-///
-/// Node layout:
-///
-/// ```text
-/// scene
-///  ├─ light
-///  └─ avatarRoot        <- yaw (turn) and pitch (tilt) are written here
-///      ├─ bodyRoot      <- idle bob, mood bounce, and the "wrong" slump
-///      │   ├─ torso, head, helmet, visor, backpack, limbs...
-///      ├─ targetPivot   <- the 3D stand-in for the mission's target planet
-///      └─ shadow
-/// ```
 class AvatarSceneBuilder {
   AvatarSceneBuilder({
     required this.geometries,
@@ -39,34 +20,18 @@ class AvatarSceneBuilder {
   final AvatarGeometryFactory geometries;
   final AvatarMaterialFactory materials;
 
-  /// Turn and tilt. The widget writes [AvatarState.yaw]/[AvatarState.pitch]
-  /// here, so rotation is a model transform rather than a camera move. That
-  /// is what lets the companion be turned and moved independently, and what
-  /// keeps it facing the child instead of swinging out of view.
   final Node avatarRoot = Node(name: 'avatar-root');
-
-  /// Inner node for idle and mood motion, so a gesture never fights the
-  /// animation: a drag moves the root, the bob moves this.
   final Node bodyRoot = Node(name: 'avatar-body');
-
   final Node targetPivot = Node(name: 'avatar-target');
 
   Node? _antennaNode;
   Node? _leftArm;
   Node? _rightArm;
 
-  // Materials are held directly rather than dug back out of the scene graph:
-  // the visor and the target are recoloured every time the mood or the
-  // mission changes, and keeping the reference means that is a plain field
-  // write instead of a graph walk on a path that runs per frame.
   UnlitMaterial? _visorMaterial;
   UnlitMaterial? _targetMaterial;
 
-  /// Builds the graph under [scene].
   void build(Scene scene) {
-    // The companion floats over the solar system rather than sitting in it, so
-    // it gets its own small key light. No skybox: the overlay must stay
-    // transparent over the scene underneath it.
     scene
       ..environmentIntensity = 0.55
       ..add(
@@ -91,96 +56,156 @@ class AvatarSceneBuilder {
 
   void _buildBody() {
     final suit = materials.suit();
+    final helmetMat = materials.helmetDome();
     final trim = materials.trim();
+    final beltMat = materials.belt();
+    final soleMat = materials.sole();
     final visor = materials.visor();
     final pack = materials.pack();
+    final panelMat = materials.chestPanel();
+    final tankMat = materials.tank();
+    final redBtn = materials.buttonRed();
+    final greenBtn = materials.buttonGreen();
+    final yellowBtn = materials.buttonYellow();
 
-    // Torso: a capsule reads as a soft, friendly suit without needing a rig.
     bodyRoot.add(
       _mesh('torso', geometries.torso(), suit)
         ..position = vm.Vector3(0, 0.02, 0),
     );
 
-    // Backpack, behind the torso in +Z (the child looks down -Z).
+    bodyRoot.add(
+      _mesh('waist', geometries.waist(), suit)
+        ..position = vm.Vector3(0, -0.13, 0),
+    );
+    bodyRoot.add(
+      _mesh('belt', geometries.belt(), beltMat)
+        ..position = vm.Vector3(0, -0.10, 0),
+    );
+    bodyRoot.add(
+      _mesh('belt-buckle', geometries.badge(), materials.badge())
+        ..position = vm.Vector3(0, -0.10, -0.145),
+    );
+
+    bodyRoot.add(
+      _mesh('collar', geometries.collar(), trim)
+        ..position = vm.Vector3(0, 0.18, 0),
+    );
+
+    bodyRoot.add(
+      _mesh('chest-panel', geometries.chestPanel(), panelMat)
+        ..position = vm.Vector3(0, 0.04, -0.165),
+    );
+    bodyRoot.add(
+      _mesh('btn-red', geometries.chestButton(), redBtn)
+        ..position = vm.Vector3(-0.04, 0.05, -0.184),
+    );
+    bodyRoot.add(
+      _mesh('btn-green', geometries.chestButton(), greenBtn)
+        ..position = vm.Vector3(0.0, 0.05, -0.184),
+    );
+    bodyRoot.add(
+      _mesh('btn-yellow', geometries.chestButton(), yellowBtn)
+        ..position = vm.Vector3(0.04, 0.05, -0.184),
+    );
+
     bodyRoot.add(
       _mesh('pack', geometries.pack(), pack)
-        ..position = vm.Vector3(0, 0.04, 0.20),
-    );
-
-    // Head and helmet. The helmet is a slightly larger sphere than the head so
-    // a rim of it always shows, which is what makes it read as a helmet rather
-    // than a bald head.
-    bodyRoot.add(
-      _mesh('head', geometries.head(), suit)..position = vm.Vector3(0, 0.40, 0),
+        ..position = vm.Vector3(0, 0.05, 0.21),
     );
     bodyRoot.add(
-      _mesh('helmet', geometries.helmet(), materials.glass())..position =
-          vm.Vector3(0, 0.40, 0),
+      _mesh('tank-left', geometries.oxygenTank(), tankMat)
+        ..position = vm.Vector3(-0.075, 0.05, 0.25),
+    );
+    bodyRoot.add(
+      _mesh('tank-right', geometries.oxygenTank(), tankMat)
+        ..position = vm.Vector3(0.075, 0.05, 0.25),
     );
 
-    // The visor faces the child, and its colour is the closest thing this
-    // character has to a face: it is what changes with mood.
+    bodyRoot.add(
+      _mesh('helmet', geometries.helmet(), helmetMat)
+        ..position = vm.Vector3(0, 0.40, 0),
+    );
+
+    bodyRoot.add(
+      _mesh('ear-left', geometries.helmetEar(), trim)
+        ..position = vm.Vector3(-0.165, 0.40, 0),
+    );
+    bodyRoot.add(
+      _mesh('ear-right', geometries.helmetEar(), trim)
+        ..position = vm.Vector3(0.165, 0.40, 0),
+    );
+
     _visorMaterial = visor;
     bodyRoot.add(
       _mesh('visor', geometries.visor(), visor)
-        ..position = vm.Vector3(0, 0.395, -0.155),
+        ..position = vm.Vector3(0, 0.39, -0.155),
     );
 
-    // Arms. Kept as their own nodes so the idle sway and the success raise can
-    // move them without rebuilding anything.
+    bodyRoot.add(
+      _mesh('shoulder-left', geometries.shoulderPad(), trim)
+        ..position = vm.Vector3(-0.20, 0.12, 0),
+    );
+    bodyRoot.add(
+      _mesh('shoulder-right', geometries.shoulderPad(), trim)
+        ..position = vm.Vector3(0.20, 0.12, 0),
+    );
+
     _leftArm = _mesh('arm-left', geometries.arm(), suit)
-      ..position = vm.Vector3(-0.215, 0.03, 0);
+      ..position = vm.Vector3(-0.215, 0.01, 0);
     _rightArm = _mesh('arm-right', geometries.arm(), suit)
-      ..position = vm.Vector3(0.215, 0.03, 0);
+      ..position = vm.Vector3(0.215, 0.01, 0);
+
+    final leftGlove = _mesh('glove-left', geometries.glove(), trim)
+      ..position = vm.Vector3(-0.215, -0.09, 0);
+    final rightGlove = _mesh('glove-right', geometries.glove(), trim)
+      ..position = vm.Vector3(0.215, -0.09, 0);
+
     bodyRoot
       ..add(_leftArm!)
-      ..add(_rightArm!);
+      ..add(_rightArm!)
+      ..add(leftGlove)
+      ..add(rightGlove);
 
-    // Legs.
     bodyRoot
       ..add(
         _mesh('leg-left', geometries.leg(), suit)
-          ..position = vm.Vector3(-0.085, -0.26, 0),
+          ..position = vm.Vector3(-0.085, -0.27, 0),
       )
       ..add(
         _mesh('leg-right', geometries.leg(), suit)
-          ..position = vm.Vector3(0.085, -0.26, 0),
-      );
-
-    // Boots, so the character is not just legs on nothing.
-    bodyRoot
+          ..position = vm.Vector3(0.085, -0.27, 0),
+      )
       ..add(
         _mesh('boot-left', geometries.boot(), trim)
-          ..position = vm.Vector3(-0.085, -0.40, -0.01),
+          ..position = vm.Vector3(-0.085, -0.41, -0.01),
       )
       ..add(
         _mesh('boot-right', geometries.boot(), trim)
-          ..position = vm.Vector3(0.085, -0.40, -0.01),
+          ..position = vm.Vector3(0.085, -0.41, -0.01),
+      )
+      ..add(
+        _mesh('sole-left', geometries.bootSole(), soleMat)
+          ..position = vm.Vector3(-0.085, -0.44, 0.01),
+      )
+      ..add(
+        _mesh('sole-right', geometries.bootSole(), soleMat)
+          ..position = vm.Vector3(0.085, -0.44, 0.01),
       );
 
-    // Chest badge: a small unlit disc that reads at any angle and gives the
-    // suit a front, which is what sells the direction it is facing.
     bodyRoot.add(
       _mesh('badge', geometries.badge(), materials.badge())..position =
-          vm.Vector3(0, 0.05, -0.175),
+          vm.Vector3(-0.07, 0.12, -0.17),
     );
 
-    // Antenna. The bobbing tip is the companion's "talking" tell.
     bodyRoot.add(
       _mesh('antenna-stem', geometries.antennaStem(), trim)
         ..position = vm.Vector3(0, 0.60, 0.02),
     );
     _antennaNode = _mesh('antenna-tip', geometries.antennaTip(), materials.badge())
-      ..position = vm.Vector3(0, 0.66, 0.02);
+      ..position = vm.Vector3(0, 0.67, 0.02);
     bodyRoot.add(_antennaNode!);
   }
 
-  /// The 3D stand-in for the mission's target planet.
-  ///
-  /// Built once and only moved and shown or hidden. The planet it stands for
-  /// comes from the active mission, never from a hardcoded id, and swapping it
-  /// must not disturb the companion's pose, so this deliberately touches
-  /// nothing but [targetPivot].
   void _buildTarget() {
     _targetMaterial = materials.target();
     targetPivot.add(
@@ -205,18 +230,10 @@ class AvatarSceneBuilder {
 
   Node _mesh(String name, MeshGeometry geometry, Material material) {
     final node = Node(mesh: Mesh(geometry, material))..name = name;
-    // Nothing under the companion is ever picked by a raycast: it is an
-    // overlay, and a stray hit here would swallow taps meant for the planets
-    // behind it.
     node.raycastable = false;
     return node;
   }
 
-  /// Applies the child's turn and tilt.
-  ///
-  /// Assignment, never in-place mutation: editing the matrix a getter returns
-  /// is a silent no-op in flutter_scene, which is the classic way to ship a
-  /// rotation that reads back correctly and never moves.
   void setRotation(AvatarState pose) {
     avatarRoot.rotation = vm.Quaternion.axisAngle(
       vm.Vector3(0, 1, 0),
@@ -224,85 +241,79 @@ class AvatarSceneBuilder {
     ) * vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), pose.pitchClamped);
   }
 
-  /// Per-frame motion for [mood]: idle bob, sway, and mood tells.
-  ///
-  /// Pure transform math driven by elapsed time, with no widget rebuilds. The
-  /// amplitudes are small on purpose — this runs every frame over the top of
-  /// an already busy scene, so it has to cost almost nothing.
-  void tick(Duration elapsed, AvatarMood mood) {
+  void tick(Duration elapsed, AvatarMood mood, AvatarIdleAction idleAction) {
     final t = elapsed.inMicroseconds / 1e6;
 
-    // Breathing bob. Slower and shallower when idle, faster when celebrating.
-    final speed = mood == AvatarMood.success ? 7.0 : 2.2;
-    final amplitude = mood == AvatarMood.success ? 0.022 : 0.010;
-    var bob = math.sin(t * speed) * amplitude;
+    double bob = 0.0;
+    double slump = 0.0;
+    double armLift = 0.0;
+    double bodyTilt = 0.0;
 
-    // A disappointed slump, held until the child moves on.
-    var slump = 0.0;
+    if (mood == AvatarMood.success || idleAction == AvatarIdleAction.dancing) {
+      final speed = idleAction == AvatarIdleAction.dancing ? 9.0 : 7.0;
+      bob = math.sin(t * speed).abs() * 0.07;
+      armLift = -1.6 + math.sin(t * 7.0) * 0.4;
+      bodyTilt = math.sin(t * 6.0) * 0.15;
+    } else if (idleAction == AvatarIdleAction.thinking) {
+      bob = math.sin(t * 2.0) * 0.008;
+      armLift = -0.9;
+      bodyTilt = -0.08;
+    } else if (idleAction == AvatarIdleAction.sitting) {
+      bob = -0.14; // sits down lower
+    } else if (idleAction == AvatarIdleAction.flying) {
+      bob = math.sin(t * 5.0) * 0.04;
+      bodyTilt = 0.2; // flying tilt forward
+    } else {
+      bob = math.sin(t * 2.2) * 0.010;
+    }
+
     if (mood == AvatarMood.wrong || mood == AvatarMood.retry) {
       bob *= 0.35;
       slump = -0.10;
     }
 
-    // Success: a small celebratory hop plus raised arms.
-    if (mood == AvatarMood.success) {
-      bob += math.sin(t * speed).abs() * 0.055;
-    }
-
     bodyRoot
       ..position = vm.Vector3(0, bob + 0.02, 0)
-      ..rotation = vm.Quaternion.axisAngle(vm.Vector3(0, 0, 1), slump);
+      ..rotation = vm.Quaternion.axisAngle(vm.Vector3(0, 0, 1), slump + bodyTilt);
 
-    // Arms: gentle idle sway, a raised pair on success, a low pair when the
-    // answer was wrong.
     final sway = math.sin(t * 1.6) * 0.16;
-    final armLift = switch (mood) {
-      AvatarMood.success => -1.9,
-      AvatarMood.wrong => 0.5,
-      AvatarMood.retry => 0.2,
-      AvatarMood.instruction => -0.35,
-      AvatarMood.searching => 0.0,
-    };
-    final armSwing = mood == AvatarMood.success ? 0.35 : 0.0;
     _leftArm?.rotation = vm.Quaternion.axisAngle(
       vm.Vector3(0, 0, 1),
-      armLift + sway,
+      (armLift != 0.0 ? armLift : -0.35) + sway,
     );
     _rightArm?.rotation = vm.Quaternion.axisAngle(
       vm.Vector3(0, 0, 1),
-      armLift - sway,
+      (armLift != 0.0 ? armLift : -0.35) - sway,
     );
-    if (armSwing > 0) {
-      _leftArm?.position = vm.Vector3(-0.215, 0.03 + armSwing * 0.06, 0);
-      _rightArm?.position = vm.Vector3(0.215, 0.03 + armSwing * 0.06, 0);
-    }
 
-    // The antenna tip bobs faster while talking, which is the companion's
-    // visual "speaking" cue. The user chose visual-only communication, so this
-    // and the visor are the entire voice.
-    final talking = mood == AvatarMood.instruction || mood == AvatarMood.retry;
+    final talking = mood == AvatarMood.instruction || mood == AvatarMood.retry || idleAction == AvatarIdleAction.dancing || idleAction == AvatarIdleAction.sendingHeart;
     final antennaRate = talking ? 9.0 : 1.5;
     final antennaSwing = talking ? 0.22 : 0.06;
     _antennaNode?.position = vm.Vector3(
       math.sin(t * antennaRate) * antennaSwing,
-      0.66,
+      0.67,
       0.02,
     );
 
-    // Mood-tinted visor: the character's face. Kept as a colour swap on a
-    // small emissive material so it reads at any angle and any size.
-    _setVisorTint(mood);
+    _setVisorTint(mood, idleAction);
   }
 
-  void _setVisorTint(AvatarMood mood) {
+  void _setVisorTint(AvatarMood mood, AvatarIdleAction idleAction) {
     final material = _visorMaterial;
     if (material == null) return;
-    final color = switch (mood) {
-      AvatarMood.instruction => const Color(0xFF38BDF8),
-      AvatarMood.searching => const Color(0xFF1E3A8A),
-      AvatarMood.wrong => const Color(0xFF7C3AED),
-      AvatarMood.retry => const Color(0xFF8B7CFF),
-      AvatarMood.success => const Color(0xFFFBBF24),
+    final color = switch (idleAction) {
+      AvatarIdleAction.dancing => const Color(0xFF10B981), // Emerald green
+      AvatarIdleAction.thinking => const Color(0xFF8B5CF6), // Violet
+      AvatarIdleAction.sitting => const Color(0xFF64748B), // Slate
+      AvatarIdleAction.flying => const Color(0xFF06B6D4), // Cyan
+      AvatarIdleAction.sendingHeart => const Color(0xFFEC4899), // Pink
+      AvatarIdleAction.none => switch (mood) {
+          AvatarMood.instruction => const Color(0xFF38BDF8),
+          AvatarMood.searching => const Color(0xFF0EA5E9),
+          AvatarMood.wrong => const Color(0xFF7C3AED),
+          AvatarMood.retry => const Color(0xFF8B7CFF),
+          AvatarMood.success => const Color(0xFFF59E0B),
+        },
     };
     if (_visorColor == color) return;
     _visorColor = color;
@@ -316,8 +327,6 @@ class AvatarSceneBuilder {
 
   Color? _visorColor;
 
-  /// Shows the stand-in target on the companion's left, so the child can see
-  /// what they are looking for without leaving the companion.
   void showTarget({required bool visible, required Color color}) {
     targetPivot.visible = visible;
     if (!visible) return;
@@ -335,11 +344,6 @@ class AvatarSceneBuilder {
 
   Color? _targetColor;
 
-  /// Detaches the companion from its scene.
-  ///
-  /// Takes the [Scene] rather than reaching through [Node.parent], because
-  /// detaching a subtree is a scene-level operation and this keeps the builder
-  /// honest about who owns the graph.
   void detachFrom(Scene scene) {
     scene.remove(avatarRoot);
   }
