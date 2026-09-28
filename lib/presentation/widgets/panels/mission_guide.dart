@@ -10,7 +10,8 @@ class MissionGuide extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ui = ref.watch(explorerControllerProvider);
-    final mission = ui.missions.where((m) => m.id == ui.activeMissionId).firstOrNull;
+    final matches = ui.missions.where((m) => m.id == ui.activeMissionId);
+    final mission = matches.isEmpty ? null : matches.first;
     if (mission == null || mission.completed) return const SizedBox.shrink();
     final controller = ref.read(explorerControllerProvider.notifier);
     if (!ui.missionGuideVisible) return Align(alignment: Alignment.topCenter, child: GestureDetector(onTap: controller.toggleMissionGuide, child: AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), child: Text('🚀 Mission ${mission.id} · ${mission.title}  ⌄', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white)))));
