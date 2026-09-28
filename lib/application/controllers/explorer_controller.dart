@@ -37,7 +37,10 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   void selectPlanet(String id) {
     state = state.copyWith(
       selectedPlanetId: id, focusedPlanetId: id, detailZoom: 1.0,
-      detailTheta: 0.65, detailPhi: 0.28, detailTitleOverride: null, detailDescriptionOverride: null, detailCardVisible: false,
+      detailTheta: 0.65, detailPhi: 0.28, detailTitleOverride: null, detailDescriptionOverride: null,
+      // Facts are collapsed by default; the standalone toggle remains
+      // available above the bottom navigation.
+      detailCardVisible: false,
       playModeBannerVisible: false, spinHintVisible: true,
     );
     _detailCardTimer?.cancel();
