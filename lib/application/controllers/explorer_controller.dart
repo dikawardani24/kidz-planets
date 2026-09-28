@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/mission.dart';
 import '../../domain/entities/planet.dart';
@@ -175,6 +176,8 @@ class ExplorerController extends StateNotifier<ExplorerState> {
 
     final mission = state.missions[idx];
     if (mission.targetPlanetId != planetId) {
+      SystemSound.play(SystemSoundType.alert);
+      HapticFeedback.lightImpact();
       state = state.copyWith(
         missionGuideVisible: true,
         missionHintLevel: (state.missionHintLevel + 1).clamp(1, 3),
@@ -196,6 +199,8 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     final targetName = mission.title
         .replaceFirst('Find ', '')
         .replaceFirst('Visit ', '');
+    SystemSound.play(SystemSoundType.click);
+    HapticFeedback.mediumImpact();
     showCelebration(
       'Mission ${mission.id} Complete!',
       'You discovered $targetName. Ready for the next mission?',
