@@ -52,6 +52,7 @@ app.*.map.json
 __pycache__/
 *.pyo
 *.wav
+!assets/audio/sfx/**/*.wav
 .kokoro/
 *.pth
 *.pt
