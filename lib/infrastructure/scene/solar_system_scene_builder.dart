@@ -137,13 +137,16 @@ class SolarSystemSceneBuilder {
   Future<void> _buildSaturnRing(Planet planet) async {
     final state = states[planet.id];
     if (state == null) return;
+
     final texture = await _safeLoad(planet.ringTextureAsset!);
+    // Wider ring proportions make the ring clearly visible at the
+    // prototype's camera distance while preserving Saturn's thin profile.
+    final inner = planet.radius * 1.48;
+    final outer = planet.radius * 2.70;
+
     final ring = Node(
       mesh: Mesh(
-        _geometries.saturnBand(
-          planet.radius * planet.ringInnerFactor,
-          planet.radius * planet.ringOuterFactor,
-        ),
+        _geometries.saturnBand(inner, outer),
         _materials.saturnRing(texture: texture),
       ),
     )
@@ -152,12 +155,11 @@ class SolarSystemSceneBuilder {
         vm.Vector3(1, 0, 0),
         _degreesToRadians(planet.tiltDegrees),
       );
+
     ring.raycastable = false;
-    // Slight lift so the band never z-fights the globe.
-    ring.position = vm.Vector3(0, 0.01, 0);
+    ring.position = vm.Vector3(0, 0.015, 0);
     state.spinNode.add(ring);
   }
-
   void _buildOrbit(Scene scene, Planet planet) {
     final node = Node(
       mesh: Mesh(
