@@ -34,10 +34,7 @@ class PlanetDetailSheet extends ConsumerWidget {
                     onPlayMode: notifier.toggleDetailCard,
                     onClose: notifier.closeDetail,
                     onHotspot: (hotspot) {
-                      ref.read(planetTtsServiceProvider).speak(
-                            hotspot.title,
-                            hotspot.description,
-                          );
+                      ref.read(planetTtsServiceProvider).speakHotspot(hotspot);
                       notifier.showHotspot(hotspot);
                     },
                   )
