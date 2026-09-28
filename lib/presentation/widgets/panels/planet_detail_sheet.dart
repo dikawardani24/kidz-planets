@@ -18,9 +18,12 @@ class PlanetDetailSheet extends ConsumerWidget {
     final ui = ref.watch(explorerControllerProvider);
     final notifier = ref.read(explorerControllerProvider.notifier);
 
-    // Animate the glass container itself, not only its contents. This makes
-    // collapsing the facts panel actually shrink the card down to the
-    // collapse button instead of leaving an empty glass container behind.
+    // The description card is independent from the toggle control. This
+    // allows the toggle to remain visible after the card collapses.
+    if (!ui.detailCardVisible) {
+      return const SizedBox.shrink();
+    }
+
     return AnimatedSize(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
@@ -28,28 +31,55 @@ class PlanetDetailSheet extends ConsumerWidget {
       child: AppTheme.glass(
         radius: BorderRadius.circular(24),
         padding: const EdgeInsets.fromLTRB(14, 13, 14, 11),
-        child: Column(
+        child: _DetailContent(
+          planet: planet,
+          ui: ui,
+          onClose: notifier.closeDetail,
+          onHotspot: (hotspot) {
+            ref
+                .read(planetNarrationServiceProvider)
+                .speakHotspot(hotspot);
+            notifier.showHotspot(hotspot);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// Standalone control for showing/hiding the description card.
+class DetailDescriptionToggle extends ConsumerWidget {
+  const DetailDescriptionToggle({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ui = ref.watch(explorerControllerProvider);
+    final notifier = ref.read(explorerControllerProvider.notifier);
+
+    return GestureDetector(
+      onTap: notifier.toggleDetailCard,
+      child: AppTheme.glass(
+        pill: true,
+        radius: BorderRadius.circular(999),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (ui.detailCardVisible)
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 220),
-                child: _DetailContent(
-                  planet: planet,
-                  ui: ui,
-                  onClose: notifier.closeDetail,
-                  onHotspot: (hotspot) {
-                    ref
-                        .read(planetNarrationServiceProvider)
-                        .speakHotspot(hotspot);
-                    notifier.showHotspot(hotspot);
-                  },
-                ),
+            Icon(
+              ui.detailCardVisible
+                  ? Icons.keyboard_arrow_down
+                  : Icons.keyboard_arrow_up,
+              size: 15,
+              color: AppTheme.accentSky,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              ui.detailCardVisible ? 'Hide facts' : 'Show facts',
+              style: const TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
               ),
-            if (ui.detailCardVisible) const SizedBox(height: 8),
-            _CollapseButton(
-              collapsed: !ui.detailCardVisible,
-              onTap: notifier.toggleDetailCard,
             ),
           ],
         ),
