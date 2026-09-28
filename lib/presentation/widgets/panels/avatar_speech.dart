@@ -77,7 +77,7 @@ String avatarLine(AvatarMood mood, String? targetName) {
   return switch (mood) {
     AvatarMood.instruction => 'Ready? Find $target and tap it!',
     AvatarMood.searching => 'Take your time — I\'ll wait right here.',
-    AvatarMood.wrong => 'Close! Let\'s read the clue together.',
+    AvatarMood.wrong => 'Close! You can tap the mission view to get hint of the $target.',
     AvatarMood.retry => 'You\'ve got this — try one more!',
     AvatarMood.success => 'You found $target! Amazing flying!',
   };

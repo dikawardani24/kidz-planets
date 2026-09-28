@@ -9,7 +9,7 @@ class SolarSystemLocalDataSource {
   List<Mission> getMissions() => const [
         Mission(
           id: 1,
-          title: 'Find Planet #3',
+          title: 'Find Planet Earth',
           description: 'Start at the Sun and count outward to our blue home world.',
           targetPlanetId: 'earth',
           startPoint: 'the Sun',
