@@ -91,7 +91,9 @@ class ExplorerScreen extends ConsumerWidget {
               if (ui.hasSelection && ui.tab == ExplorerTab.explore)
                 Positioned(
                   left: isLandscape ? null : 16,
-                  right: isLandscape ? 16 : 16,
+                  // Keep the description card to the left of the vertical
+                  // zoom rail. The rail occupies the right edge in landscape.
+                  right: isLandscape ? 68 : 16,
                   top: isLandscape ? 72 : null,
                   bottom: isLandscape ? 72 : 88,
                   width: isLandscape ? 330 : null,
