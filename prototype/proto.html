@@ -1309,10 +1309,12 @@
             const angle = length * 0.009;
             trackballDeltaQuat.setFromAxisAngle(trackballAxis, angle);
 
-            // World-space accumulation gives globe-like manipulation: the object
-            // keeps its existing orientation instead of resetting at the poles.
-            accumulator.copy(trackballDeltaQuat).multiply(accumulator);
-            object.quaternion.copy(accumulator).normalize();
+            // Treat the drag axis as LOCAL to the object. Because the local
+            // axes rotate together with the globe, its former Z axis can naturally
+            // become the new "up/down" axis after a vertical flip.
+            // This removes the artificial pole behavior and allows endless flipping.
+            object.quaternion.multiply(trackballDeltaQuat).normalize();
+            accumulator.copy(object.quaternion);
         }
 
         function setupTouchAndMouse() {
