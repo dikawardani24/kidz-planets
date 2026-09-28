@@ -3,7 +3,6 @@ import 'package:just_audio/just_audio.dart';
 import 'package:kidz_planets/data/datasources/planet_catalog.dart';
 import 'package:kidz_planets/domain/entities/planet.dart';
 import 'package:kidz_planets/infrastructure/services/planet_narration_service.dart';
-import 'package:kidz_planets/infrastructure/services/planet_tts_service.dart';
 
 class _FakePlayer extends AudioPlayer {
   _FakePlayer({this.available = true});
@@ -12,6 +11,7 @@ class _FakePlayer extends AudioPlayer {
   final List<String> loaded = [];
   final List<String> played = [];
   int playCalls = 0;
+  int stopCalls = 0;
 
   @override
   Future<Duration?> setAsset(
@@ -35,32 +35,14 @@ class _FakePlayer extends AudioPlayer {
   }
 
   @override
-  Future<void> stop() async {}
-}
-
-class _RecordingTts extends PlanetTtsService {
-  final List<String> spoken = [];
-  int stopCalls = 0;
-
-  @override
-  Future<void> speakPlanet(Planet planet) async {
-    spoken.add('planet:${planet.id}');
-  }
-
-  @override
-  Future<void> speakHotspot(Hotspot hotspot) async {
-    spoken.add('hotspot:${hotspot.title}');
-  }
-
-  @override
   Future<void> stop() async {
     stopCalls++;
   }
 }
 
 void main() {
-  // PlanetTtsService constructs a real FlutterTts, which registers a method
-  // call handler and therefore needs the binding to exist.
+  // AudioPlayer configures an audio_session channel in its constructor, so the
+  // binding must exist even though every call is overridden below.
   TestWidgetsFlutterBinding.ensureInitialized();
 
   Planet byId(String id) => PlanetCatalog.planets.firstWhere((p) => p.id == id);
@@ -68,48 +50,43 @@ void main() {
   final earth = byId('earth');
   final saturn = byId('saturn');
 
-  test('plays the bundled mp3 instead of device tts when available', () async {
+  test('plays the bundled mp3 asset', () async {
     final player = _FakePlayer();
-    final tts = _RecordingTts();
-    final service = PlanetNarrationService(player: player, fallback: tts);
+    final service = PlanetNarrationService(player: player);
 
     await service.speakPlanet(earth);
 
+    expect(player.played, ['assets/audio/narration/planets/earth.mp3']);
+    await service.dispose();
+  });
+
+  test('hotspot narration uses the slugged asset path', () async {
+    final player = _FakePlayer();
+    final service = PlanetNarrationService(player: player);
+    final hotspot = saturn.hotspots.first;
+
+    await service.speakHotspot(hotspot);
+
     expect(
       player.played,
-      ['assets/audio/narration/planets/earth.mp3'],
+      [NarrationAudioCatalog.hotspot(hotspot.title)],
     );
-    expect(tts.spoken, isEmpty);
+    expect(player.played.single, startsWith('assets/audio/narration/hotspots/'));
     await service.dispose();
   });
 
-  test('falls back to device tts when the mp3 cannot be loaded', () async {
+  test('a missing asset does not throw and does not play', () async {
     final player = _FakePlayer(available: false);
-    final tts = _RecordingTts();
-    final service = PlanetNarrationService(player: player, fallback: tts);
+    final service = PlanetNarrationService(player: player);
 
-    await service.speakPlanet(saturn);
-
+    await expectLater(service.speakPlanet(saturn), completes);
     expect(player.playCalls, 0);
-    expect(tts.spoken, ['planet:saturn']);
     await service.dispose();
-  });
-
-  test('hotspot slugs match the generator naming convention', () {
-    expect(
-      NarrationAudioCatalog.hotspot('Great Red Spot'),
-      'assets/audio/narration/hotspots/great_red_spot.mp3',
-    );
-    expect(
-      NarrationAudioCatalog.hotspot('79+ Moons'),
-      'assets/audio/narration/hotspots/79_moons.mp3',
-    );
   });
 
   test('a newer selection is not overwritten by an older request', () async {
     final player = _FakePlayer();
-    final tts = _RecordingTts();
-    final service = PlanetNarrationService(player: player, fallback: tts);
+    final service = PlanetNarrationService(player: player);
 
     final first = service.speakPlanet(earth);
     final second = service.speakPlanet(saturn);
@@ -119,17 +96,32 @@ void main() {
     await service.dispose();
   });
 
-  test('stop halts narration and prevents later playback', () async {
+  test('stop halts the current narration', () async {
     final player = _FakePlayer();
-    final tts = _RecordingTts();
-    final service = PlanetNarrationService(player: player, fallback: tts);
+    final service = PlanetNarrationService(player: player);
 
     await service.speakPlanet(earth);
     final playsBeforeStop = player.playCalls;
+    final stopsBeforeStop = player.stopCalls;
     await service.stop();
 
     expect(player.playCalls, playsBeforeStop);
-    expect(tts.stopCalls, greaterThan(0));
+    expect(player.stopCalls, greaterThan(stopsBeforeStop));
     await service.dispose();
+  });
+
+  test('asset slugs match the generator naming convention', () {
+    expect(
+      NarrationAudioCatalog.planet('saturn'),
+      'assets/audio/narration/planets/saturn.mp3',
+    );
+    expect(
+      NarrationAudioCatalog.hotspot('Great Red Spot'),
+      'assets/audio/narration/hotspots/great_red_spot.mp3',
+    );
+    expect(
+      NarrationAudioCatalog.hotspot('79+ Moons'),
+      'assets/audio/narration/hotspots/79_moons.mp3',
+    );
   });
 }

@@ -1,51 +1,39 @@
+import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../../domain/entities/planet.dart';
-import 'planet_tts_service.dart';
 
 /// Plays pre-generated neural narration bundled with the app.
 ///
 /// Audio files are treated as content assets rather than being synthesized
-/// on-device. This keeps the voice natural, deterministic, and independent
-/// of the device TTS engine. Until a neural audio asset exists, the service
-/// falls back to [PlanetTtsService].
+/// on-device. This keeps the voice natural, deterministic, and independent of
+/// the device TTS engine.
+///
+/// Assets are generated locally with Kokoro; see
+/// `tool/generate_neural_narration.py`. Narration never throws: a missing or
+/// unreadable asset is reported in debug builds and ignored, so a content gap
+/// can never crash the UI.
 class PlanetNarrationService {
-  PlanetNarrationService({
-    AudioPlayer? player,
-    PlanetTtsService? fallback,
-  })  : _player = player ?? AudioPlayer(),
-        _fallback = fallback ?? PlanetTtsService();
+  PlanetNarrationService({AudioPlayer? player}) : _player = player ?? AudioPlayer();
 
   final AudioPlayer _player;
-  final PlanetTtsService _fallback;
 
   Future<void> _queue = Future<void>.value();
   int _generation = 0;
 
   Future<void> speakPlanet(Planet planet) {
-    return _playOrFallback(
-      path: NarrationAudioCatalog.planet(planet.id),
-      fallback: () => _fallback.speakPlanet(planet),
-    );
+    return _play(NarrationAudioCatalog.planet(planet.id));
   }
 
   Future<void> speakHotspot(Hotspot hotspot) {
-    return _playOrFallback(
-      path: NarrationAudioCatalog.hotspot(hotspot.title),
-      fallback: () => _fallback.speakHotspot(hotspot),
-    );
+    return _play(NarrationAudioCatalog.hotspot(hotspot.title));
   }
 
   Future<void> replay(Planet planet) => speakPlanet(planet);
 
   Future<void> stop() {
     _generation++;
-    _queue = _queue.then((_) async {
-      try {
-        await _player.stop();
-      } catch (_) {}
-      await _fallback.stop();
-    }).catchError((Object _) {});
+    _queue = _queue.then((_) => _player.stop()).catchError(_ignore);
     return _queue;
   }
 
@@ -55,42 +43,28 @@ class PlanetNarrationService {
       await _player.stop();
     } catch (_) {}
     await _player.dispose();
-    await _fallback.stop();
   }
 
-  Future<void> _playOrFallback({
-    required String path,
-    required Future<void> Function() fallback,
-  }) {
+  static void _ignore(Object _) {}
+
+  Future<void> _play(String path) {
     final generation = ++_generation;
-    _queue = _queue
-        .then((_) => _run(generation, path, fallback))
-        .catchError((Object _) {});
+    _queue = _queue.then((_) => _run(generation, path)).catchError(_ignore);
     return _queue;
   }
 
-  Future<void> _run(
-    int generation,
-    String path,
-    Future<void> Function() fallback,
-  ) async {
+  Future<void> _run(int generation, String path) async {
     try {
       await _player.stop();
       if (generation != _generation) return;
 
-      try {
-        await _player.setAsset(path);
-      } catch (_) {
-        if (generation != _generation) return;
-        await fallback();
-        return;
-      }
-
+      await _player.setAsset(path);
       if (generation != _generation) return;
+
       await _player.play();
-    } catch (_) {
+    } catch (error) {
       if (generation == _generation) {
-        await fallback();
+        debugPrint('Narration asset unavailable: $path ($error)');
       }
     }
   }

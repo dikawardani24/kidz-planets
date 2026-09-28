@@ -1,7 +1,11 @@
 # Neural narration audio
 
-The app plays pre-generated neural TTS files with `just_audio`. Device TTS remains
-only as a fallback while the bundled files are missing.
+The app plays pre-generated neural TTS files with `just_audio`. Narration audio
+is bundled with the app; there is no runtime speech synthesis and no platform
+TTS plugin.
+
+If an asset is ever missing or cannot be loaded, narration is skipped and the
+failure is logged in debug builds rather than surfacing an error to the player.
 
 ## Quick start
 
