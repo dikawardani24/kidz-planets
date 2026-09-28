@@ -72,8 +72,3 @@ class _MissionDialog extends ConsumerWidget {
     )))));
   }
 }
-class WrongMissionFeedback extends StatelessWidget {
-  const WrongMissionFeedback({super.key});
-  @override
-  Widget build(BuildContext context) => Center(child: TweenAnimationBuilder<double>(tween: Tween(begin: .0, end: 1), duration: const Duration(milliseconds: 500), curve: Curves.easeOutBack, builder: (_, v, child) => Opacity(opacity: v.clamp(0.0, 1.0), child: Transform.scale(scale: .8 + v * .2, child: child)), child: AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 10), child: const Text('💫 Not this one — let’s check the clue!', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)))));
-}

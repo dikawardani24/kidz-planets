@@ -16,7 +16,6 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   Timer? _toastTimer;
   Timer? _spinHintTimer;
   Timer? _playModeTimer;
-  Timer? _wrongFeedbackTimer;
   int _toastKey = 0;
 
   void setTab(ExplorerTab tab) {
@@ -65,7 +64,6 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   void closeDetail() {
     _spinHintTimer?.cancel();
     _playModeTimer?.cancel();
-    _wrongFeedbackTimer?.cancel();
     state = state.copyWith(
       selectedPlanetId: null, focusedPlanetId: null, detailTitleOverride: null, detailDescriptionOverride: null, detailCardVisible: false,
       spinHintVisible: false, playModeBannerVisible: false,
@@ -159,7 +157,22 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     // this out does not disturb the narration that starts on the next state
     // change.
     _missionSound.stop();
-    state = state.copyWith(celebrationTitle: null, celebrationDescription: null);
+    state = state.copyWith(
+      celebrationTitle: null,
+      celebrationDescription: null,
+      // Back to the quiet pose. When another mission is waiting the companion
+      // explains it instead, so the child is not left staring at a stale win.
+      avatarMood: state.missions.any((m) => !m.completed)
+          ? AvatarMood.instruction
+          : AvatarMood.searching,
+    );
+  }
+
+  /// Puts the companion into its talking pose, e.g. when the mission sheet is
+  /// opened. Safe to call in any mood: it never interrupts a celebration.
+  void setAvatarMood(AvatarMood mood) {
+    if (state.avatarMood == AvatarMood.success) return;
+    state = state.copyWith(avatarMood: mood);
   }
 
   void showToast(String text) {
@@ -187,19 +200,20 @@ class ExplorerController extends StateNotifier<ExplorerState> {
 
     final mission = state.missions[idx];
     if (mission.targetPlanetId != planetId) {
-      _missionSound.playMissionFailure();
+      // A wrong pick is the companion's job alone. The user asked for no
+      // dialog, no hint overlay, no toast, no failure sound, and no mission
+      // narration here, because the avatar reacting in place already says it
+      // and a child should not be interrupted by four things at once.
+      //
+      // `missionGuideVisible` is deliberately not set, so the mission dialog
+      // does not open on a miss, and the hint level does not advance, so there
+      // is no escalated clue to read out. The companion's own bubble is the
+      // feedback, and it holds until the child tries again.
       HapticFeedback.lightImpact();
-      _wrongFeedbackTimer?.cancel();
       state = state.copyWith(
-        missionGuideVisible: true,
-        wrongFeedbackVisible: true,
-        missionHintLevel: (state.missionHintLevel + 1).clamp(1, 3),
         wrongSelectionKey: state.wrongSelectionKey + 1,
+        avatarMood: AvatarMood.wrong,
       );
-      showToast('💡 Let’s look at the clue again!');
-      _wrongFeedbackTimer = Timer(const Duration(milliseconds: 1500), () {
-        if (mounted) state = state.copyWith(wrongFeedbackVisible: false);
-      });
       return;
     }
 
@@ -211,6 +225,9 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     state = state.copyWith(
       missions: updated,
       activeMissionId: nextMissionId,
+      // The companion celebrates in place rather than being replaced, and
+      // drops back to calm when the celebration dialog is dismissed.
+      avatarMood: AvatarMood.success,
     );
     final targetName = mission.title
         .replaceFirst('Find ', '')
@@ -224,12 +241,23 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     showToast('🚀 Mission complete: ${mission.title}');
   }
 
+  /// Moves the companion from disappointed to encouraging.
+  ///
+  /// Called when the child taps the companion after a wrong pick. A later miss
+  /// re-enters [AvatarMood.wrong] through _checkMission, so this line is only
+  /// reached deliberately rather than by a timer racing the child.
+  void retryMission() {
+    if (state.avatarMood == AvatarMood.wrong ||
+        state.avatarMood == AvatarMood.retry) {
+      state = state.copyWith(avatarMood: AvatarMood.retry);
+    }
+  }
+
   @override
   void dispose() {
     _toastTimer?.cancel();
     _spinHintTimer?.cancel();
     _playModeTimer?.cancel();
-    _wrongFeedbackTimer?.cancel();
     _missionSound.dispose();
     super.dispose();
   }

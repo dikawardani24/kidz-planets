@@ -11,8 +11,8 @@ import '../theme/app_theme.dart';
 import '../widgets/overlays/bottom_nav.dart';
 import '../widgets/overlays/toast_overlay.dart';
 import '../widgets/overlays/top_bar.dart';
+import '../widgets/panels/mission_companion.dart';
 import '../widgets/panels/missions_panel.dart';
-import '../widgets/panels/mission_guide.dart';
 import '../widgets/panels/planet_detail_sheet.dart';
 import '../widgets/panels/playground_panel.dart';
 import '../widgets/scene/solar_system_scene_view.dart';
@@ -22,14 +22,16 @@ import '../widgets/scene/solar_system_scene_view.dart';
 /// A completed mission plays its own success cue and then raises a
 /// celebration dialog, so narration is held until that dialog is dismissed:
 /// the voice runs at 0.92 and would otherwise talk over the 0.65 cue and read
-/// the dialog out loud. A wrong pick has already replayed the active mission
-/// as a hint, so that cue keeps the last word.
-bool canStartPlanetAudio({
-  required ExplorerState current,
-  required int wrongSelectionKeyAtSelect,
-}) {
+/// the dialog out loud.
+///
+/// Note what this deliberately does *not* gate. A planet the child taps is
+/// always described and always plays its own ambience, wrong pick or not: that
+/// is the whole point of tapping a body, and it is how the app teaches the
+/// planets. What a wrong pick suppresses is the *mission* feedback, which the
+/// companion now owns: no mission replay, no mission dialog, and no failure
+/// cue. Those live in the branch above, not behind this gate.
+bool canStartPlanetAudio({required ExplorerState current}) {
   if (current.celebrationVisible) return false;
-  if (current.wrongSelectionKey != wrongSelectionKeyAtSelect) return false;
   return true;
 }
 
@@ -48,17 +50,13 @@ class ExplorerScreen extends ConsumerWidget {
         ref.read(planetSoundServiceProvider).playBody(planet);
       }
 
-      if (prev?.wrongSelectionKey != next.wrongSelectionKey && next.wrongSelectionKey != 0) {
-        final matches = next.missions.where((m) => m.id == next.activeMissionId);
-        final mission = matches.isEmpty ? null : matches.first;
-        if (mission != null) {
-          final planet = ref.read(planetByIdProvider(mission.targetPlanetId));
-          ref.read(planetNarrationServiceProvider).replay(planet);
-          Future<void>.delayed(const Duration(milliseconds: 550), () {
-            if (context.mounted) showMissionDialog(context, ref);
-          });
-        }
-      }
+      // A wrong pick deliberately has no *mission* branch here. This used to
+      // replay the active mission out loud and reopen the mission dialog 550ms
+      // later; the companion handles a miss on its own now, so neither happens.
+      //
+      // The planet that was tapped is still described and still plays its own
+      // ambience further down, because tapping a body is how the child explores
+      // and the mission being wrong does not make the body uninteresting.
 
       // Dismissing the celebration is the cue to describe the body that was
       // just found. The mission success sound plays alone while the modal is
@@ -79,12 +77,7 @@ class ExplorerScreen extends ConsumerWidget {
           if (current.activeMissionId != missionId) return;
           final matches = current.missions.where((m) => m.id == missionId);
           if (matches.isEmpty) return;
-          if (!canStartPlanetAudio(
-            current: current,
-            wrongSelectionKeyAtSelect: current.wrongSelectionKey,
-          )) {
-            return;
-          }
+          if (!canStartPlanetAudio(current: current)) return;
           final planet = ref.read(planetByIdProvider(matches.first.targetPlanetId));
           ref.read(planetNarrationServiceProvider).replay(planet);
         });
@@ -100,17 +93,15 @@ class ExplorerScreen extends ConsumerWidget {
           // a celebration raised by this tap is not set yet on this pass.
           // Re-reading the state on a microtask lets it be seen; when one is up
           // the celebration-dismissed branch above does the narration instead.
-          final wrongKey = next.wrongSelectionKey;
+          //
+          // The body that was tapped is described and sounds either way,
+          // including when it was the wrong mission target: the companion owns
+          // the *mission* reaction, not the body's own voice.
           scheduleMicrotask(() {
             if (!context.mounted) return;
             final current = ref.read(explorerControllerProvider);
             if (current.selectedPlanetId != selectedId) return;
-            if (!canStartPlanetAudio(
-              current: current,
-              wrongSelectionKeyAtSelect: wrongKey,
-            )) {
-              return;
-            }
+            if (!canStartPlanetAudio(current: current)) return;
             speakSelected(selectedId);
           });
         }
@@ -149,8 +140,7 @@ class ExplorerScreen extends ConsumerWidget {
                 child: ExplorerTopBar(),
               ),
               const ExplorerInteractionOverlays(),
-              const ToastOverlay(),if (ui.wrongFeedbackVisible)
-                Positioned.fill(child: WrongMissionFeedback()),
+              const ToastOverlay(),
 
               if (ui.tab == ExplorerTab.playground)
                 Positioned(
@@ -196,6 +186,12 @@ class ExplorerScreen extends ConsumerWidget {
                     description: ui.celebrationDescription!,
                   ),
                 ),
+
+              // Last in the stack, so the companion is the topmost thing on
+              // screen: above the scene, the panels, the nav, and the
+              // celebration dialog. It is a permanent part of the mission UI,
+              // never hidden and never promoted into a dialog of its own.
+              const MissionCompanion(),
                 ],
               );
             },
