@@ -29,6 +29,7 @@ class SolarSystemSceneBuilder {
   final Map<String, PlanetRenderState> states = {};
   final Map<String, Node> orbitNodes = {};
   Node? starNode;
+  final Node solarSystemRoot = Node(name: 'solar-system-root');
 
   /// Builds the full graph under [scene]; awaits all texture uploads.
   Future<void> build({
@@ -40,6 +41,9 @@ class SolarSystemSceneBuilder {
     // source, while only a small amount of ambient IBL keeps the shadow side
     // from becoming completely black.
     scene.environmentIntensity = 0.14;
+    // All celestial bodies and their orbit paths live under one transform root.
+    // Rotating this root is equivalent to physically turning the whole model.
+    scene.add(solarSystemRoot);
     _buildSunLight(scene);
 
     onProgress('Painting stars…');
@@ -130,7 +134,7 @@ class SolarSystemSceneBuilder {
       parentPosition.z + math.sin(angle) * planet.orbitRadius,
     );
     orbitNode.add(spinNode);
-    scene.add(orbitNode);
+    solarSystemRoot.add(orbitNode);
 
     states[planet.id] = PlanetRenderState(
       id: planet.id,
@@ -232,7 +236,7 @@ class SolarSystemSceneBuilder {
       ..name = '${planet.id}:path'
       ..position = vm.Vector3(0, -0.02, 0);
     node.raycastable = false;
-    scene.add(node);
+    solarSystemRoot.add(node);
     orbitNodes[planet.id] = node;
   }
 
@@ -243,6 +247,29 @@ class SolarSystemSceneBuilder {
         ? 0.0
         : math.atan2(state.node.position.z, state.node.position.x);
     state.node.position = vm.Vector3(math.cos(angle) * radius, 0, math.sin(angle) * radius);
+  }
+
+  void rotateSolarSystem(double dx, double dy) {
+    final length = math.sqrt(dx * dx + dy * dy);
+    if (length < 0.001) return;
+    final axis = vm.Vector3(dy, dx, 0)..normalize();
+    final angle = length * 0.009;
+    solarSystemRoot.rotation = solarSystemRoot.rotation *
+        vm.Quaternion.axisAngle(axis, angle);
+  }
+
+  void rotatePlanet(String planetId, double dx, double dy) {
+    final state = states[planetId];
+    if (state == null) return;
+    final length = math.sqrt(dx * dx + dy * dy);
+    if (length < 0.001) return;
+    final axis = vm.Vector3(dy, dx, 0)..normalize();
+    final angle = length * 0.009;
+    // Post-multiplication applies the gesture in the planet's local frame.
+    // Once the globe flips, its local Z/X axes have flipped with it, so
+    // vertical dragging can continue past the poles indefinitely.
+    state.spinNode.rotation = state.spinNode.rotation *
+        vm.Quaternion.axisAngle(axis, angle);
   }
 
   void setOrbitsVisible(bool visible) {
