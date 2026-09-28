@@ -146,9 +146,17 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
       if (incrementalScale.isFinite && incrementalScale > 0) {
         if (ui.hasSelection) {
           final currentZoom = ref.read(explorerControllerProvider).detailZoom;
-          ref.read(explorerControllerProvider.notifier).updateDetailCamera(
-                zoom: (currentZoom / incrementalScale).clamp(0.4, 2.6),
-              );
+          final nextZoom = currentZoom / incrementalScale;
+          // Pinching outward far enough leaves detail mode. This makes the
+          // overview reachable directly from the scene, without requiring
+          // the facts dialog as an exit mechanism.
+          if (nextZoom >= 2.58) {
+            ref.read(explorerControllerProvider.notifier).closeDetail();
+          } else {
+            ref.read(explorerControllerProvider.notifier).updateDetailCamera(
+                  zoom: nextZoom.clamp(0.4, 2.6),
+                );
+          }
         } else {
           controller.pinch(incrementalScale);
         }
