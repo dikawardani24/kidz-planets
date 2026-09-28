@@ -27,35 +27,44 @@ DURATION = 4.0
 COUNT = int(SAMPLE_RATE * DURATION)
 
 # Base frequency, harmonic, noise level, pulse/modulation character.
+# Frequencies are spread wide on purpose: phone/laptop speakers barely
+# reproduce anything under ~150 Hz, so bodies that all rumble at 40-90 Hz
+# sound identical. Giants keep the low rumble; small/icy bodies sit an
+# octave or more higher with their own shimmer so switching detail is
+# clearly audible.
 PROFILES = {
-    "sun": (52, 0.38, 0.12, 0.18),
-    "mercury": (150, 0.18, 0.05, 0.10),
-    "venus": (68, 0.32, 0.10, 0.12),
-    "earth": (108, 0.20, 0.08, 0.22),
-    "mars": (76, 0.28, 0.12, 0.14),
-    "jupiter": (42, 0.48, 0.16, 0.10),
-    "saturn": (72, 0.25, 0.06, 0.30),
-    "uranus": (118, 0.18, 0.08, 0.24),
-    "neptune": (48, 0.34, 0.15, 0.16),
-    "moon": (92, 0.16, 0.04, 0.10),
-    "phobos": (130, 0.14, 0.08, 0.08),
-    "deimos": (118, 0.13, 0.07, 0.08),
-    "io": (82, 0.40, 0.14, 0.28),
-    "europa": (164, 0.16, 0.05, 0.34),
-    "ganymede": (64, 0.30, 0.06, 0.18),
-    "callisto": (55, 0.24, 0.12, 0.08),
-    "titan": (61, 0.34, 0.13, 0.12),
-    "enceladus": (190, 0.12, 0.04, 0.38),
-    "mimas": (145, 0.13, 0.05, 0.16),
-    "tethys": (125, 0.14, 0.04, 0.25),
-    "iapetus": (58, 0.22, 0.09, 0.06),
-    "miranda": (172, 0.12, 0.06, 0.30),
-    "ariel": (142, 0.14, 0.05, 0.26),
-    "umbriel": (70, 0.22, 0.08, 0.07),
-    "titania": (105, 0.17, 0.06, 0.18),
-    "oberon": (62, 0.20, 0.08, 0.07),
-    "triton": (88, 0.24, 0.09, 0.20),
+    "sun": (55, 0.42, 0.14, 0.18),
+    "mercury": (220, 0.15, 0.05, 0.12),
+    "venus": (110, 0.30, 0.10, 0.12),
+    "earth": (147, 0.22, 0.08, 0.22),
+    "mars": (98, 0.28, 0.12, 0.14),
+    "jupiter": (65, 0.45, 0.16, 0.10),
+    "saturn": (130, 0.25, 0.06, 0.30),
+    "uranus": (175, 0.18, 0.08, 0.24),
+    "neptune": (82, 0.32, 0.15, 0.16),
+    "moon": (196, 0.14, 0.05, 0.10),
+    "phobos": (262, 0.12, 0.08, 0.08),
+    "deimos": (233, 0.12, 0.07, 0.08),
+    "io": (124, 0.38, 0.14, 0.28),
+    "europa": (294, 0.16, 0.05, 0.34),
+    "ganymede": (104, 0.28, 0.06, 0.18),
+    "callisto": (87, 0.24, 0.12, 0.08),
+    "titan": (92, 0.32, 0.13, 0.12),
+    "enceladus": (330, 0.12, 0.04, 0.38),
+    "mimas": (247, 0.13, 0.05, 0.16),
+    "tethys": (208, 0.14, 0.04, 0.25),
+    "iapetus": (73, 0.22, 0.09, 0.06),
+    "miranda": (311, 0.12, 0.06, 0.30),
+    "ariel": (233, 0.14, 0.05, 0.26),
+    "umbriel": (110, 0.22, 0.08, 0.07),
+    "titania": (165, 0.17, 0.06, 0.18),
+    "oberon": (98, 0.20, 0.08, 0.07),
+    "triton": (140, 0.24, 0.09, 0.20),
 }
+
+# Bright icy shimmer an octave-plus up, so ice worlds read clearly
+# different from rocky rumbles on small speakers.
+ICY_SHIMMER = {"europa", "enceladus", "miranda", "ariel", "tethys", "triton"}
 
 
 def sample(body: str, t: float) -> float:
@@ -84,6 +93,12 @@ def sample(body: str, t: float) -> float:
     if body in {"sun", "io"}:
         burst = max(0.0, math.sin(2.0 * math.pi * 0.8 * t))
         value += math.sin(2.0 * math.pi * (base * 5.2) * t) * 0.06 * burst
+
+    # Icy worlds get a bright high shimmer so they read clearly different
+    # from rocky rumbles on small speakers.
+    if body in ICY_SHIMMER:
+        value += math.sin(2.0 * math.pi * (base * 2.02) * t + 0.9) * 0.10
+        value += math.sin(2.0 * math.pi * (base * 3.01) * t + 2.2) * 0.05
 
     # Fade only the first/last 80 ms to make asset looping click-free.
     edge = min(t / 0.08, (DURATION - t) / 0.08, 1.0)

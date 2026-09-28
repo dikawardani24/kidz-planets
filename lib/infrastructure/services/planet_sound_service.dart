@@ -13,29 +13,42 @@ class PlanetSoundService {
 
   final AudioPlayer _player;
   Future<void> _queue = Future<void>.value();
+  int _generation = 0;
 
   Future<void> playBody(Planet body) {
+    // Generation counter so a rapid tap A -> B cancels A's pending load
+    // instead of queueing stale sounds behind it. Latest selection wins.
+    final generation = ++_generation;
     final path = PlanetSoundCatalog.body(body.id);
-    _queue = _queue.then((_) async {
-      try {
-        await _player.stop();
-        await _player.setLoopMode(LoopMode.one);
-        await _player.setVolume(0.42);
-        await _player.setAsset(path);
-        await _player.play();
-      } catch (error) {
-        debugPrint('Planet sound unavailable: $path ($error)');
-      }
-    }).catchError((_) {});
+    _queue = _queue.then((_) => _run(generation, path)).catchError((_) {});
     return _queue;
   }
 
+  Future<void> _run(int generation, String path) async {
+    try {
+      await _player.stop();
+      if (generation != _generation) return;
+      await _player.setLoopMode(LoopMode.one);
+      await _player.setVolume(0.42);
+      if (generation != _generation) return;
+      await _player.setAsset(path);
+      if (generation != _generation) return;
+      await _player.play();
+    } catch (error) {
+      if (generation == _generation) {
+        debugPrint('Planet sound unavailable: $path ($error)');
+      }
+    }
+  }
+
   Future<void> stop() {
+    _generation++;
     _queue = _queue.then((_) => _player.stop()).catchError((_) {});
     return _queue;
   }
 
   Future<void> dispose() async {
+    _generation++;
     try {
       await _player.stop();
     } catch (_) {}
