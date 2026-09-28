@@ -95,7 +95,11 @@ class ExplorerScreen extends ConsumerWidget {
                   // zoom rail. The rail occupies the right edge in landscape.
                   right: isLandscape ? 68 : 16,
                   top: isLandscape ? 72 : null,
-                  bottom: isLandscape ? 72 : 88,
+                  // In landscape the card must be height-driven by its
+                  // contents. Setting both top and bottom would give the
+                  // Positioned child a tight viewport-height constraint,
+                  // preventing AnimatedSize from collapsing the glass card.
+                  bottom: isLandscape ? null : 88,
                   width: isLandscape ? 330 : null,
                   child: _DetailWrapper(planetId: ui.selectedPlanetId!),
                 ),
