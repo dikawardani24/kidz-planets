@@ -10,8 +10,8 @@ import '../../domain/entities/planet.dart';
 class TtsVoiceProfile {
   const TtsVoiceProfile({
     this.language = 'en-US',
-    this.speechRate = 0.40,
-    this.pitch = 1.14,
+    this.speechRate = 0.48,
+    this.pitch = 1.06,
     this.volume = 1.0,
   });
 
@@ -23,11 +23,13 @@ class TtsVoiceProfile {
 
 /// One voice as reported by the platform, reduced to the fields we score on.
 class TtsVoiceCandidate {
-  const TtsVoiceCandidate({required this.name, required this.locale, this.quality});
+  const TtsVoiceCandidate({required this.name, required this.locale, this.quality, this.latency, this.networkRequired});
 
   final String name;
   final String locale;
   final String? quality;
+  final int? latency;
+  final bool? networkRequired;
 
   /// Substring of [voice] mapped to the shape `setVoice` expects.
   Map<String, String> toVoiceMap() => {'name': name, 'locale': locale};
@@ -36,9 +38,9 @@ class TtsVoiceCandidate {
 /// Picks the most natural-sounding English voice the device actually offers.
 ///
 /// Preference order, highest score first:
-///  1. an en-US/en-GB voice advertising quality (Neural, Natural, Enhanced…)
-///  2. any en-US voice
-///  3. any other English voice
+///  1. an English voice advertising Neural/Natural/Enhanced quality
+///  2. a high-quality Android voice, preferring network-backed voices
+///  3. en-US, then en-GB, then other English voices
 ///
 /// Returns null when the device exposes no English voice, so the caller can
 /// fall back to the system default rather than guessing a name.
@@ -68,10 +70,14 @@ TtsVoiceCandidate? _readCandidate(Object? voice) {
   if (name is! String || locale is! String) return null;
   if (name.isEmpty || !_isEnglish(locale)) return null;
   final quality = voice['quality'];
+  final latency = voice['latency'];
+  final networkRequired = voice['network_required'];
   return TtsVoiceCandidate(
     name: name,
     locale: locale,
-    quality: quality is String ? quality : null,
+    quality: quality?.toString(),
+    latency: latency is num ? latency.toInt() : null,
+    networkRequired: networkRequired is bool ? networkRequired : null,
   );
 }
 
@@ -116,6 +122,20 @@ double _score(TtsVoiceCandidate candidate) {
   }
 
   var score = quality * 10.0;
+
+  // Android exposes voice quality, latency and network availability.
+  // Prefer higher-quality voices and, when available, a network voice:
+  // these are often the downloaded/cloud-backed voices rather than the
+  // smallest local fallback. Never require a network voice, though.
+  if (candidate.quality != null) {
+    final numericQuality = int.tryParse(candidate.quality!);
+    if (numericQuality != null) {
+      score += (numericQuality / 100.0).clamp(0.0, 10.0);
+    }
+  }
+  if (candidate.networkRequired == true) score += 3.0;
+  if (candidate.latency != null && candidate.latency! <= 200) score += 1.0;
+
   score += switch (candidate.locale.toLowerCase().replaceAll('_', '-')) {
     'en-us' => 2.0,
     'en-gb' => 1.5,
