@@ -97,9 +97,9 @@ class ExplorerScreen extends ConsumerWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const DetailDescriptionToggle(),
-                      const SizedBox(height: 8),
                       _DetailWrapper(planetId: ui.selectedPlanetId!),
+                      const SizedBox(height: 8),
+                      const DetailDescriptionToggle(),
                     ],
                   ),
                 ),
