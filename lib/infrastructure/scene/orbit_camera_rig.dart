@@ -79,12 +79,16 @@ class OrbitCameraRig {
     // Moon every frame. The target is updated from the current world transform
     // but interpolated, so the camera settles instead of snapping.
     const duration = 0.82;
-    _focusElapsed = math.min(_focusElapsed + deltaSeconds.clamp(0.0, 0.05), duration);
+    _focusElapsed = math.min(
+      _focusElapsed + deltaSeconds.clamp(0.0, 0.05).toDouble(),
+      duration,
+    );
     final t = (_focusElapsed / duration).clamp(0.0, 1.0);
     final eased = 1.0 - math.pow(1.0 - t, 3).toDouble();
     _focusProgress = eased;
 
-    final target = vm.Vector3.lerp(_focusStartTarget, _focusTarget, eased)!;
+    final target =
+        _focusStartTarget * (1.0 - eased) + _focusTarget * eased;
     _state
       ..targetX = target.x
       ..targetY = target.y
