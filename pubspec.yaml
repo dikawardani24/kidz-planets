@@ -28,3 +28,4 @@ flutter:
     - assets/textures/
     - assets/audio/narration/planets/
     - assets/audio/narration/hotspots/
+    - assets/audio/sfx/planets/
