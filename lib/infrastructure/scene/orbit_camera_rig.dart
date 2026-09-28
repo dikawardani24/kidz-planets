@@ -24,6 +24,7 @@ class OrbitCameraRig {
   vm.Vector3 _focusTarget = vm.Vector3.zero();
   double _focusStartRadius = kOverviewRadius;
   double _focusTargetRadius = kOverviewRadius;
+  double _displayDetailZoom = 1.0;
 
   CameraRigState get state => _state;
 
@@ -66,6 +67,7 @@ class OrbitCameraRig {
       _focusProgress = 0.0;
       _focusStartTarget = vm.Vector3(_state.targetX, _state.targetY, _state.targetZ);
       _focusStartRadius = _state.radius;
+      _displayDetailZoom = 1.0;
     }
 
     _focusTarget = destination;
@@ -116,10 +118,13 @@ class OrbitCameraRig {
     double tz = _state.targetZ;
 
     if (ui.hasSelection) {
+      // Smooth the zoom target so pinch gestures do not cause visible
+      // distance stepping, especially on tiny moons.
+      _displayDetailZoom += (ui.detailZoom - _displayDetailZoom) * 0.18;
       // Detail mode keeps the camera centered on the selected body.
       // The body itself is rotated by the gesture; the camera must not orbit
       // around it or impose a vertical pole clamp.
-      radius = _detailRadius(ui.detailZoom);
+      radius = _detailRadius(_displayDetailZoom);
       theta = _state.theta;
       phi = _state.phi;
     }
