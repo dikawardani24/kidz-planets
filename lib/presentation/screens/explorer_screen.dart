@@ -10,7 +10,6 @@ import '../widgets/overlays/bottom_nav.dart';
 import '../widgets/overlays/toast_overlay.dart';
 import '../widgets/overlays/top_bar.dart';
 import '../widgets/panels/missions_panel.dart';
-import '../widgets/panels/mission_guide.dart';
 import '../widgets/panels/planet_detail_sheet.dart';
 import '../widgets/panels/playground_panel.dart';
 import '../widgets/scene/solar_system_scene_view.dart';
@@ -89,12 +88,7 @@ class ExplorerScreen extends ConsumerWidget {
                 child: ExplorerTopBar(),
               ),
               const ExplorerInteractionOverlays(),
-              const ToastOverlay(),
-
-              if (ui.tab == ExplorerTab.explore && ui.activeMissionId != null)
-                const Positioned(top: 68, left: 12, right: 12, child: MissionGuide()),
-
-              if (ui.wrongFeedbackVisible)
+              const ToastOverlay(),if (ui.wrongFeedbackVisible)
                 const Positioned.fill(child: WrongMissionFeedback()),
 
               if (ui.tab == ExplorerTab.playground)
