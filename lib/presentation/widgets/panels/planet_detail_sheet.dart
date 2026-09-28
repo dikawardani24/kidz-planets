@@ -4,6 +4,7 @@ import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../../domain/entities/planet.dart';
 import '../../../infrastructure/services/planet_narration_provider.dart';
+import '../../../infrastructure/services/planet_sound_provider.dart';
 import '../../theme/app_theme.dart';
 
 class PlanetDetailSheet extends ConsumerWidget {
@@ -37,6 +38,8 @@ class PlanetDetailSheet extends ConsumerWidget {
                       ui: ui,
                       onSpeak: () =>
                           ref.read(planetNarrationServiceProvider).replay(planet),
+                      onSound: () =>
+                          ref.read(planetSoundServiceProvider).playBody(planet),
                       onPlayMode: notifier.toggleDetailCard,
                       onClose: notifier.closeDetail,
                       onHotspot: (hotspot) {
@@ -72,6 +75,7 @@ class _DetailContent extends StatelessWidget {
     required this.planet,
     required this.ui,
     required this.onSpeak,
+    required this.onSound,
     required this.onPlayMode,
     required this.onClose,
     required this.onHotspot,
@@ -80,6 +84,7 @@ class _DetailContent extends StatelessWidget {
   final Planet planet;
   final ExplorerState ui;
   final VoidCallback onSpeak;
+  final VoidCallback onSound;
   final VoidCallback onPlayMode;
   final VoidCallback onClose;
   final ValueChanged<Hotspot> onHotspot;
@@ -154,6 +159,23 @@ class _DetailContent extends StatelessWidget {
                             color: Color(0xFFDDEAFE),
                           ),
                         ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 5),
+                GestureDetector(
+                  onTap: onSound,
+                  child: AppTheme.glass(
+                    pill: true,
+                    radius: BorderRadius.circular(999),
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.graphic_eq_rounded, size: 12, color: AppTheme.accentAmber),
+                        SizedBox(width: 4),
+                        Text('Sound', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: Color(0xFFFFE7A3))),
                       ],
                     ),
                   ),
