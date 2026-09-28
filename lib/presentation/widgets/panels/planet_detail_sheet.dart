@@ -136,85 +136,6 @@ class _DetailContent extends StatelessWidget {
                   ),
                 ),
                 GestureDetector(
-                  onTap: onSpeak,
-                  child: AppTheme.glass(
-                    pill: true,
-                    radius: BorderRadius.circular(999),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 6,
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.volume_up_rounded,
-                          size: 12,
-                          color: AppTheme.accentSky,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          'Listen',
-                          style: TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFFDDEAFE),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 5),
-                GestureDetector(
-                  onTap: onSound,
-                  child: AppTheme.glass(
-                    pill: true,
-                    radius: BorderRadius.circular(999),
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.graphic_eq_rounded, size: 12, color: AppTheme.accentAmber),
-                        SizedBox(width: 4),
-                        Text('Sound', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: Color(0xFFFFE7A3))),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 5),
-                GestureDetector(
-                  onTap: onPlayMode,
-                  child: AppTheme.glass(
-                    pill: true,
-                    radius: BorderRadius.circular(999),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 6,
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.gamepad,
-                          size: 12,
-                          color: AppTheme.accentAmber,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          'Play Mode',
-                          style: TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFFFFE7A3),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 5),
-                GestureDetector(
                   onTap: onClose,
                   child: AppTheme.glass(
                     pill: true,
@@ -293,6 +214,89 @@ class _DetailContent extends StatelessWidget {
                       ),
                     ),
                   ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 5,
+              runSpacing: 5,
+              children: [
+                GestureDetector(
+                  onTap: onSpeak,
+                  child: AppTheme.glass(
+                    pill: true,
+                    radius: BorderRadius.circular(999),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 6,
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.volume_up_rounded,
+                          size: 12,
+                          color: AppTheme.accentSky,
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          'Listen',
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFFDDEAFE),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: onSound,
+                  child: AppTheme.glass(
+                    pill: true,
+                    radius: BorderRadius.circular(999),
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.graphic_eq_rounded, size: 12, color: AppTheme.accentAmber),
+                        SizedBox(width: 4),
+                        Text('Sound', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: Color(0xFFFFE7A3))),
+                      ],
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: onPlayMode,
+                  child: AppTheme.glass(
+                    pill: true,
+                    radius: BorderRadius.circular(999),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 6,
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.gamepad,
+                          size: 12,
+                          color: AppTheme.accentAmber,
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          'Play Mode',
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFFFFE7A3),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ],
