@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../../infrastructure/services/scene_providers.dart';
@@ -30,6 +29,9 @@ class ExplorerScreen extends ConsumerWidget {
         if (mission != null) {
           final planet = ref.read(planetByIdProvider(mission.targetPlanetId));
           ref.read(planetNarrationServiceProvider).replay(planet);
+          Future<void>.delayed(const Duration(milliseconds: 550), () {
+            if (context.mounted) showMissionDialog(context, ref);
+          });
         }
       }
 
