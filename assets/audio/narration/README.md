@@ -1,7 +1,46 @@
 # Neural narration audio
 
-Place pre-generated neural TTS files in this directory using the naming convention
-implemented by `NarrationAudioCatalog`.
+The app plays pre-generated neural TTS files with `just_audio`. Device TTS remains
+only as a fallback while the bundled files are missing.
+
+## Generate the real neural audio
+
+The repository includes `tool/generate_neural_narration.py`. It reads the narration
+copy directly from `lib/data/datasources/planet_catalog.dart`, so the spoken
+content does not need to be duplicated in another source file.
+
+The generator uses ElevenLabs Text to Speech. ElevenLabs returns MP3 audio from
+its TTS endpoint, which is exactly what the Flutter narration player expects.
+
+Set the credentials locally; never commit the API key:
+
+```bash
+export ELEVENLABS_API_KEY="your-key"
+export ELEVENLABS_VOICE_ID="your-voice-id"
+
+python3 tool/generate_neural_narration.py
+```
+
+The default model is `eleven_multilingual_v2`, which is intended for stable,
+high-fidelity narration. You can override it with:
+
+```bash
+export ELEVENLABS_MODEL="eleven_v3"
+```
+
+Generate a single entry while testing a voice:
+
+```bash
+python3 tool/generate_neural_narration.py --only saturn
+```
+
+Preview the complete asset list without calling the API:
+
+```bash
+python3 tool/generate_neural_narration.py --dry-run
+```
+
+Use `--force` to regenerate an existing file.
 
 ## Planet narration
 
@@ -38,5 +77,6 @@ Use the slug of the hotspot title:
 - `hotspots/supersonic_winds.mp3`
 - `hotspots/white_cirrus_clouds.mp3`
 
-The app first attempts the bundled neural recording. If the file is not present
-or cannot be loaded, it falls back to the existing device TTS service.
+Flutter asset directories are declared separately for `planets/` and
+`hotspots/` because files inside nested subdirectories are not included by
+declaring only their parent directory.
