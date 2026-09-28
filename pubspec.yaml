@@ -27,4 +27,5 @@ flutter:
   uses-material-design: true
   assets:
     - assets/textures/
-    - assets/audio/narration/
+    - assets/audio/narration/planets/
+    - assets/audio/narration/hotspots/
