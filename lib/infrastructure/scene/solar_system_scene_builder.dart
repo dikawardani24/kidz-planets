@@ -136,42 +136,80 @@ class SolarSystemSceneBuilder {
     final state = states[planet.id];
     if (state == null) return;
 
-    final texture = await _safeLoad(planet.ringTextureAsset!);
     final tilt = vm.Quaternion.axisAngle(
       vm.Vector3(1, 0, 0),
       _degreesToRadians(planet.tiltDegrees),
     );
 
-    // Model Saturn's rings as separate translucent bands instead of one
-    // decorative disc. The proportions emphasize the main C, B and A rings,
-    // the Cassini Division, the faint F ring and outer arcs.
-    final bands = <({String id, double inner, double outer, double opacity})>[
-      (id: 'd', inner: 1.18, outer: 1.30, opacity: 0.28),
-      (id: 'c', inner: 1.30, outer: 1.49, opacity: 0.52),
-      (id: 'b', inner: 1.50, outer: 1.91, opacity: 0.82),
-      (id: 'a', inner: 1.98, outer: 2.28, opacity: 0.68),
-      (id: 'f', inner: 2.31, outer: 2.35, opacity: 0.42),
-      (id: 'outer', inner: 2.39, outer: 2.56, opacity: 0.16),
+    // NASA's Cassini images show Saturn's rings as thousands of fine
+    // ringlets, not six thick colored hoops. Build a low-cost approximation:
+    // broad translucent ring regions underneath many very thin strands.
+    final broad = <({String id, double inner, double outer, double opacity})>[
+      (id: 'c', inner: 1.22, outer: 1.53, opacity: 0.16),
+      (id: 'b', inner: 1.54, outer: 1.96, opacity: 0.28),
+      (id: 'a', inner: 2.03, outer: 2.28, opacity: 0.20),
     ];
 
-    for (final band in bands) {
+    for (final band in broad) {
       final ring = Node(
         mesh: Mesh(
           _geometries.saturnBand(
             planet.radius * band.inner,
             planet.radius * band.outer,
           ),
-          _materials.saturnRing(
-            texture: texture,
-            opacity: band.opacity,
-          ),
+          _materials.saturnRing(opacity: band.opacity),
         ),
       )
-        ..name = '${planet.id}:ring:${band.id}'
+        ..name = '${planet.id}:ring:base:${band.id}'
         ..rotation = tilt;
-
       ring.raycastable = false;
-      ring.position = vm.Vector3(0, 0.012, 0);
+      state.spinNode.add(ring);
+    }
+
+    // Fine structure: irregular spacing and opacity makes the ring read as
+    // particle-rich ice instead of a handful of perfect flat hoops.
+    const strands = <({double radius, double width, double opacity})>[
+      (radius: 1.255, width: 0.010, opacity: 0.18),
+      (radius: 1.285, width: 0.006, opacity: 0.32),
+      (radius: 1.335, width: 0.012, opacity: 0.20),
+      (radius: 1.375, width: 0.006, opacity: 0.34),
+      (radius: 1.415, width: 0.009, opacity: 0.22),
+      (radius: 1.465, width: 0.014, opacity: 0.30),
+      (radius: 1.515, width: 0.008, opacity: 0.26),
+      (radius: 1.575, width: 0.012, opacity: 0.42),
+      (radius: 1.625, width: 0.007, opacity: 0.26),
+      (radius: 1.685, width: 0.015, opacity: 0.48),
+      (radius: 1.755, width: 0.009, opacity: 0.30),
+      (radius: 1.825, width: 0.018, opacity: 0.54),
+      (radius: 1.885, width: 0.010, opacity: 0.34),
+      // Cassini Division: deliberately no geometry from ~1.96 to ~2.03.
+      (radius: 2.045, width: 0.008, opacity: 0.28),
+      (radius: 2.085, width: 0.012, opacity: 0.42),
+      (radius: 2.135, width: 0.007, opacity: 0.30),
+      (radius: 2.185, width: 0.015, opacity: 0.46),
+      (radius: 2.235, width: 0.009, opacity: 0.30),
+      (radius: 2.275, width: 0.006, opacity: 0.18),
+      // F ring and faint outer material.
+      (radius: 2.335, width: 0.012, opacity: 0.38),
+      (radius: 2.352, width: 0.004, opacity: 0.52),
+      (radius: 2.405, width: 0.004, opacity: 0.10),
+      (radius: 2.445, width: 0.006, opacity: 0.07),
+    ];
+
+    for (var i = 0; i < strands.length; i++) {
+      final strand = strands[i];
+      final ring = Node(
+        mesh: Mesh(
+          _geometries.saturnBand(
+            planet.radius * (strand.radius - strand.width / 2),
+            planet.radius * (strand.radius + strand.width / 2),
+          ),
+          _materials.saturnRing(opacity: strand.opacity),
+        ),
+      )
+        ..name = '${planet.id}:ring:strand:$i'
+        ..rotation = tilt;
+      ring.raycastable = false;
       state.spinNode.add(ring);
     }
   }
