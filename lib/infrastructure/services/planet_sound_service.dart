@@ -16,6 +16,12 @@ class PlanetSoundService {
   Future<void> playBody(Planet body) =>
       _play(PlanetSoundCatalog.body(body.id));
 
+  Future<void> playMissionSuccess() =>
+      _playOneShot(PlanetSoundCatalog.missionSuccess);
+
+  Future<void> playMissionFailure() =>
+      _playOneShot(PlanetSoundCatalog.missionFailure);
+
   Future<void> stop() async {
     final generation = ++_generation;
     await _fadeOut(generation);
@@ -53,6 +59,17 @@ class PlanetSoundService {
         await p.stop();
         await p.setVolume(0);
       } catch (_) {}
+    }
+  }
+
+  Future<void> _playOneShot(String path) async {
+    try {
+      final player = AudioPlayer();
+      await player.setVolume(0.65);
+      await player.setAsset(path);
+      unawaited(player.play().whenComplete(player.dispose));
+    } catch (error) {
+      debugPrint('Mission sound unavailable: $path ($error)');
     }
   }
 
@@ -105,9 +122,11 @@ class PlanetSoundService {
 
 abstract final class PlanetSoundCatalog {
   static String body(String id) => 'assets/audio/sfx/planets/$id.wav';
+  static const missionSuccess = 'assets/audio/sfx/missions/mission_success.wav';
+  static const missionFailure = 'assets/audio/sfx/missions/mission_failure.wav';
 }
 
-  Future<void> _startPlayback(AudioPlayer player, String path) async {
+Future<void> _startPlayback(AudioPlayer player, String path) async {
     try {
       await player.play();
     } catch (error) {
