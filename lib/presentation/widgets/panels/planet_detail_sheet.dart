@@ -6,6 +6,7 @@ import '../../../domain/entities/planet.dart';
 import '../../../infrastructure/services/planet_narration_provider.dart';
 import '../../../infrastructure/services/planet_sound_provider.dart';
 import '../../theme/app_theme.dart';
+import '../overlays/top_bar.dart';
 
 class PlanetDetailSheet extends ConsumerWidget {
   const PlanetDetailSheet({super.key, required this.planet});
@@ -36,11 +37,6 @@ class PlanetDetailSheet extends ConsumerWidget {
                   ? _DetailContent(
                       planet: planet,
                       ui: ui,
-                      onSpeak: () =>
-                          ref.read(planetNarrationServiceProvider).replay(planet),
-                      onSound: () =>
-                          ref.read(planetSoundServiceProvider).playBody(planet),
-                      onPlayMode: notifier.toggleDetailCard,
                       onClose: notifier.closeDetail,
                       onHotspot: (hotspot) {
                         ref
@@ -53,13 +49,6 @@ class PlanetDetailSheet extends ConsumerWidget {
             ),
           ),
           if (ui.detailCardVisible) const SizedBox(height: 8),
-          _DetailZoomBar(
-            zoom: ui.detailZoom,
-            onZoomOut: () => notifier.adjustDetailZoom(.25),
-            onZoomIn: () => notifier.adjustDetailZoom(-.25),
-            onReset: notifier.resetDetailView,
-          ),
-          const SizedBox(height: 7),
           _CollapseButton(
             collapsed: !ui.detailCardVisible,
             onTap: notifier.toggleDetailCard,
@@ -70,22 +59,150 @@ class PlanetDetailSheet extends ConsumerWidget {
   }
 }
 
+class DetailSideRails extends ConsumerWidget {
+  const DetailSideRails({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ui = ref.watch(explorerControllerProvider);
+    if (!ui.hasSelection || ui.tab != ExplorerTab.explore) {
+      return const SizedBox.shrink();
+    }
+    final planet = ref.watch(planetByIdProvider(ui.selectedPlanetId!));
+    final notifier = ref.read(explorerControllerProvider.notifier);
+    final top = bannerTop(context) + 56;
+
+    return Stack(children: [
+      // Voice + Play Mode rail, below the app title on the left.
+      Positioned(
+        left: 12,
+        top: top,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GestureDetector(
+              onTap: () =>
+                  ref.read(planetNarrationServiceProvider).replay(planet),
+              child: AppTheme.glass(
+                pill: true,
+                radius: BorderRadius.circular(999),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.volume_up_rounded,
+                      size: 14,
+                      color: AppTheme.accentSky,
+                    ),
+                    SizedBox(width: 5),
+                    Text(
+                      'Listen',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFFDDEAFE),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: () =>
+                  ref.read(planetSoundServiceProvider).playBody(planet),
+              child: AppTheme.glass(
+                pill: true,
+                radius: BorderRadius.circular(999),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.graphic_eq_rounded,
+                      size: 14,
+                      color: AppTheme.accentAmber,
+                    ),
+                    SizedBox(width: 5),
+                    Text(
+                      'Sound',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFFFFE7A3),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: notifier.toggleDetailCard,
+              child: AppTheme.glass(
+                pill: true,
+                radius: BorderRadius.circular(999),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.gamepad,
+                      size: 14,
+                      color: AppTheme.accentAmber,
+                    ),
+                    SizedBox(width: 5),
+                    Text(
+                      'Play Mode',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFFFFE7A3),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      // Zoom rail, below the app title on the right edge.
+      Positioned(
+        right: 12,
+        top: top,
+        child: _DetailZoomBar(
+          zoom: ui.detailZoom,
+          vertical: true,
+          onZoomOut: () => notifier.adjustDetailZoom(.25),
+          onZoomIn: () => notifier.adjustDetailZoom(-.25),
+          onReset: notifier.resetDetailView,
+        ),
+      ),
+    ]);
+  }
+}
+
 class _DetailContent extends StatelessWidget {
   const _DetailContent({
     required this.planet,
     required this.ui,
-    required this.onSpeak,
-    required this.onSound,
-    required this.onPlayMode,
     required this.onClose,
     required this.onHotspot,
   });
 
   final Planet planet;
   final ExplorerState ui;
-  final VoidCallback onSpeak;
-  final VoidCallback onSound;
-  final VoidCallback onPlayMode;
   final VoidCallback onClose;
   final ValueChanged<Hotspot> onHotspot;
 
@@ -216,89 +333,6 @@ class _DetailContent extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 5,
-              runSpacing: 5,
-              children: [
-                GestureDetector(
-                  onTap: onSpeak,
-                  child: AppTheme.glass(
-                    pill: true,
-                    radius: BorderRadius.circular(999),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 6,
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.volume_up_rounded,
-                          size: 12,
-                          color: AppTheme.accentSky,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          'Listen',
-                          style: TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFFDDEAFE),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: onSound,
-                  child: AppTheme.glass(
-                    pill: true,
-                    radius: BorderRadius.circular(999),
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.graphic_eq_rounded, size: 12, color: AppTheme.accentAmber),
-                        SizedBox(width: 4),
-                        Text('Sound', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: Color(0xFFFFE7A3))),
-                      ],
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: onPlayMode,
-                  child: AppTheme.glass(
-                    pill: true,
-                    radius: BorderRadius.circular(999),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 6,
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.gamepad,
-                          size: 12,
-                          color: AppTheme.accentAmber,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          'Play Mode',
-                          style: TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFFFFE7A3),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
       ),
@@ -312,39 +346,61 @@ class _DetailZoomBar extends StatelessWidget {
     required this.onZoomOut,
     required this.onZoomIn,
     required this.onReset,
+    this.vertical = false,
   });
 
   final double zoom;
   final VoidCallback onZoomOut;
   final VoidCallback onZoomIn;
   final VoidCallback onReset;
+  final bool vertical;
 
   @override
   Widget build(BuildContext context) {
     final percent = (100 / zoom).round();
 
+    final zoomOut = _ZoomButton(icon: Icons.remove, onTap: onZoomOut);
+    final badge = AppTheme.glass(
+      pill: true,
+      radius: BorderRadius.circular(999),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+      child: Text(
+        '$percent%',
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          color: AppTheme.accentAmber,
+        ),
+      ),
+    );
+    final zoomIn = _ZoomButton(icon: Icons.add, onTap: onZoomIn);
+    final reset = _ZoomButton(icon: Icons.refresh, onTap: onReset, small: true);
+
+    if (vertical) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          zoomIn,
+          const SizedBox(height: 7),
+          badge,
+          const SizedBox(height: 7),
+          zoomOut,
+          const SizedBox(height: 7),
+          reset,
+        ],
+      );
+    }
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _ZoomButton(icon: Icons.remove, onTap: onZoomOut),
+        zoomOut,
         const SizedBox(width: 7),
-        AppTheme.glass(
-          pill: true,
-          radius: BorderRadius.circular(999),
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-          child: Text(
-            '$percent%',
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              color: AppTheme.accentAmber,
-            ),
-          ),
-        ),
+        badge,
         const SizedBox(width: 7),
-        _ZoomButton(icon: Icons.add, onTap: onZoomIn),
+        zoomIn,
         const SizedBox(width: 7),
-        _ZoomButton(icon: Icons.refresh, onTap: onReset, small: true),
+        reset,
       ],
     );
   }
