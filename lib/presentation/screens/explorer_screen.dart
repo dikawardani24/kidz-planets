@@ -4,6 +4,7 @@ import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../../infrastructure/services/scene_providers.dart';
 import '../../../infrastructure/services/planet_narration_provider.dart';
+import '../../../infrastructure/services/planet_sound_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/overlays/bottom_nav.dart';
 import '../widgets/overlays/toast_overlay.dart';
@@ -23,11 +24,14 @@ class ExplorerScreen extends ConsumerWidget {
     ref.listen<ExplorerState>(explorerControllerProvider, (prev, next) {
       if (prev?.selectedPlanetId != next.selectedPlanetId) {
         final narration = ref.read(planetNarrationServiceProvider);
+        final sound = ref.read(planetSoundServiceProvider);
         if (next.selectedPlanetId == null) {
           narration.stop();
+          sound.stop();
         } else {
           final planet = ref.read(planetByIdProvider(next.selectedPlanetId!));
-          narration.speakPlanet(planet);
+          narration.stop();
+          sound.playBody(planet);
         }
       }
 
