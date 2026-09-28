@@ -52,7 +52,7 @@ class OrbitCameraRig {
   }
 
   /// Eases the focus target toward a planet's current world position.
-  void focusOn(String planetId, SolarSystemSceneBuilder builder) {
+  void focusOn(String planetId, SolarSystemSceneBuilder builder, {double deltaSeconds = 1 / 60}) {
     final render = builder.states[planetId];
     if (render == null) return;
 
@@ -77,7 +77,7 @@ class OrbitCameraRig {
     // Moon every frame. The target is updated from the current world transform
     // but interpolated, so the camera settles instead of snapping.
     const duration = 0.82;
-    _focusElapsed = math.min(_focusElapsed + (1 / 60), duration);
+    _focusElapsed = math.min(_focusElapsed + deltaSeconds.clamp(0.0, 0.05), duration);
     final t = (_focusElapsed / duration).clamp(0.0, 1.0);
     final eased = 1.0 - math.pow(1.0 - t, 3).toDouble();
     _focusProgress = eased;
