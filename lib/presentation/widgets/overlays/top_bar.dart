@@ -23,10 +23,13 @@ class ExplorerTopBar extends ConsumerWidget {
         const Spacer(),
         _CircleButton(icon: ui.running ? Icons.pause : Icons.play_arrow, color: AppTheme.accentSky, onTap: notifier.toggleRunning),
         const SizedBox(width: 8),
-        _CircleButton(
-          icon: ui.showLabels ? Icons.label_outline : Icons.label_off_outlined,
-          color: ui.showLabels ? AppTheme.accentAmber : Colors.white54,
-          onTap: notifier.toggleLabels,
+        Tooltip(
+          message: ui.showLabels ? 'Hide object labels' : 'Show object labels',
+          child: _CircleButton(
+            icon: ui.showLabels ? Icons.label_outline : Icons.label_off_outlined,
+            color: ui.showLabels ? AppTheme.accentAmber : Colors.white54,
+            onTap: notifier.toggleLabels,
+          ),
         ),
         const SizedBox(width: 8),
         const _CircleButton(icon: Icons.emoji_people, color: AppTheme.accentAmber),
