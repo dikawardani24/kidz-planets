@@ -21,8 +21,6 @@ class ExplorerTopBar extends ConsumerWidget {
             const Text('NASA Space Explorer', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: .2, color: Colors.white)),
           ])),
         const Spacer(),
-        _CircleButton(icon: ui.running ? Icons.pause : Icons.play_arrow, color: AppTheme.accentSky, onTap: notifier.toggleRunning),
-        const SizedBox(width: 8),
         Tooltip(
           message: ui.showLabels ? 'Hide object labels' : 'Show object labels',
           child: _CircleButton(
@@ -32,7 +30,20 @@ class ExplorerTopBar extends ConsumerWidget {
           ),
         ),
         const SizedBox(width: 8),
-        const _CircleButton(icon: Icons.emoji_people, color: AppTheme.accentAmber),
+        _CircleButton(
+          icon: ui.running ? Icons.pause : Icons.play_arrow,
+          color: AppTheme.accentSky,
+          onTap: notifier.toggleRunning,
+        ),
+        const SizedBox(width: 8),
+        Tooltip(
+          message: ui.showOrbits ? 'Hide orbit paths' : 'Show orbit paths',
+          child: _CircleButton(
+            icon: ui.showOrbits ? Icons.track_changes : Icons.track_changes_outlined,
+            color: ui.showOrbits ? AppTheme.accentViolet : Colors.white54,
+            onTap: notifier.toggleOrbits,
+          ),
+        ),
       ]),
     ));
   }
@@ -119,9 +130,6 @@ class ExplorerControlPills extends ConsumerWidget {
         SizedBox(width: 105, child: Slider(value: ui.speed.clamp(0, 4), min: 0, max: 4, divisions: 8, activeColor: AppTheme.accentAmber, inactiveColor: Colors.white24, onChanged: notifier.setSpeed)),
         Text('${ui.speed.toStringAsFixed(1)}x', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppTheme.accentAmber)),
         const SizedBox(width: 6),
-        _MiniToggle(label: 'Orbits', active: ui.showOrbits, onTap: notifier.toggleOrbits),
-        const SizedBox(width: 5),
-        _MiniToggle(label: 'Labels', active: ui.showLabels, onTap: notifier.toggleLabels),
       ]));
   }
 }
