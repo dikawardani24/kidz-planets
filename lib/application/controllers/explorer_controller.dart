@@ -48,8 +48,10 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     });
 
     _spinHintTimer?.cancel();
-    _spinHintTimer = Timer(const Duration(seconds: 4), {
-      if (mounted && state.hasSelection) state = state.copyWith(spinHintVisible: false);
+    _spinHintTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted && state.hasSelection) {
+        state = state.copyWith(spinHintVisible: false);
+      }
     });
     _checkMission(id);
   }
