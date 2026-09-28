@@ -12,6 +12,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   final SimulationClock _clock;
   Timer? _toastTimer;
   Timer? _spinHintTimer;
+  Timer? _detailCardTimer;
   Timer? _playModeTimer;
   int _toastKey = 0;
 
@@ -36,11 +37,18 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   void selectPlanet(String id) {
     state = state.copyWith(
       selectedPlanetId: id, focusedPlanetId: id, detailZoom: 1.0,
-      detailTheta: 0.65, detailPhi: 0.28, detailTitleOverride: null, detailDescriptionOverride: null, detailCardVisible: true,
+      detailTheta: 0.65, detailPhi: 0.28, detailTitleOverride: null, detailDescriptionOverride: null, detailCardVisible: false,
       playModeBannerVisible: false, spinHintVisible: true,
     );
+    _detailCardTimer?.cancel();
+    _detailCardTimer = Timer(const Duration(milliseconds: 850), () {
+      if (mounted && state.hasSelection && state.selectedPlanetId == id) {
+        state = state.copyWith(detailCardVisible: true);
+      }
+    });
+
     _spinHintTimer?.cancel();
-    _spinHintTimer = Timer(const Duration(seconds: 4), () {
+    _spinHintTimer = Timer(const Duration(seconds: 4), {
       if (mounted && state.hasSelection) state = state.copyWith(spinHintVisible: false);
     });
     _checkMission(id);
@@ -48,6 +56,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
 
   void closeDetail() {
     _spinHintTimer?.cancel();
+    _detailCardTimer?.cancel();
     _playModeTimer?.cancel();
     state = state.copyWith(
       selectedPlanetId: null, focusedPlanetId: null, detailTitleOverride: null, detailDescriptionOverride: null, detailCardVisible: true,
@@ -165,6 +174,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   void dispose() {
     _toastTimer?.cancel();
     _spinHintTimer?.cancel();
+    _detailCardTimer?.cancel();
     _playModeTimer?.cancel();
     super.dispose();
   }
