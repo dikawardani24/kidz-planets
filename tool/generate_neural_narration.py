@@ -52,8 +52,10 @@ def slugify(value: str) -> str:
 
 
 def extract_narration(block: str) -> str | None:
+    # A planet's narration is followed by a comma because `hotspots:` comes next,
+    # while a hotspot's narration is the last argument and is closed by `)`.
     match = re.search(
-        rf"narration:\s*{STRING_GROUP}\s*,",
+        rf"narration:\s*{STRING_GROUP}\s*[,)]",
         block,
         re.DOTALL,
     )

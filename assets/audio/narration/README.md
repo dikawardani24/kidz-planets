@@ -3,6 +3,27 @@
 The app plays pre-generated neural TTS files with `just_audio`. Device TTS remains
 only as a fallback while the bundled files are missing.
 
+## Quick start
+
+One command does the whole setup and generation:
+
+```bash
+./run.sh narration
+```
+
+Or call the helper directly:
+
+```bash
+./tool/setup_kokoro.sh              # install dependencies and set up the venv
+./tool/setup_kokoro.sh --saturn     # generate Saturn only, to audition the voice
+./tool/setup_kokoro.sh --all        # generate all 9 planets + 18 hotspots
+./tool/setup_kokoro.sh --check      # report what is missing, install nothing
+```
+
+The helper installs `ffmpeg`/`espeak-ng` via Homebrew, creates `.venv-kokoro`,
+installs Kokoro, and exports `PYTORCH_ENABLE_MPS_FALLBACK=1` on Apple Silicon.
+It is safe to re-run.
+
 ## Free local generation with Kokoro
 
 The repository includes `tool/generate_neural_narration.py`. It reads the narration
@@ -27,6 +48,55 @@ python3 -m venv .venv-kokoro
 source .venv-kokoro/bin/activate
 pip install "kokoro>=0.9.4" soundfile
 ```
+
+Kokoro requires **Python 3.10 to 3.12** (`requires-python >=3.10,<3.13`). macOS
+ships Python 3.9, so install a newer interpreter first if `pip` rejects the
+install:
+
+```bash
+brew install python@3.12
+python3.12 -m venv .venv-kokoro
+```
+
+### Using pyenv instead
+
+pyenv is the other common option. Because the pyenv shims only reach `PATH` in
+an **interactive** shell, each shell needs its own init line.
+
+**fish** — add to `~/.config/fish/config.fish`:
+
+```fish
+if status is-interactive; and type -q pyenv
+    set -gx PYENV_ROOT $HOME/.pyenv
+    pyenv init - fish | source
+end
+```
+
+Use `pyenv init - fish | source`, **not** `eval (pyenv init - fish)`. Command
+substitution joins the output onto a single line, which corrupts the multi-line
+`while ... end` block that pyenv emits.
+
+**zsh/bash** — add to `~/.zshrc`:
+
+```bash
+export PYENV_ROOT="$HOME/.pyenv"
+command -v pyenv >/dev/null 2>&1 && eval "$(pyenv init -)"
+```
+
+Then start a new shell and confirm:
+
+```bash
+cd /path/to/kidz-planets
+python3 --version          # 3.12.x
+pyenv local 3.12.13        # pins the version for this repo only
+```
+
+`tool/setup_kokoro.sh` also looks inside `~/.pyenv/versions` directly, so it
+works from non-interactive shells and CI even when the shims are absent from
+`PATH`. `.python-version` is gitignored because it is a machine-local pin.
+
+Also note that `espeak-ng` supplies the phoneme fallback used by some voices, and
+`ffmpeg` is required to encode the MP3 assets.
 
 For Apple Silicon Macs, Kokoro's documentation recommends enabling the PyTorch
 MPS fallback:

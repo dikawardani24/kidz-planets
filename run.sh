@@ -10,6 +10,7 @@
 #   ./run.sh clean        flutter clean + pub get
 #   ./run.sh devices      list available devices
 #   ./run.sh doctor       flutter doctor
+#   ./run.sh narration    generate Kokoro neural narration MP3s (local only)
 #   ./run.sh build-macos  release build for macOS
 #   ./run.sh build-web    release build for web
 #   ./run.sh build-apk    release build for Android
@@ -126,6 +127,12 @@ case "$cmd" in
   build-macos) shift; do_build macos "$@" ;;
   build-web) shift; do_build web "$@" ;;
   build-apk) shift; do_build apk "$@" ;;
+  narration)
+    shift
+    # Kokoro needs Python 3.10-3.12 plus ffmpeg; the helper installs and
+    # generates without needing a cloud TTS key.
+    exec ./tool/setup_kokoro.sh "$@"
+    ;;
   help|-h|--help) show_help ;;
   *) echo "Unknown command: $cmd"; echo ""; show_help; exit 1 ;;
 esac
