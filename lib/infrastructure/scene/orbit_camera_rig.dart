@@ -99,8 +99,13 @@ class OrbitCameraRig {
   }
 
   double _detailRadius(double zoom) {
+    // Moons are tiny (0.10–0.42 units) and orbit close to bright parents.
+    // A floor of 2.5 buries them behind the parent/zoom math that was tuned
+    // for full-size planets — so clamp relative to the focused body size.
+    final bodyMin = (_focusedPlanetRadius * 3.0).clamp(0.45, 2.5);
+    final bodyMax = (_focusedPlanetRadius * 22.0).clamp(6.0, 30.0);
     final baseDistance = _focusedPlanetRadius * (_focusedPlanetIsSun ? 3.4 : 3.6);
-    return (baseDistance * zoom).clamp(2.5, 30.0);
+    return (baseDistance * zoom).clamp(bodyMin, bodyMax);
   }
 }
 
