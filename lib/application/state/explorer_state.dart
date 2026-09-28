@@ -30,6 +30,7 @@ class ExplorerState extends Equatable {
     this.missionGuideVisible = true,
     this.missionHintLevel = 0,
     this.wrongSelectionKey = 0,
+    this.wrongFeedbackVisible = false,
   });
 
   final ExplorerTab tab;
@@ -58,6 +59,7 @@ class ExplorerState extends Equatable {
   final bool missionGuideVisible;
   final int missionHintLevel;
   final int wrongSelectionKey;
+  final bool wrongFeedbackVisible;
 
   bool get hasSelection => selectedPlanetId != null;
   bool get celebrationVisible => celebrationTitle != null && celebrationDescription != null;
@@ -89,6 +91,7 @@ class ExplorerState extends Equatable {
     bool? missionGuideVisible,
     int? missionHintLevel,
     int? wrongSelectionKey,
+    bool? wrongFeedbackVisible,
   }) {
     return ExplorerState(
       tab: tab ?? this.tab,
@@ -117,6 +120,7 @@ class ExplorerState extends Equatable {
       missionGuideVisible: missionGuideVisible ?? this.missionGuideVisible,
       missionHintLevel: missionHintLevel ?? this.missionHintLevel,
       wrongSelectionKey: wrongSelectionKey ?? this.wrongSelectionKey,
+      wrongFeedbackVisible: wrongFeedbackVisible ?? this.wrongFeedbackVisible,
     );
   }
 
@@ -124,7 +128,7 @@ class ExplorerState extends Equatable {
   List<Object?> get props => [
         tab, running, speed, showOrbits, showLabels, selectedPlanetId, focusedPlanetId,
         detailZoom, detailTheta, detailPhi, detailTitleOverride, detailDescriptionOverride, detailCardVisible, spinHintVisible,
-        playModeBannerVisible, playgroundAlertIcon, playgroundAlertTitle, playgroundAlertDescription, missions, toasts, celebrationTitle, celebrationDescription, activeMissionId, missionGuideVisible, missionHintLevel, wrongSelectionKey,
+        playModeBannerVisible, playgroundAlertIcon, playgroundAlertTitle, playgroundAlertDescription, missions, toasts, celebrationTitle, celebrationDescription, activeMissionId, missionGuideVisible, missionHintLevel, wrongSelectionKey, wrongFeedbackVisible,
       ];
 }
 
