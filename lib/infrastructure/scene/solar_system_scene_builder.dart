@@ -44,9 +44,10 @@ class SolarSystemSceneBuilder {
 
     onProgress('Painting stars…');
     await _buildStars(scene);
-    final total = planets.length;
-    for (var i = 0; i < total; i++) {
-      final planet = planets[i];
+    final primaryBodies = planets.where((p) => !p.isMoon).toList();
+    final moons = planets.where((p) => p.isMoon).toList();
+
+    for (final planet in primaryBodies) {
       onProgress('Painting ${planet.name}…');
       await _buildPlanet(scene, planet);
       if (planet.hasRing) {
@@ -55,6 +56,11 @@ class SolarSystemSceneBuilder {
       if (!planet.isSun) {
         _buildOrbit(scene, planet);
       }
+    }
+
+    for (final moon in moons) {
+      onProgress('Painting ${moon.name}…');
+      await _buildPlanet(scene, moon);
     }
   }
 
@@ -115,10 +121,13 @@ class SolarSystemSceneBuilder {
 
     final orbitNode = Node()..name = '${planet.id}:orbit';
     final angle = planet.startAngle;
+    final parent =
+        planet.parentPlanetId == null ? null : states[planet.parentPlanetId!];
+    final parentPosition = parent?.node.position ?? vm.Vector3.zero();
     orbitNode.position = vm.Vector3(
-      math.cos(angle) * planet.orbitRadius,
-      0,
-      math.sin(angle) * planet.orbitRadius,
+      parentPosition.x + math.cos(angle) * planet.orbitRadius,
+      parentPosition.y,
+      parentPosition.z + math.sin(angle) * planet.orbitRadius,
     );
     orbitNode.add(spinNode);
     scene.add(orbitNode);
