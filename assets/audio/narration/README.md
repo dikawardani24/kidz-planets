@@ -3,46 +3,77 @@
 The app plays pre-generated neural TTS files with `just_audio`. Device TTS remains
 only as a fallback while the bundled files are missing.
 
-## Generate the real neural audio
+## Free local generation with Kokoro
 
 The repository includes `tool/generate_neural_narration.py`. It reads the narration
-copy directly from `lib/data/datasources/planet_catalog.dart`, so the spoken
-content does not need to be duplicated in another source file.
+copy directly from `lib/data/datasources/planet_catalog.dart`, then runs Kokoro
+locally and writes MP3 assets into this directory.
 
-The generator uses ElevenLabs Text to Speech. ElevenLabs returns MP3 audio from
-its TTS endpoint, which is exactly what the Flutter narration player expects.
+Kokoro is an open-weight 82M-parameter TTS model with an Apache license. Its
+official inference library supports local Python generation and 24 kHz audio.
 
-Set the credentials locally; never commit the API key:
+### macOS setup
 
-```bash
-export ELEVENLABS_API_KEY="your-key"
-export ELEVENLABS_VOICE_ID="your-voice-id"
-
-python3 tool/generate_neural_narration.py
-```
-
-The default model is `eleven_multilingual_v2`, which is intended for stable,
-high-fidelity narration. You can override it with:
+Install the native tools:
 
 ```bash
-export ELEVENLABS_MODEL="eleven_v3"
+brew install espeak-ng ffmpeg
 ```
 
-Generate a single entry while testing a voice:
+Create a dedicated Python environment:
+
+```bash
+python3 -m venv .venv-kokoro
+source .venv-kokoro/bin/activate
+pip install "kokoro>=0.9.4" soundfile
+```
+
+For Apple Silicon Macs, Kokoro's documentation recommends enabling the PyTorch
+MPS fallback:
+
+```bash
+export PYTORCH_ENABLE_MPS_FALLBACK=1
+```
+
+### Generate one test narration
+
+Start with Saturn so you can judge the voice before generating every file:
 
 ```bash
 python3 tool/generate_neural_narration.py --only saturn
 ```
 
-Preview the complete asset list without calling the API:
+The default voice is `af_heart`. You can test another local Kokoro voice:
+
+```bash
+python3 tool/generate_neural_narration.py --only saturn --voice af_sarah
+python3 tool/generate_neural_narration.py --only saturn --voice am_michael
+```
+
+### Generate everything
+
+```bash
+python3 tool/generate_neural_narration.py
+```
+
+This generates the nine planet narrations and all hotspot narrations from the
+existing catalog.
+
+Use `--force` to regenerate existing files:
+
+```bash
+python3 tool/generate_neural_narration.py --force
+```
+
+Preview the asset list without loading the model:
 
 ```bash
 python3 tool/generate_neural_narration.py --dry-run
 ```
 
-Use `--force` to regenerate an existing file.
+## Asset naming
 
-## Planet narration
+Planet assets:
 
 - `planets/sun.mp3`
 - `planets/mercury.mp3`
@@ -54,29 +85,15 @@ Use `--force` to regenerate an existing file.
 - `planets/uranus.mp3`
 - `planets/neptune.mp3`
 
-## Hotspot narration
-
-Use the slug of the hotspot title:
-
-- `hotspots/nuclear_fusion.mp3`
-- `hotspots/solar_wind.mp3`
-- `hotspots/speedy_orbit.mp3`
-- `hotspots/cratered_face.mp3`
-- `hotspots/runaway_heat.mp3`
-- `hotspots/backward_spin.mp3`
-- `hotspots/liquid_oceans.mp3`
-- `hotspots/protective_shield.mp3`
-- `hotspots/olympus_mons.mp3`
-- `hotspots/polar_ice_caps.mp3`
-- `hotspots/great_red_spot.mp3`
-- `hotspots/79_moons.mp3`
-- `hotspots/icy_rings.mp3`
-- `hotspots/light_as_cork.mp3`
-- `hotspots/sideways_roll.mp3`
-- `hotspots/methane_sky.mp3`
-- `hotspots/supersonic_winds.mp3`
-- `hotspots/white_cirrus_clouds.mp3`
+Hotspot assets use the slug of the hotspot title, for example
+`hotspots/great_red_spot.mp3` and `hotspots/icy_rings.mp3`.
 
 Flutter asset directories are declared separately for `planets/` and
-`hotspots/` because files inside nested subdirectories are not included by
-declaring only their parent directory.
+`hotspots/` so the nested audio files are bundled correctly.
+
+## Cost
+
+This workflow does not call ElevenLabs or any other TTS API. After the Kokoro
+model and dependencies are downloaded, narration generation runs locally.
+
+Do not commit the Kokoro model or Python virtual environment to this repository.
