@@ -63,14 +63,27 @@ class SolarSystemAnimator {
       if (!planet.isSun && planet.orbitRadius > 0) {
         final radius = _orbitRadiusOverrides[planet.id] ?? planet.orbitRadius;
         final angle = planet.startAngle + t * planet.orbitSpeed;
-        state.node.position = vm.Vector3(
-          math.cos(angle) * radius,
-          0,
-          math.sin(angle) * radius,
-        );
+
+        if (planet.isMoon && planet.parentPlanetId != null) {
+          final parent = _builder.states[planet.parentPlanetId!];
+          if (parent != null) {
+            final parentPosition = parent.node.position;
+            state.node.position = vm.Vector3(
+              parentPosition.x + math.cos(angle) * radius,
+              parentPosition.y,
+              parentPosition.z + math.sin(angle) * radius,
+            );
+          }
+        } else {
+          state.node.position = vm.Vector3(
+            math.cos(angle) * radius,
+            0,
+            math.sin(angle) * radius,
+          );
+        }
       }
       // Self-spin: slow ambient + finger momentum.
-      final baseSpin = planet.isSun ? 0.02 : 0.12;
+      final baseSpin = planet.isSun ? 0.02 : planet.isMoon ? 0.18 : 0.12;
       final spin = (baseSpin + _spinBoost) * deltaSeconds;
       state.spinNode.rotation =
           state.spinNode.rotation * vm.Quaternion.axisAngle(
