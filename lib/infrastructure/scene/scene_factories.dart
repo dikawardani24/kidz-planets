@@ -102,16 +102,15 @@ class PlanetMaterialFactory {
       ..doubleSided = true;
   }
 
-  /// Saturn band: strip texture, double-sided so it reads from below.
-  UnlitMaterial saturnRing({required TextureSource? texture}) {
+  /// Saturn ring band inspired by NASA's translucent ring imagery.
+  UnlitMaterial saturnRing({
+    required TextureSource? texture,
+    double opacity = 0.8,
+  }) {
     final material = UnlitMaterial(colorTexture: texture);
-    // The ring texture contains transparent gaps; blend them rather than
-    // treating the PNG as an opaque decal.
     material.alphaMode = AlphaMode.blend;
     material.doubleSided = true;
-    if (texture == null) {
-      material.baseColorFactor = vm.Vector4(0.89, 0.79, 0.55, 0.92);
-    }
+    material.baseColorFactor = vm.Vector4(0.92, 0.84, 0.66, opacity);
     return material;
   }
 
