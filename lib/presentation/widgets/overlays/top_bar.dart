@@ -56,22 +56,32 @@ class _CircleButton extends StatelessWidget {
   }
 }
 
+/// Vertical space the top bar occupies below the safe-area inset:
+/// 10px top padding + 38px controls + 2px bottom padding.
+const double topBarExtent = 50;
+
+/// Y offset for banners that must sit below the top bar, so they stay clear
+/// of it on devices with a status bar or notch.
+double bannerTop(BuildContext context) =>
+    MediaQuery.paddingOf(context).top + topBarExtent;
+
 class ExplorerInteractionOverlays extends ConsumerWidget {
   const ExplorerInteractionOverlays({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ui = ref.watch(explorerControllerProvider);
+    final top = bannerTop(context);
     if (ui.hasSelection && ui.spinHintVisible) {
-      return const _Banner(top: 64, borderColor: Color(0x66F59E0B), background: Color(0xD9040712), textColor: Color(0xFFFFE7A3),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [Text('👆 Swipe to spin'), SizedBox(width: 8), Text('•', style: TextStyle(color: AppTheme.accentViolet)), SizedBox(width: 8), Text('🤏 Pinch or +/- to zoom')]));
+      return _Banner(top: top + 14, borderColor: const Color(0x66F59E0B), background: const Color(0xD9040712), textColor: const Color(0xFFFFE7A3),
+        child: const Row(mainAxisSize: MainAxisSize.min, children: [Text('👆 Swipe to spin'), SizedBox(width: 8), Text('•', style: TextStyle(color: AppTheme.accentViolet)), SizedBox(width: 8), Text('🤏 Pinch or +/- to zoom')]));
     }
     if (ui.playModeBannerVisible) {
-      return const _Banner(top: 64, borderColor: Color(0x80F59E0B), background: Color(0xE6040712), textColor: Color(0xFFFFE7A3),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.gamepad, size: 13, color: AppTheme.accentAmber), SizedBox(width: 6), Text('Play Mode Active: Spin & explore freely!')]));
+      return _Banner(top: top + 14, borderColor: const Color(0x80F59E0B), background: const Color(0xE6040712), textColor: const Color(0xFFFFE7A3),
+        child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.gamepad, size: 13, color: AppTheme.accentAmber), SizedBox(width: 6), Text('Play Mode Active: Spin & explore freely!')]));
     }
     if (!ui.hasSelection && ui.tab == ExplorerTab.explore) {
-      return const _Banner(top: 62, borderColor: Color(0x664F46E5), background: Color(0xBF010206), textColor: Color(0xDDBFC6FF),
-        child: Text('✨ Tap the Sun or any planet to inspect NASA 3D details'));
+      return _Banner(top: top + 12, borderColor: const Color(0x664F46E5), background: const Color(0xBF010206), textColor: const Color(0xDDBFC6FF),
+        child: const Text('✨ Tap the Sun or any planet to inspect NASA 3D details'));
     }
     return const SizedBox.shrink();
   }
