@@ -31,6 +31,7 @@ abstract class SolarSystemSceneController {
   List<PlanetLabelFrame> projectLabels(
       PerspectiveCamera camera, Size viewSize);
   void setOrbitsVisible(bool visible);
+  bool labelsVisibleAtZoom(ExplorerState ui);
   void setPlanetOrbitRadius(String planetId, double radius);
   void addSpinBoost(double amount);
   String? pickPlanet(Offset screenPosition, Size viewSize, PerspectiveCamera camera);
@@ -113,6 +114,10 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   @override
   PerspectiveCamera buildCamera(ExplorerState ui) =>
       _rig.buildCamera(ui: ui);
+
+  @override
+  bool labelsVisibleAtZoom(ExplorerState ui) =>
+      _rig.labelsVisibleAtZoom(ui);
 
   @override
   void tick(double deltaSeconds, ExplorerState ui) {
