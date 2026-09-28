@@ -20,7 +20,7 @@ class PlanetSoundService {
       try {
         await _player.stop();
         await _player.setLoopMode(LoopMode.one);
-        await _player.setVolume(0.28);
+        await _player.setVolume(0.42);
         await _player.setAsset(path);
         await _player.play();
       } catch (error) {

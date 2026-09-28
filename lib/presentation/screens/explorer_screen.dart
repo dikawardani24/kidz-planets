@@ -30,7 +30,7 @@ class ExplorerScreen extends ConsumerWidget {
           sound.stop();
         } else {
           final planet = ref.read(planetByIdProvider(next.selectedPlanetId!));
-          narration.stop();
+          narration.speakPlanet(planet);
           sound.playBody(planet);
         }
       }
