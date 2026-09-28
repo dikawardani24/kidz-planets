@@ -282,6 +282,33 @@ class SolarSystemSceneBuilder {
             vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), -edgeAngle),
       );
     }
+
+    // Flat bands have zero projected area at an exact edge-on angle.
+    // Keep three very thin physical edge profiles so the ring system
+    // remains visible instead of snapping completely out of sight.
+    const edgeProfiles = <({double radius, double tube, double opacity})>[
+      (radius: 1.40, tube: 0.020, opacity: 0.34),
+      (radius: 1.78, tube: 0.022, opacity: 0.42),
+      (radius: 2.17, tube: 0.018, opacity: 0.34),
+    ];
+
+    for (var i = 0; i < edgeProfiles.length; i++) {
+      final edge = edgeProfiles[i];
+      final ring = Node(
+        mesh: Mesh(
+          _geometries.saturnEdgeRing(
+            planet.radius * edge.radius,
+            planet.radius * edge.tube,
+          ),
+          _materials.saturnRing(opacity: edge.opacity),
+        ),
+      )
+        ..name = '${planet.id}:ring:edge:$i'
+        ..rotation = tilt;
+      ring.raycastable = false;
+      state.spinNode.add(ring);
+    }
+
   }
   void _buildOrbit(Scene scene, Planet planet) {
     final node = Node(
