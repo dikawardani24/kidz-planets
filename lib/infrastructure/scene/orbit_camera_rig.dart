@@ -52,6 +52,20 @@ class OrbitCameraRig {
         .clamp(kMinRadius, kMaxRadius);
   }
 
+  /// Automatic readability rule for object labels.
+  ///
+  /// This does not modify the user's label preference. It only decides
+  /// whether labels should be displayed at the current camera distance.
+  bool labelsVisibleAtZoom(ExplorerState ui) {
+    if (ui.hasSelection) {
+      // In detail mode, a larger detailZoom means the camera is farther away.
+      return _displayDetailZoom <= 1.7;
+    }
+    // In overview mode, hide labels once the whole system is zoomed out
+    // enough that the chips begin to obscure the planets.
+    return _state.radius <= 62.0;
+  }
+
   /// Eases the focus target toward a planet's current world position.
   void focusOn(String planetId, SolarSystemSceneBuilder builder, {double deltaSeconds = 1 / 60}) {
     final render = builder.states[planetId];
