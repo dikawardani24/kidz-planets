@@ -1,38 +1,36 @@
 #!/usr/bin/env python3
-"""Generate bundled neural narration MP3s for Kidz Planets.
+"""Generate bundled neural narration with Kokoro, entirely locally.
 
-The script reads the narration copy directly from the Flutter planet catalog so
-there is one source of truth for spoken content. It writes MP3 assets into
-assets/audio/narration/planets and assets/audio/narration/hotspots.
+No cloud TTS API or API key is required. The script reads narration copy from
+the Flutter planet catalog and generates MP3 assets for the app.
 
-Required environment variables:
-  ELEVENLABS_API_KEY
-  ELEVENLABS_VOICE_ID
+Setup on macOS:
+  brew install espeak-ng ffmpeg
+  python3 -m venv .venv-kokoro
+  source .venv-kokoro/bin/activate
+  pip install "kokoro>=0.9.4" soundfile
 
-Optional:
-  ELEVENLABS_MODEL (default: eleven_multilingual_v2)
+Apple Silicon:
+  export PYTORCH_ENABLE_MPS_FALLBACK=1
 
-Example:
-  ELEVENLABS_API_KEY=... ELEVENLABS_VOICE_ID=... \
-    python3 tool/generate_neural_narration.py
+Then:
+  python3 tool/generate_neural_narration.py --only saturn
+  python3 tool/generate_neural_narration.py
 
-Generate only Saturn:
-  ... python3 tool/generate_neural_narration.py --only saturn
-
-Preview what would be generated:
-  ... python3 tool/generate_neural_narration.py --dry-run
+The default voice is Kokoro's American English "af_heart".
+Override it with KOKORO_VOICE, for example af_sarah or am_michael.
 """
 
 from __future__ import annotations
 
 import argparse
 import ast
-import os
-from pathlib import Path
 import re
+import shutil
+import subprocess
 import sys
-from urllib import error, request
-import json
+import tempfile
+from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,8 +51,12 @@ def slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
 
 
-def extract_narration(block: str, start: int = 0) -> str | None:
-    match = re.search(rf"narration:\s*{STRING_GROUP}\s*,", block[start:], re.DOTALL)
+def extract_narration(block: str) -> str | None:
+    match = re.search(
+        rf"narration:\s*{STRING_GROUP}\s*,",
+        block,
+        re.DOTALL,
+    )
     if not match:
         return None
     return decode_dart_strings(match.group(1)).strip()
@@ -76,7 +78,7 @@ def extract_catalog() -> list[tuple[str, str, str]]:
             items.append(("planet", planet_id, planet_narration))
 
         for hotspot in re.split(r"Hotspot\(", block)[1:]:
-            title_match = re.search(rf"title:\s*({STRING})", hotspot, re.DOTALL)
+            title_match = re.search(rf"title:\s*({STRING})", hotspot)
             if not title_match:
                 continue
 
@@ -88,51 +90,49 @@ def extract_catalog() -> list[tuple[str, str, str]]:
     return items
 
 
-def generate_audio(
-    *,
-    api_key: str,
-    voice_id: str,
-    model_id: str,
-    text: str,
-) -> bytes:
-    url = (
-        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-        "?output_format=mp3_44100_128"
-    )
+def generate_audio(pipeline, text: str, voice: str, output_path: Path) -> None:
+    import soundfile as sf
 
-    payload = json.dumps(
-        {
-            "text": text,
-            "model_id": model_id,
-            "voice_settings": {
-                "stability": 0.45,
-                "similarity_boost": 0.75,
-                "style": 0.15,
-                "use_speaker_boost": True,
-                "speed": 0.96,
-            },
-        }
-    ).encode("utf-8")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    req = request.Request(
-        url,
-        data=payload,
-        method="POST",
-        headers={
-            "xi-api-key": api_key,
-            "Content-Type": "application/json",
-            "Accept": "audio/mpeg",
-        },
-    )
+    with tempfile.TemporaryDirectory(prefix="kidz-planets-tts-") as temp_dir:
+        wav_path = Path(temp_dir) / "narration.wav"
 
-    try:
-        with request.urlopen(req, timeout=120) as response:
-            return response.read()
-    except error.HTTPError as exc:
-        details = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(
-            f"ElevenLabs returned HTTP {exc.code}: {details}"
-        ) from exc
+        chunks = []
+        for _, _, audio in pipeline(text, voice=voice):
+            chunks.append(audio)
+
+        if not chunks:
+            raise RuntimeError("Kokoro produced no audio.")
+
+        import numpy as np
+
+        audio = np.concatenate(chunks)
+        sf.write(wav_path, audio, 24000)
+
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg is None:
+            raise RuntimeError(
+                "ffmpeg is required to create MP3 assets. "
+                "Install it with: brew install ffmpeg"
+            )
+
+        subprocess.run(
+            [
+                ffmpeg,
+                "-y",
+                "-loglevel",
+                "error",
+                "-i",
+                str(wav_path),
+                "-codec:a",
+                "libmp3lame",
+                "-q:a",
+                "4",
+                str(output_path),
+            ],
+            check=True,
+        )
 
 
 def main() -> int:
@@ -150,7 +150,12 @@ def main() -> int:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="List generated files without calling ElevenLabs.",
+        help="List files without loading Kokoro or generating audio.",
+    )
+    parser.add_argument(
+        "--voice",
+        default=None,
+        help="Kokoro voice. Defaults to KOKORO_VOICE or af_heart.",
     )
     args = parser.parse_args()
 
@@ -159,27 +164,40 @@ def main() -> int:
         return 1
 
     items = extract_catalog()
-    if not items:
-        print("No narration entries were found in the planet catalog.", file=sys.stderr)
-        return 1
-
     selected = set(args.only or [])
     if selected:
         items = [item for item in items if item[1] in selected]
 
-    if not args.dry_run:
-        api_key = os.getenv("ELEVENLABS_API_KEY")
-        voice_id = os.getenv("ELEVENLABS_VOICE_ID")
-        if not api_key or not voice_id:
-            print(
-                "Set ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID before generating audio.",
-                file=sys.stderr,
-            )
-            return 2
-    else:
-        api_key = voice_id = None
+    if not items:
+        print("No narration entries selected.", file=sys.stderr)
+        return 1
 
-    model_id = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
+    voice = args.voice or __import__("os").environ.get("KOKORO_VOICE", "af_heart")
+
+    if args.dry_run:
+        for kind, key, _ in items:
+            folder = PLANET_OUTPUT if kind == "planet" else HOTSPOT_OUTPUT
+            print(folder.joinpath(f"{key}.mp3").relative_to(ROOT))
+        return 0
+
+    try:
+        from kokoro import KPipeline
+    except ImportError:
+        print(
+            'Kokoro is not installed. Run: pip install "kokoro>=0.9.4" soundfile',
+            file=sys.stderr,
+        )
+        return 2
+
+    language = voice[0]
+    if language not in {"a", "b"}:
+        raise SystemExit(
+            f"Unsupported English voice '{voice}'. Use an American 'af_*' or "
+            "British 'bf_*' voice."
+        )
+
+    print(f"Loading Kokoro voice: {voice}")
+    pipeline = KPipeline(lang_code=language)
 
     for kind, key, narration in items:
         output_dir = PLANET_OUTPUT if kind == "planet" else HOTSPOT_OUTPUT
@@ -190,19 +208,9 @@ def main() -> int:
             continue
 
         print(f"create {output_path.relative_to(ROOT)}")
-        if args.dry_run:
-            continue
+        generate_audio(pipeline, narration, voice, output_path)
 
-        output_dir.mkdir(parents=True, exist_ok=True)
-        audio = generate_audio(
-            api_key=api_key,
-            voice_id=voice_id,
-            model_id=model_id,
-            text=narration,
-        )
-        output_path.write_bytes(audio)
-
-    print(f"Processed {len(items)} narration entries.")
+    print(f"Processed {len(items)} narration entries with Kokoro.")
     return 0
 
 
