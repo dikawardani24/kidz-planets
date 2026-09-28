@@ -121,7 +121,7 @@ class ExplorerInteractionOverlays extends ConsumerWidget {
             children: [
               const Icon(Icons.explore, size: 13, color: AppTheme.accentSky),
               const SizedBox(width: 7),
-              Text('Mission ' + activeMission.id.toString() + ': ' + activeMission.title)),
+              Text('Mission ' + activeMission.id.toString() + ': ' + activeMission.title),
             ],
           ),
         );
