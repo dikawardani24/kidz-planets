@@ -12,7 +12,8 @@ class PlanetsGridPanel extends ConsumerWidget {
     final planets = ref.watch(planetsProvider);
     final ui = ref.watch(explorerControllerProvider);
     final notifier = ref.read(explorerControllerProvider.notifier);
-    final others = planets.where((p) => !p.isSun).toList();
+    final others = planets.where((p) => !p.isSun && !p.isMoon).toList();
+    final moons = planets.where((p) => p.isMoon).toList();
     return Container(
       decoration: BoxDecoration(color: AppTheme.space900.withValues(alpha: 0.96), borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.14)))),
@@ -25,10 +26,36 @@ class PlanetsGridPanel extends ConsumerWidget {
               child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(999)),
                 child: const Text('Close', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white70))))])),
-        Flexible(child: GridView.builder(padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 12, crossAxisSpacing: 12, childAspectRatio: 1.35),
-          itemCount: others.length,
-          itemBuilder: (context, i) => _PlanetCard(planet: others[i], selected: ui.selectedPlanetId == others[i].id))),
+        Flexible(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(left: 4, bottom: 10),
+                child: Text('PLANETS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white54, letterSpacing: 1.2)),
+              ),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 12, crossAxisSpacing: 12, childAspectRatio: 1.35),
+                itemCount: others.length,
+                itemBuilder: (context, i) => _PlanetCard(planet: others[i], selected: ui.selectedPlanetId == others[i].id),
+              ),
+              const SizedBox(height: 22),
+              const Padding(
+                padding: EdgeInsets.only(left: 4, bottom: 10),
+                child: Text('MOONS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white54, letterSpacing: 1.2)),
+              ),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 12, crossAxisSpacing: 12, childAspectRatio: 1.35),
+                itemCount: moons.length,
+                itemBuilder: (context, i) => _PlanetCard(planet: moons[i], selected: ui.selectedPlanetId == moons[i].id),
+              ),
+            ],
+          ),
+        ),
       ])));
   }
 }
