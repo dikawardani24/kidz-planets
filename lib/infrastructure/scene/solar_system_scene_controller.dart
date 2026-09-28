@@ -76,6 +76,7 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   double _rotationVelocityX = 0.0;
   double _rotationVelocityY = 0.0;
   String? _rotationVelocityPlanetId;
+  String? _lastFocusedPlanetId;
 
   @override
   Scene get scene => _scene;
@@ -117,6 +118,12 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   void tick(double deltaSeconds, ExplorerState ui) {
     _clock.tick(deltaSeconds);
     final focused = ui.focusedPlanetId;
+    if (focused != _lastFocusedPlanetId) {
+      _rotationVelocityX = 0.0;
+      _rotationVelocityY = 0.0;
+      _rotationVelocityPlanetId = focused;
+      _lastFocusedPlanetId = focused;
+    }
     _animator?.setFocusedPlanet(focused);
 
     if (_rotationVelocityX.abs() > 0.0001 ||
