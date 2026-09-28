@@ -47,7 +47,9 @@ class OrbitCameraRig {
   void focusOn(String planetId, SolarSystemSceneBuilder builder) {
     final render = builder.states[planetId];
     if (render == null) return;
-    final p = render.node.position;
+    // The system can now be rotated as a 3D object, so the selected body's
+    // actual world position must be used instead of its local orbit position.
+    final p = render.node.globalTransform.getTranslation();
     _focusedPlanetRadius = render.radius;
     _focusedPlanetIsSun = render.isSun;
     const k = 0.12;
