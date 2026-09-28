@@ -16,101 +16,71 @@ class PlanetDetailSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ui = ref.watch(explorerControllerProvider);
-    final notifier = ref.read(explorerControllerProvider.notifier);
 
-    // Keep the card in the layout while AnimatedSwitcher transitions it
-    // to zero size. Because the card sits above the standalone toggle, the
-    // collapse animation contracts toward the toggle instead of disappearing
-    // abruptly.
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 280),
-      reverseDuration: const Duration(milliseconds: 220),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      layoutBuilder: (currentChild, previousChildren) {
-        return AnimatedSize(
-          duration: const Duration(milliseconds: 280),
-          curve: Curves.easeInOutCubic,
-          alignment: Alignment.bottomCenter,
-          child: Stack(
-            alignment: Alignment.bottomCenter,
-            children: [
-              ...previousChildren,
-              if (currentChild != null) currentChild,
-            ],
-          ),
-        );
-      },
-      transitionBuilder: (child, animation) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        );
-        return SizeTransition(
-          sizeFactor: curved,
-          axisAlignment: 1.0,
-          child: FadeTransition(
-            opacity: curved,
-            child: child,
-          ),
-        );
-      },
-      child: ui.detailCardVisible
-          ? AppTheme.glass(
-              key: const ValueKey('planet-detail-card-visible'),
-              radius: BorderRadius.circular(24),
-              padding: const EdgeInsets.fromLTRB(14, 13, 14, 11),
-              child: _DetailContent(
-                planet: planet,
-                ui: ui,
-                onClose: notifier.closeDetail,
-                onHotspot: (hotspot) {
-                  ref
-                      .read(planetNarrationServiceProvider)
-                      .speakHotspot(hotspot);
-                  notifier.showHotspot(hotspot);
-                },
-              ),
-            )
-          : const SizedBox(
-              key: ValueKey('planet-detail-card-collapsed'),
-              width: 0,
-              height: 0,
-            ),
+    return AppTheme.glass(
+      radius: BorderRadius.circular(24),
+      padding: const EdgeInsets.fromLTRB(18, 17, 18, 15),
+      child: _DetailContent(
+        planet: planet,
+        ui: ui,
+        onClose: () => Navigator.of(context).pop(),
+        onHotspot: (hotspot) {
+          ref
+              .read(planetNarrationServiceProvider)
+              .speakHotspot(hotspot);
+          ref.read(explorerControllerProvider.notifier).showHotspot(hotspot);
+        },
+      ),
     );
   }
 }
 
-/// Standalone control for showing/hiding the description card.
+/// Opens the full facts view as a modal dialog. The dialog owns its available
+/// space, so orientation changes do not constrain the facts card to the scene.
 class DetailDescriptionToggle extends ConsumerWidget {
-  const DetailDescriptionToggle({super.key});
+  const DetailDescriptionToggle({super.key, required this.planet});
+
+  final Planet planet;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ui = ref.watch(explorerControllerProvider);
-    final notifier = ref.read(explorerControllerProvider.notifier);
-
     return GestureDetector(
-      onTap: notifier.toggleDetailCard,
+      onTap: () {
+        showDialog<void>(
+          context: context,
+          barrierColor: Colors.black.withValues(alpha: .68),
+          builder: (_) => Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 24,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: 620,
+                maxHeight: 620,
+              ),
+              child: PlanetDetailSheet(planet: planet),
+            ),
+          ),
+        );
+      },
       child: AppTheme.glass(
         pill: true,
         radius: BorderRadius.circular(999),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        child: Row(
+        child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              ui.detailCardVisible
-                  ? Icons.keyboard_arrow_down
-                  : Icons.keyboard_arrow_up,
+              Icons.keyboard_arrow_up,
               size: 15,
               color: AppTheme.accentSky,
             ),
-            const SizedBox(width: 4),
+            SizedBox(width: 4),
             Text(
-              ui.detailCardVisible ? 'Hide facts' : 'Show facts',
-              style: const TextStyle(
+              'Show facts',
+              style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w800,
                 color: Colors.white,
