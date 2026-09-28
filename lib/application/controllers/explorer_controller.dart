@@ -14,6 +14,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   Timer? _toastTimer;
   Timer? _spinHintTimer;
   Timer? _playModeTimer;
+  Timer? _wrongFeedbackTimer;
   int _toastKey = 0;
 
   void setTab(ExplorerTab tab) {
@@ -62,6 +63,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   void closeDetail() {
     _spinHintTimer?.cancel();
     _playModeTimer?.cancel();
+    _wrongFeedbackTimer?.cancel();
     state = state.copyWith(
       selectedPlanetId: null, focusedPlanetId: null, detailTitleOverride: null, detailDescriptionOverride: null, detailCardVisible: false,
       spinHintVisible: false, playModeBannerVisible: false,
@@ -178,12 +180,17 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     if (mission.targetPlanetId != planetId) {
       SystemSound.play(SystemSoundType.alert);
       HapticFeedback.lightImpact();
+      _wrongFeedbackTimer?.cancel();
       state = state.copyWith(
         missionGuideVisible: true,
+        wrongFeedbackVisible: true,
         missionHintLevel: (state.missionHintLevel + 1).clamp(1, 3),
         wrongSelectionKey: state.wrongSelectionKey + 1,
       );
       showToast('💡 Let’s look at the clue again!');
+      _wrongFeedbackTimer = Timer(const Duration(milliseconds: 1500), () {
+        if (mounted) state = state.copyWith(wrongFeedbackVisible: false);
+      });
       return;
     }
 
@@ -213,6 +220,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     _toastTimer?.cancel();
     _spinHintTimer?.cancel();
     _playModeTimer?.cancel();
+    _wrongFeedbackTimer?.cancel();
     super.dispose();
   }
 }
