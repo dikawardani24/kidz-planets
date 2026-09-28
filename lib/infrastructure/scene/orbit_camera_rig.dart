@@ -179,7 +179,7 @@ class LabelProjector {
     for (final planet in _planets) {
       final render = _builder.states[planet.id];
       if (render == null) continue;
-      final world = render.node.position;
+      final world = render.node.globalTransform.getTranslation();
       final screen = camera.worldToScreen(world, viewSize);
       if (screen == null) continue;
       final dx = world.x - camera.position.x;
