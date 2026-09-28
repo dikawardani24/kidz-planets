@@ -43,6 +43,8 @@ class Planet extends Equatable {
     required this.dayLength,
     required this.hotspots,
     this.narration,
+    this.parentPlanetId,
+    this.isMoon = false,
     this.ringTextureAsset,
     this.ringInnerFactor = 1.35,
     this.ringOuterFactor = 2.1,
@@ -58,6 +60,13 @@ class Planet extends Equatable {
   /// [fact] so the spoken voice can address the child directly while the
   /// on-screen text stays factual. Falls back to [fact] when absent.
   final String? narration;
+
+  /// Parent planet for natural satellites. Moon orbit values are relative to
+  /// the parent planet rather than the Sun.
+  final String? parentPlanetId;
+
+  /// True when this body is a moon rather than one of the eight planets.
+  final bool isMoon;
 
   /// Visual 3D radius in world units (already kid-scaled).
   final double radius;
@@ -90,5 +99,5 @@ class Planet extends Equatable {
   bool get hasRing => ringTextureAsset != null;
 
   @override
-  List<Object?> get props => [id];
+  List<Object?> get props => [id, parentPlanetId, isMoon];
 }
