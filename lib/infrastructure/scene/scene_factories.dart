@@ -104,13 +104,15 @@ class PlanetMaterialFactory {
 
   /// Saturn ring band inspired by NASA's translucent ring imagery.
   UnlitMaterial saturnRing({
-    required TextureSource? texture,
+    TextureSource? texture,
     double opacity = 0.8,
   }) {
     final material = UnlitMaterial(colorTexture: texture);
     material.alphaMode = AlphaMode.blend;
     material.doubleSided = true;
-    material.baseColorFactor = vm.Vector4(0.92, 0.84, 0.66, opacity);
+    // Soft icy-beige rather than a saturated gold. Alpha is intentionally low:
+    // NASA imagery shows the rings are translucent and reveal Saturn/shadows.
+    material.baseColorFactor = vm.Vector4(0.88, 0.83, 0.70, opacity);
     return material;
   }
 
