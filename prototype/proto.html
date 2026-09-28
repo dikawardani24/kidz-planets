@@ -743,7 +743,7 @@
         // Interactive Detail View Controls (Zoom, Swipe-Spin Momentum, Tilt)
         let detailZoom = 1.0;
         let detailCamTheta = 0.65; // Unbounded azimuth: keeps rotating past 360°
-        let detailCamPhi = 0.28;   // Elevation is limited only to avoid flipping at the poles
+        let detailCamPhi = 0.28;   // Unbounded elevation for continuous vertical rotation
         let planetSpinVelocity = 0.008; // dynamic spin momentum from finger
         let fingerVelocityX = 0;
         let lastPointerX = 0;
@@ -1348,7 +1348,7 @@
                     // Horizontal detail rotation is an unbounded azimuth. The user can keep
                     // swiping around the planet through any number of full rotations.
                     detailCamTheta += deltaX * 0.006;
-                    detailCamPhi = Math.max(-1.45, Math.min(1.45, detailCamPhi + deltaY * 0.006));
+                    // Unbounded elevation: vertical swipes can continue through multiple full rotations.\n                    detailCamPhi += deltaY * 0.006;
 
                     // Track spin speed matching finger motion
                     planetSpinVelocity = fingerVelocityX * 0.018;
@@ -1356,7 +1356,7 @@
                     // Orbit the entire solar system around its center. Keep theta unbounded so
                     // repeated full rotations never hit an artificial 360° stop.
                     solarOrbitTheta += deltaX * 0.005;
-                    solarOrbitPhi = Math.max(-1.35, Math.min(1.35, solarOrbitPhi - deltaY * 0.004));
+                    // Unbounded elevation: the solar system can tumble vertically without a pole clamp.\n                    solarOrbitPhi -= deltaY * 0.004;
                 }
 
                 previousMousePosition = { x: e.clientX, y: e.clientY };
