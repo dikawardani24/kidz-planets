@@ -122,13 +122,20 @@ class OrbitCameraRig {
     double tz = _state.targetZ;
 
     if (ui.hasSelection) {
-      // Smooth the zoom target so pinch gestures do not cause visible
-      // distance stepping, especially on tiny moons.
-      _displayDetailZoom += (ui.detailZoom - _displayDetailZoom) * 0.18;
+      // During the initial focus flight, use the animated radius from
+      // [focusOn]. Previously this was replaced immediately with the final
+      // detail radius, making selection appear to teleport/zoom instantly.
+      if (_focusProgress >= 1.0) {
+        // Once focused, smooth pinch zoom independently.
+        _displayDetailZoom += (ui.detailZoom - _displayDetailZoom) * 0.18;
+        radius = _detailRadius(_displayDetailZoom);
+      } else {
+        radius = _state.radius;
+      }
+
       // Detail mode keeps the camera centered on the selected body.
       // The body itself is rotated by the gesture; the camera must not orbit
       // around it or impose a vertical pole clamp.
-      radius = _detailRadius(_displayDetailZoom);
       theta = _state.theta;
       phi = _state.phi;
     }
