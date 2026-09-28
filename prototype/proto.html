@@ -473,7 +473,7 @@
         // Texture Loader with Cross-Origin and Fallback Resilience
         function loadPlanetTexture(filename, cdnType = 'soumya', planetId = null) {
             const cdnBase = (cdnType === 'threejs') ? CDN_THREEJS : CDN_SOUMYA;
-            const primaryUrl = IS_FILE_PROTOCOL ? (cdnBase + filename) : ('./textures/' + filename);
+            const primaryUrl = IS_FILE_PROTOCOL ? (cdnBase + filename) : ('../assets/textures/' + filename);
             const fallbackUrl = cdnBase + filename;
 
             const texture = new THREE.Texture();
