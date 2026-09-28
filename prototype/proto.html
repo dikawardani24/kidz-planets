@@ -1366,25 +1366,28 @@
                 const instVx = deltaX / dt;
                 fingerVelocityX = fingerVelocityX * 0.35 + instVx * 0.65;
 
+                // True object manipulation: the finger rotates the object itself.
+                // No camera orbit, no elevation/pole clamp, and no spherical theta/phi
+                // coordinates. Because the quaternion is accumulated, the object's local
+                // axes move with it; after a 180° flip, its former Z axis can naturally
+                // become the new vertical axis and the motion can continue indefinitely.
                 if (selectedPlanetItem) {
-                    // Kids' finger directly spins the planet
-                    selectedPlanetItem.mesh.rotation.y += deltaX * 0.009;
-                    if (selectedPlanetItem.group.userData.cloudMesh) {
-                        selectedPlanetItem.group.userData.cloudMesh.rotation.y += deltaX * 0.0095;
-                    }
+                    applyTrackballRotation(
+                        selectedPlanetItem.tiltGroup,
+                        deltaX,
+                        deltaY,
+                        trackballDetailAccumulator
+                    );
 
-                    // Horizontal detail rotation is an unbounded azimuth. The user can keep
-                    // swiping around the planet through any number of full rotations.
-                    detailCamTheta += deltaX * 0.006;
-                    // Unbounded elevation: vertical swipes can continue through multiple full rotations.\n                    detailCamPhi += deltaY * 0.006;
-
-                    // Track spin speed matching finger motion
+                    // Keep the normal inertial spin only for horizontal flicks.
                     planetSpinVelocity = fingerVelocityX * 0.018;
                 } else {
-                    // Orbit the entire solar system around its center. Keep theta unbounded so
-                    // repeated full rotations never hit an artificial 360° stop.
-                    solarOrbitTheta += deltaX * 0.005;
-                    // Unbounded elevation: the solar system can tumble vertically without a pole clamp.\n                    solarOrbitPhi -= deltaY * 0.004;
+                    applyTrackballRotation(
+                        solarSystemGroup,
+                        deltaX,
+                        deltaY,
+                        trackballSolarAccumulator
+                    );
                 }
 
                 previousMousePosition = { x: e.clientX, y: e.clientY };
