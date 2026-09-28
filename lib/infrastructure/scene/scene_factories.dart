@@ -105,11 +105,13 @@ class PlanetMaterialFactory {
   /// Saturn band: strip texture, double-sided so it reads from below.
   UnlitMaterial saturnRing({required TextureSource? texture}) {
     final material = UnlitMaterial(colorTexture: texture);
-    if (texture == null) {
-      material.baseColorFactor = vm.Vector4(0.89, 0.79, 0.55, 0.85);
-    }
+    // The ring texture contains transparent gaps; blend them rather than
+    // treating the PNG as an opaque decal.
     material.alphaMode = AlphaMode.blend;
     material.doubleSided = true;
+    if (texture == null) {
+      material.baseColorFactor = vm.Vector4(0.89, 0.79, 0.55, 0.92);
+    }
     return material;
   }
 
