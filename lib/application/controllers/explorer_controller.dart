@@ -163,9 +163,31 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   }
 
   void _checkMission(String planetId) {
-    final idx = state.missions.indexWhere((m) => m.targetPlanetId == planetId && !m.completed);
+    final activeId = state.activeMissionId;
+    if (activeId == null) return;
+    final idx = state.missions.indexWhere(
+      (m) => m.id == activeId && !m.completed && m.targetPlanetId == planetId,
+    );
     if (idx < 0) return;
-    completeFirstPendingFor(planetId);
+
+    final updated = List<MissionState>.from(state.missions);
+    final mission = updated[idx];
+    updated[idx] = mission.copyWith(completed: true);
+
+    final nextIndex = updated.indexWhere((m) => !m.completed);
+    final nextMissionId = nextIndex < 0 ? null : updated[nextIndex].id;
+    state = state.copyWith(
+      missions: updated,
+      activeMissionId: nextMissionId,
+    );
+    final targetName = mission.title
+        .replaceFirst('Find ', '')
+        .replaceFirst('Visit ', '');
+    showCelebration(
+      'Mission ${mission.id} Complete!',
+      'You discovered $targetName. Ready for the next mission?',
+    );
+    showToast('🚀 Mission complete: ${mission.title}');
   }
 
   @override
