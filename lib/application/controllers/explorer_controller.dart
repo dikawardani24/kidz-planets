@@ -34,6 +34,13 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   void toggleLabels() => state = state.copyWith(showLabels: !state.showLabels);
 
   void selectPlanet(String id) {
+    // Tapping the already-focused body exits detail mode. Facts are never
+    // required to leave the focused view.
+    if (state.selectedPlanetId == id) {
+      closeDetail();
+      return;
+    }
+
     state = state.copyWith(
       selectedPlanetId: id, focusedPlanetId: id, detailZoom: 1.0,
       detailTheta: 0.65, detailPhi: 0.28, detailTitleOverride: null, detailDescriptionOverride: null,
