@@ -12,6 +12,11 @@ ExplorerController makeController() {
 }
 
 void main() {
+  // ExplorerController owns a PlanetSoundService for the mission cues, and
+  // AudioPlayer registers an audio_session channel in its constructor, so the
+  // binding has to exist before the first controller is built.
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('catalog has sun + 8 planets with textures', () {
     expect(PlanetCatalog.planets.length, 27);
     expect(PlanetCatalog.moons.length, 18);
