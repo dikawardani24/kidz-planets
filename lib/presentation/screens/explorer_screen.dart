@@ -24,9 +24,18 @@ class ExplorerScreen extends ConsumerWidget {
 
     ref.listen<ExplorerState>(explorerControllerProvider, (prev, next) {
       if (prev?.wrongSelectionKey != next.wrongSelectionKey && next.wrongSelectionKey != 0) {
-        final mission = next.missions.where((m) => m.id == next.activeMissionId).firstOrNull;
+        final matches = next.missions.where((m) => m.id == next.activeMissionId);
+        final mission = matches.isEmpty ? null : matches.first;
         if (mission != null) {
           final planet = ref.read(planetByIdProvider(mission.targetPlanetId));
+          ref.read(planetNarrationServiceProvider).replay(planet);
+        }
+      }
+
+      if (prev?.activeMissionId != next.activeMissionId && next.activeMissionId != null) {
+        final matches = next.missions.where((m) => m.id == next.activeMissionId);
+        if (matches.isNotEmpty) {
+          final planet = ref.read(planetByIdProvider(matches.first.targetPlanetId));
           ref.read(planetNarrationServiceProvider).replay(planet);
         }
       }
