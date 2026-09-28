@@ -17,6 +17,14 @@ class OrbitCameraRig {
   final CameraRigState _state;
   double _focusedPlanetRadius = 1.0;
   bool _focusedPlanetIsSun = false;
+  String? _activeFocusId;
+  double _focusProgress = 1.0;
+  double _focusElapsed = 0.0;
+  vm.Vector3 _focusStartTarget = vm.Vector3.zero();
+  vm.Vector3 _focusTarget = vm.Vector3.zero();
+  double _focusStartRadius = kOverviewRadius;
+  double _focusTargetRadius = kOverviewRadius;
+
   CameraRigState get state => _state;
 
   static const double kOverviewRadius = 46.0;
@@ -47,18 +55,46 @@ class OrbitCameraRig {
   void focusOn(String planetId, SolarSystemSceneBuilder builder) {
     final render = builder.states[planetId];
     if (render == null) return;
-    // The system can now be rotated as a 3D object, so the selected body's
-    // actual world position must be used instead of its local orbit position.
+
     final p = render.node.globalTransform.getTranslation();
+    final destination = p.clone();
+    final destinationRadius = _detailRadius(1.0, radius: render.radius, isSun: render.isSun);
+
+    if (_activeFocusId != planetId) {
+      _activeFocusId = planetId;
+      _focusElapsed = 0.0;
+      _focusProgress = 0.0;
+      _focusStartTarget = vm.Vector3(_state.targetX, _state.targetY, _state.targetZ);
+      _focusStartRadius = _state.radius;
+    }
+
+    _focusTarget = destination;
+    _focusTargetRadius = destinationRadius;
     _focusedPlanetRadius = render.radius;
     _focusedPlanetIsSun = render.isSun;
-    const k = 0.12;
-    _state.targetX += (p.x - _state.targetX) * k;
-    _state.targetY += (p.y - _state.targetY) * k;
-    _state.targetZ += (p.z - _state.targetZ) * k;
+
+    // A short eased camera flight is much more stable than chasing a moving
+    // Moon every frame. The target is updated from the current world transform
+    // but interpolated, so the camera settles instead of snapping.
+    const duration = 0.82;
+    _focusElapsed = math.min(_focusElapsed + (1 / 60), duration);
+    final t = (_focusElapsed / duration).clamp(0.0, 1.0);
+    final eased = 1.0 - math.pow(1.0 - t, 3).toDouble();
+    _focusProgress = eased;
+
+    final target = vm.Vector3.lerp(_focusStartTarget, _focusTarget, eased)!;
+    _state
+      ..targetX = target.x
+      ..targetY = target.y
+      ..targetZ = target.z
+      ..radius = _focusStartRadius +
+          (_focusTargetRadius - _focusStartRadius) * eased;
   }
 
   void releaseFocus() {
+    _activeFocusId = null;
+    _focusProgress = 1.0;
+    _focusElapsed = 0.0;
     const k = 0.08;
     _state.targetX *= (1 - k);
     _state.targetY *= (1 - k);
@@ -102,13 +138,15 @@ class OrbitCameraRig {
     );
   }
 
-  double _detailRadius(double zoom) {
+  double _detailRadius(double zoom, {double? radius, bool? isSun}) {
+    final focusedRadius = radius ?? _focusedPlanetRadius;
+    final focusedIsSun = isSun ?? _focusedPlanetIsSun;
     // Moons are tiny (0.10–0.42 units) and orbit close to bright parents.
     // A floor of 2.5 buries them behind the parent/zoom math that was tuned
     // for full-size planets — so clamp relative to the focused body size.
-    final bodyMin = (_focusedPlanetRadius * 3.0).clamp(0.45, 2.5);
-    final bodyMax = (_focusedPlanetRadius * 22.0).clamp(6.0, 30.0);
-    final baseDistance = _focusedPlanetRadius * (_focusedPlanetIsSun ? 3.4 : 3.6);
+    final bodyMin = (focusedRadius * 3.0).clamp(0.45, 2.5);
+    final bodyMax = (focusedRadius * 22.0).clamp(6.0, 30.0);
+    final baseDistance = focusedRadius * (focusedIsSun ? 3.4 : 3.6);
     return (baseDistance * zoom).clamp(bodyMin, bodyMax);
   }
 }
