@@ -12,7 +12,6 @@ class PlanetNarrationService {
   final List<AudioPlayer> _players;
   int _activeIndex = 0;
   int _generation = 0;
-  Timer? _fadeTimer;
 
   Future<void> speakPlanet(Planet planet) =>
       _play(NarrationAudioCatalog.planet(planet.id));
@@ -23,21 +22,12 @@ class PlanetNarrationService {
   Future<void> replay(Planet planet) => speakPlanet(planet);
 
   Future<void> stop() async {
-    ++_generation;
-    _fadeTimer?.cancel();
-    _fadeTimer = null;
-    for (final player in _players) {
-      try {
-        await player.stop();
-        await player.setVolume(0);
-      } catch (_) {}
-    }
+    final generation = ++_generation;
+    await _fadeOut(generation);
   }
 
   Future<void> dispose() async {
     ++_generation;
-    _fadeTimer?.cancel();
-    _fadeTimer = null;
     for (final player in _players) {
       try {
         await player.stop();
@@ -51,8 +41,6 @@ class PlanetNarrationService {
     // narration fades up. This avoids the hard stop/start feeling of a
     // single AudioPlayer.
     final generation = ++_generation;
-    _fadeTimer?.cancel();
-    _fadeTimer = null;
 
     final incomingIndex = 1 - _activeIndex;
     final outgoingIndex = _activeIndex;
@@ -86,6 +74,31 @@ class PlanetNarrationService {
     }
   }
 
+  Future<void> _fadeOut(int generation) async {
+    const duration = Duration(milliseconds: 260);
+    const steps = 13;
+    const stepDuration = Duration(milliseconds: 20);
+    final player = _players[_activeIndex];
+    final startedAt = DateTime.now();
+
+    for (var step = 1; step <= steps; step++) {
+      await Future<void>.delayed(stepDuration);
+      if (generation != _generation) return;
+      final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
+      final t = (elapsed / duration.inMilliseconds).clamp(0.0, 1.0);
+      final eased = 1 - (t * t * (3 - 2 * t));
+      await player.setVolume(0.92 * eased);
+    }
+
+    if (generation != _generation) return;
+    for (final p in _players) {
+      try {
+        await p.stop();
+        await p.setVolume(0);
+      } catch (_) {}
+    }
+  }
+
   Future<void> _crossfade({
     required int generation,
     required AudioPlayer incoming,
@@ -112,7 +125,6 @@ class PlanetNarrationService {
     await outgoing.stop();
     await outgoing.setVolume(0);
     await incoming.setVolume(0.92);
-    _fadeTimer = null;
   }
 }
 
