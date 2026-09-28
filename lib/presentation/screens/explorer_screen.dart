@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/state/explorer_state.dart';
@@ -15,6 +17,22 @@ import '../widgets/panels/planet_detail_sheet.dart';
 import '../widgets/panels/playground_panel.dart';
 import '../widgets/scene/solar_system_scene_view.dart';
 
+/// Decides whether a body's ambience and voice description may start now.
+///
+/// A completed mission plays its own success cue and then raises a
+/// celebration dialog, so narration is held until that dialog is dismissed:
+/// the voice runs at 0.92 and would otherwise talk over the 0.65 cue and read
+/// the dialog out loud. A wrong pick has already replayed the active mission
+/// as a hint, so that cue keeps the last word.
+bool canStartPlanetAudio({
+  required ExplorerState current,
+  required int wrongSelectionKeyAtSelect,
+}) {
+  if (current.celebrationVisible) return false;
+  if (current.wrongSelectionKey != wrongSelectionKeyAtSelect) return false;
+  return true;
+}
+
 class ExplorerScreen extends ConsumerWidget {
   const ExplorerScreen({super.key});
 
@@ -23,6 +41,13 @@ class ExplorerScreen extends ConsumerWidget {
     final ui = ref.watch(explorerControllerProvider);
 
     ref.listen<ExplorerState>(explorerControllerProvider, (prev, next) {
+      void speakSelected(String? id) {
+        if (id == null) return;
+        final planet = ref.read(planetByIdProvider(id));
+        ref.read(planetNarrationServiceProvider).speakPlanet(planet);
+        ref.read(planetSoundServiceProvider).playBody(planet);
+      }
+
       if (prev?.wrongSelectionKey != next.wrongSelectionKey && next.wrongSelectionKey != 0) {
         final matches = next.missions.where((m) => m.id == next.activeMissionId);
         final mission = matches.isEmpty ? null : matches.first;
@@ -35,24 +60,59 @@ class ExplorerScreen extends ConsumerWidget {
         }
       }
 
+      // Dismissing the celebration is the cue to describe the body that was
+      // just found. The mission success sound plays alone while the modal is
+      // up: narration runs at 0.92 and would otherwise talk over the 0.65 cue
+      // and read the dialog out loud.
+      if (prev?.celebrationVisible == true && !next.celebrationVisible) {
+        speakSelected(next.selectedPlanetId);
+      }
+
       if (prev?.activeMissionId != next.activeMissionId && next.activeMissionId != null) {
-        final matches = next.missions.where((m) => m.id == next.activeMissionId);
-        if (matches.isNotEmpty) {
+        final missionId = next.activeMissionId;
+        // _checkMission() raises the celebration in a later state assignment
+        // than the one that advances activeMissionId, so the same microtask
+        // deferral is needed here to see it.
+        scheduleMicrotask(() {
+          if (!context.mounted) return;
+          final current = ref.read(explorerControllerProvider);
+          if (current.activeMissionId != missionId) return;
+          final matches = current.missions.where((m) => m.id == missionId);
+          if (matches.isEmpty) return;
+          if (!canStartPlanetAudio(
+            current: current,
+            wrongSelectionKeyAtSelect: current.wrongSelectionKey,
+          )) {
+            return;
+          }
           final planet = ref.read(planetByIdProvider(matches.first.targetPlanetId));
           ref.read(planetNarrationServiceProvider).replay(planet);
-        }
+        });
       }
 
       if (prev?.selectedPlanetId != next.selectedPlanetId) {
-        final narration = ref.read(planetNarrationServiceProvider);
-        final sound = ref.read(planetSoundServiceProvider);
-        if (next.selectedPlanetId == null) {
-          narration.stop();
-          sound.stop();
+        final selectedId = next.selectedPlanetId;
+        if (selectedId == null) {
+          ref.read(planetNarrationServiceProvider).stop();
+          ref.read(planetSoundServiceProvider).stop();
         } else {
-          final planet = ref.read(planetByIdProvider(next.selectedPlanetId!));
-          narration.speakPlanet(planet);
-          sound.playBody(planet);
+          // selectPlanet() checks the mission in the same synchronous turn, so
+          // a celebration raised by this tap is not set yet on this pass.
+          // Re-reading the state on a microtask lets it be seen; when one is up
+          // the celebration-dismissed branch above does the narration instead.
+          final wrongKey = next.wrongSelectionKey;
+          scheduleMicrotask(() {
+            if (!context.mounted) return;
+            final current = ref.read(explorerControllerProvider);
+            if (current.selectedPlanetId != selectedId) return;
+            if (!canStartPlanetAudio(
+              current: current,
+              wrongSelectionKeyAtSelect: wrongKey,
+            )) {
+              return;
+            }
+            speakSelected(selectedId);
+          });
         }
       }
 
