@@ -78,10 +78,12 @@ class OrbitCameraRig {
     double tz = _state.targetZ;
 
     if (ui.hasSelection) {
-      // Detail mode: closer orbit driven by the detail sheet gestures.
+      // Detail mode keeps the camera centered on the selected body.
+      // The body itself is rotated by the gesture; the camera must not orbit
+      // around it or impose a vertical pole clamp.
       radius = _detailRadius(ui.detailZoom);
-      theta = _state.theta + ui.detailTheta;
-      phi = (ui.detailPhi).clamp(-0.2, 1.3);
+      theta = _state.theta;
+      phi = _state.phi;
     }
 
     final cosPhi = math.cos(phi);
