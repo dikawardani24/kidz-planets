@@ -94,14 +94,23 @@ class ExplorerScreen extends ConsumerWidget {
                   // Keep the description card to the left of the vertical
                   // zoom rail. The rail occupies the right edge in landscape.
                   right: isLandscape ? 68 : 16,
-                  top: isLandscape ? 72 : null,
-                  // In landscape the card must be height-driven by its
-                  // contents. Setting both top and bottom would give the
-                  // Positioned child a tight viewport-height constraint,
-                  // preventing AnimatedSize from collapsing the glass card.
-                  bottom: isLandscape ? null : 88,
+                  // Leave room for the standalone description toggle.
+                  top: isLandscape ? 116 : null,
+                  bottom: isLandscape ? null : 116,
                   width: isLandscape ? 330 : null,
                   child: _DetailWrapper(planetId: ui.selectedPlanetId!),
+                ),
+
+              if (ui.hasSelection && ui.tab == ExplorerTab.explore)
+                Positioned(
+                  left: isLandscape ? null : 16,
+                  right: isLandscape ? 68 : 16,
+                  top: isLandscape ? 72 : null,
+                  bottom: isLandscape ? null : 76,
+                  child: const Align(
+                    alignment: Alignment.centerRight,
+                    child: DetailDescriptionToggle(),
+                  ),
                 ),
 
               if (ui.hasSelection && ui.tab == ExplorerTab.explore)
