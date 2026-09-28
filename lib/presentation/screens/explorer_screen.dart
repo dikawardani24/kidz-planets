@@ -45,17 +45,21 @@ class ExplorerScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppTheme.space950,
       resizeToAvoidBottomInset: false,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isLandscape = constraints.maxWidth > constraints.maxHeight;
+      body: OrientationBuilder(
+        builder: (context, orientation) {
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              // OrientationBuilder explicitly reacts to device rotation.
+              // LayoutBuilder then supplies the new viewport dimensions.
+              final isLandscape = orientation == Orientation.landscape;
           final horizontalInset = isLandscape ? 24.0 : 0.0;
 
           // The scene is intentionally allowed to use the entire viewport.
           // The previous 390px width cap made landscape render as a narrow
           // portrait-sized canvas with unused space on both sides.
-          return Stack(
-            fit: StackFit.expand,
-            children: [
+              return Stack(
+                fit: StackFit.expand,
+                children: [
               const SolarSystemSceneView(),
               const Positioned(
                 top: 0,
@@ -106,7 +110,9 @@ class ExplorerScreen extends ConsumerWidget {
                     description: ui.celebrationDescription!,
                   ),
                 ),
-            ],
+                ],
+              );
+            },
           );
         },
       ),
