@@ -70,7 +70,7 @@ class DetailSideRails extends ConsumerWidget {
     }
     final planet = ref.watch(planetByIdProvider(ui.selectedPlanetId!));
     final notifier = ref.read(explorerControllerProvider.notifier);
-    final top = bannerTop(context) + 56;
+    final top = bannerTop(context) + 8;
 
     return Stack(children: [
       // Voice + Play Mode rail, below the app title on the left.
