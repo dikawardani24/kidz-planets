@@ -46,10 +46,13 @@ class DetailDescriptionToggle extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
       onTap: () {
-        showDialog<void>(
+        showGeneralDialog<void>(
           context: context,
+          barrierDismissible: true,
+          barrierLabel: 'Planet facts',
           barrierColor: Colors.black.withValues(alpha: .68),
-          builder: (_) => Dialog(
+          transitionDuration: const Duration(milliseconds: 280),
+          pageBuilder: (_, __, ___) => Dialog(
             backgroundColor: Colors.transparent,
             insetPadding: const EdgeInsets.symmetric(
               horizontal: 20,
@@ -63,6 +66,20 @@ class DetailDescriptionToggle extends ConsumerWidget {
               child: PlanetDetailSheet(planet: planet),
             ),
           ),
+          transitionBuilder: (_, animation, __, child) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
+            return FadeTransition(
+              opacity: curved,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: .94, end: 1.0).animate(curved),
+                child: child,
+              ),
+            );
+          },
         );
       },
       child: AppTheme.glass(
