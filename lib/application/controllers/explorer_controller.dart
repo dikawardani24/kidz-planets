@@ -6,9 +6,8 @@ import '../state/explorer_state.dart';
 import '../state/simulation_clock.dart';
 
 class ExplorerController extends StateNotifier<ExplorerState> {
-  ExplorerController({required SimulationClock clock, required List<Mission> initialMissions})
-      : _clock = clock,
-        super(ExplorerState(missions: initialMissions.map((m) => MissionState(id: m.id, title: m.title, description: m.description, targetPlanetId: m.targetPlanetId)).toList()));
+  ExplorerController({required this._clock, required List<Mission> initialMissions})
+      : super(ExplorerState(missions: initialMissions.map((m) => MissionState(id: m.id, title: m.title, description: m.description, targetPlanetId: m.targetPlanetId)).toList()));
 
   final SimulationClock _clock;
   Timer? _toastTimer;
@@ -129,7 +128,8 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     final mission = updated[idx];
     updated[idx] = mission.copyWith(completed: true);
     state = state.copyWith(missions: updated);
-    showCelebration(mission.title, 'Fantastic! Mission successfully verified: '+mission.title+'!');
+    showCelebration(mission.title, 'Fantastic! Mission successfully verified: ${mission.title}!');
+    showToast('Mission complete: ${mission.title}');
   }
 
   void showCelebration(String title, String description) {
