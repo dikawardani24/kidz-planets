@@ -18,42 +18,41 @@ class PlanetDetailSheet extends ConsumerWidget {
     final ui = ref.watch(explorerControllerProvider);
     final notifier = ref.read(explorerControllerProvider.notifier);
 
-    return AppTheme.glass(
-      radius: BorderRadius.circular(24),
-      padding: const EdgeInsets.fromLTRB(14, 13, 14, 11),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Flexible so the scrolling detail card yields height when the
-          // viewport is short. Without it the card, zoom bar and collapse
-          // button add up to more than the sheet allows and the Column
-          // overflows.
-          Flexible(
-            child: AnimatedSize(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.topCenter,
-              child: ui.detailCardVisible
-                  ? _DetailContent(
-                      planet: planet,
-                      ui: ui,
-                      onClose: notifier.closeDetail,
-                      onHotspot: (hotspot) {
-                        ref
-                            .read(planetNarrationServiceProvider)
-                            .speakHotspot(hotspot);
-                        notifier.showHotspot(hotspot);
-                      },
-                    )
-                  : const SizedBox.shrink(),
+    // Animate the glass container itself, not only its contents. This makes
+    // collapsing the facts panel actually shrink the card down to the
+    // collapse button instead of leaving an empty glass container behind.
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: AppTheme.glass(
+        radius: BorderRadius.circular(24),
+        padding: const EdgeInsets.fromLTRB(14, 13, 14, 11),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (ui.detailCardVisible)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 220),
+                child: _DetailContent(
+                  planet: planet,
+                  ui: ui,
+                  onClose: notifier.closeDetail,
+                  onHotspot: (hotspot) {
+                    ref
+                        .read(planetNarrationServiceProvider)
+                        .speakHotspot(hotspot);
+                    notifier.showHotspot(hotspot);
+                  },
+                ),
+              ),
+            if (ui.detailCardVisible) const SizedBox(height: 8),
+            _CollapseButton(
+              collapsed: !ui.detailCardVisible,
+              onTap: notifier.toggleDetailCard,
             ),
-          ),
-          if (ui.detailCardVisible) const SizedBox(height: 8),
-          _CollapseButton(
-            collapsed: !ui.detailCardVisible,
-            onTap: notifier.toggleDetailCard,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
