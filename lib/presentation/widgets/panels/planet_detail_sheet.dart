@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../../domain/entities/planet.dart';
-import '../../../infrastructure/services/planet_tts_provider.dart';
+import '../../../infrastructure/services/planet_narration_provider.dart';
 import '../../theme/app_theme.dart';
 
 class PlanetDetailSheet extends ConsumerWidget {
@@ -30,7 +30,7 @@ class PlanetDetailSheet extends ConsumerWidget {
                 ? _DetailContent(
                     planet: planet,
                     ui: ui,
-                    onSpeak: () => ref.read(planetTtsServiceProvider).replay(planet),
+                    onSpeak: () => ref.read(planetNarrationServiceProvider).replay(planet),
                     onPlayMode: notifier.toggleDetailCard,
                     onClose: notifier.closeDetail,
                     onHotspot: (hotspot) {
