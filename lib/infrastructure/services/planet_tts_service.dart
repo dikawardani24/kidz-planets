@@ -235,8 +235,8 @@ class PlanetTtsService {
     return value
         .replaceAll('—', ', ')
         .replaceAll('–', ', ')
-        .replaceAll(RegExp(r'[ \\t]+'), ' ')
-        .replaceAll(RegExp(r'\\n{3,}'), '\\n\\n')
+        .replaceAll(RegExp(r'[ \t]+'), ' ')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
         .trim();
   }
 
