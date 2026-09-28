@@ -17,23 +17,31 @@ class MissionGuide extends ConsumerWidget {
     if (!ui.missionGuideVisible) return Align(alignment: Alignment.topCenter, child: GestureDetector(onTap: controller.toggleMissionGuide, child: AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), child: Text('🚀 Mission ${mission.id} · ${mission.title}  ⌄', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white)))));
     final planet = ref.watch(planetByIdProvider(mission.targetPlanetId));
     final clue = ui.missionHintLevel == 0 ? (mission.hint ?? mission.description) : '${mission.hint ?? mission.description} ${mission.direction ?? 'Count outward from the Sun'}.';
-    return Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 430), child: AppTheme.glass(radius: BorderRadius.circular(22), padding: const EdgeInsets.all(13), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [const Text('🚀', style: TextStyle(fontSize: 18)), const SizedBox(width: 7), Expanded(child: Text('MISSION ${mission.id}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: AppTheme.accentSky))), GestureDetector(onTap: controller.toggleMissionGuide, child: const Icon(Icons.keyboard_arrow_up, size: 18, color: Colors.white70))]),
-      const SizedBox(height: 4),
-      Text(mission.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white)),
-      const SizedBox(height: 7),
-      Text('📍 Start at ${mission.startPoint ?? 'the Sun'}   →   ${mission.direction ?? 'Explore outward'}', style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: Color(0xFFDDEAFE))),
-      const SizedBox(height: 9),
-      Container(padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: AppTheme.space800.withValues(alpha: .8), borderRadius: BorderRadius.circular(16)), child: Row(children: [
-        ClipOval(child: SizedBox(width: 58, height: 58, child: Image.asset(planet.textureAsset, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Center(child: Text(planet.isSun ? '☀️' : '🪐', style: const TextStyle(fontSize: 27)))))),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('LOOK FOR THIS', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: AppTheme.accentAmber)), const SizedBox(height: 3), Text(clue, style: const TextStyle(fontSize: 10, height: 1.35, color: Color(0xFFE0E7FF)))])),
-        GestureDetector(onTap: () => ref.read(planetNarrationServiceProvider).replay(planet), child: AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.all(9), child: const Icon(Icons.volume_up_rounded, size: 16, color: AppTheme.accentSky))),
+    return Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 430), child: AppTheme.glass(radius: BorderRadius.circular(28), padding: const EdgeInsets.all(18), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [const Text('🚀', style: TextStyle(fontSize: 22)), const SizedBox(width: 8), Expanded(child: Text('MISSION ${mission.id}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: AppTheme.accentSky))), IconButton(onPressed: controller.toggleMissionGuide, icon: const Icon(Icons.keyboard_arrow_up, color: Colors.white70))]),
+      Text(mission.title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
+      const SizedBox(height: 8),
+      Text(mission.description, style: const TextStyle(fontSize: 12, height: 1.45, color: Color(0xFFC7D2FE))),
+      const SizedBox(height: 14),
+      Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: AppTheme.space800.withValues(alpha: .75), borderRadius: BorderRadius.circular(18)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('START HERE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: AppTheme.accentAmber)),
+        const SizedBox(height: 5),
+        Text('☀️  Start at ${mission.startPoint ?? 'the Sun'}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
+        const SizedBox(height: 7),
+        Text('➡️  ${mission.direction ?? 'Count outward'}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFDDEAFE))),
       ])),
-      const SizedBox(height: 5),
-      Text(ui.missionHintLevel == 0 ? 'Use the picture as your clue.' : 'Hint ${ui.missionHintLevel.clamp(1, 3)} · Need more help? Keep exploring!', style: const TextStyle(fontSize: 9, color: Color(0xFF9CA9D8))),
-    ]))));
+      const SizedBox(height: 12),
+      Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: AppTheme.accentSky.withValues(alpha: .25))), child: Row(children: [
+        ClipOval(child: SizedBox(width: 76, height: 76, child: Image.asset(planet.textureAsset, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Center(child: Text(planet.isSun ? '☀️' : '🪐', style: const TextStyle(fontSize: 34)))))),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('LOOK FOR THIS', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: AppTheme.accentAmber)), const SizedBox(height: 5), Text(clue, style: const TextStyle(fontSize: 11, height: 1.4, color: Color(0xFFE0E7FF)))])),
+        IconButton(onPressed: () => ref.read(planetNarrationServiceProvider).replay(planet), icon: const Icon(Icons.volume_up_rounded, color: AppTheme.accentSky)),
+      ])),
+      const SizedBox(height: 14),
+      SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: controller.toggleMissionGuide, icon: const Icon(Icons.explore_rounded), label: const Text('Got it — let’s explore!'))),
+    ])));
   }
+}
 }
 
 class WrongMissionFeedback extends StatelessWidget {
