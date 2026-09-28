@@ -12,6 +12,7 @@ class GeometryFactory {
 
   final Map<double, SphereGeometry> _spheres = {};
   final Map<String, RingGeometry> _rings = {};
+  final Map<String, TorusGeometry> _tori = {};
 
   SphereGeometry sphere(double radius) => _spheres.putIfAbsent(
         radius,
@@ -43,6 +44,21 @@ class GeometryFactory {
         ),
       );
 
+  /// Thin torus used as a physical edge profile for Saturn's rings.
+  ///
+  /// Flat RingGeometry has zero projected area when viewed edge-on, so it
+  /// can legitimately vanish. These thin toruses preserve subtle thickness.
+  TorusGeometry saturnEdgeRing(double radius, double tubeRadius) =>
+      _tori.putIfAbsent(
+        'saturn-edge:$radius:$tubeRadius',
+        () => TorusGeometry(
+          radius: radius,
+          tubeRadius: tubeRadius,
+          radialSegments: 128,
+          tubularSegments: 8,
+        ),
+      );
+
   /// Starfield-friendly large inverted sphere.
   SphereGeometry get starDome => _spheres.putIfAbsent(
         -999.0,
@@ -52,6 +68,7 @@ class GeometryFactory {
   void dispose() {
     _spheres.clear();
     _rings.clear();
+    _tori.clear();
   }
 }
 
