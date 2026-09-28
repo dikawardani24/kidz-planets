@@ -100,8 +100,36 @@ class ExplorerInteractionOverlays extends ConsumerWidget {
         child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.gamepad, size: 13, color: AppTheme.accentAmber), SizedBox(width: 6), Text('Play Mode Active: Spin & explore freely!')]));
     }
     if (!ui.hasSelection && ui.tab == ExplorerTab.explore) {
-      return _Banner(top: top + 12, borderColor: const Color(0x664F46E5), background: const Color(0xBF010206), textColor: const Color(0xDDBFC6FF),
-        child: const Text('✨ Tap the Sun or any planet to inspect NASA 3D details'));
+      final activeId = ui.activeMissionId;
+      final activeMission = activeId == null
+          ? null
+          : ui.missions.cast<MissionState?>().firstWhere(
+              (m) => m?.id == activeId,
+              orElse: () => null,
+            );
+      if (activeMission != null) {
+        return _Banner(
+          top: top + 12,
+          borderColor: const Color(0x665B8CFF),
+          background: const Color(0xD9040712),
+          textColor: const Color(0xFFD9E4FF),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.explore, size: 13, color: AppTheme.accentSky),
+              const SizedBox(width: 7),
+              Text('Mission ${activeMission.id}: ${activeMission.title}'),
+            ],
+          ),
+        );
+      }
+      return _Banner(
+        top: top + 12,
+        borderColor: const Color(0x664F46E5),
+        background: const Color(0xBF010206),
+        textColor: const Color(0xDDBFC6FF),
+        child: const Text('✨ Solar system fully explored!'),
+      );
     }
     return const SizedBox.shrink();
   }
