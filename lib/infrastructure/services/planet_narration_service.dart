@@ -68,7 +68,10 @@ class PlanetNarrationService {
       if (generation != _generation) return;
 
       _activeIndex = incomingIndex;
-      await incoming.play();
+      // Start playback without awaiting completion. `play()` stays pending until
+      // the narration finishes; awaiting it here would prevent the crossfade
+      // from starting until the old narration had already ended.
+      unawaited(_startPlayback(incoming, path));
       if (generation != _generation) return;
 
       await _crossfade(
@@ -127,3 +130,11 @@ abstract final class NarrationAudioCatalog {
         .replaceAll(RegExp(r'^_+|_+$'), '');
   }
 }
+
+  Future<void> _startPlayback(AudioPlayer player, String path) async {
+    try {
+      await player.play();
+    } catch (error) {
+      debugPrint('Narration playback failed: $path ($error)');
+    }
+  }
