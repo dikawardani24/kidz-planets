@@ -137,26 +137,43 @@ class SolarSystemSceneBuilder {
     if (state == null) return;
 
     final texture = await _safeLoad(planet.ringTextureAsset!);
-    // Wider ring proportions make the ring clearly visible at the
-    // prototype's camera distance while preserving Saturn's thin profile.
-    final inner = planet.radius * 1.48;
-    final outer = planet.radius * 2.70;
+    final tilt = vm.Quaternion.axisAngle(
+      vm.Vector3(1, 0, 0),
+      _degreesToRadians(planet.tiltDegrees),
+    );
 
-    final ring = Node(
-      mesh: Mesh(
-        _geometries.saturnBand(inner, outer),
-        _materials.saturnRing(texture: texture),
-      ),
-    )
-      ..name = '${planet.id}:ring'
-      ..rotation = vm.Quaternion.axisAngle(
-        vm.Vector3(1, 0, 0),
-        _degreesToRadians(planet.tiltDegrees),
-      );
+    // Model Saturn's rings as separate translucent bands instead of one
+    // decorative disc. The proportions emphasize the main C, B and A rings,
+    // the Cassini Division, the faint F ring and outer arcs.
+    final bands = <({String id, double inner, double outer, double opacity})>[
+      (id: 'd', inner: 1.18, outer: 1.30, opacity: 0.28),
+      (id: 'c', inner: 1.30, outer: 1.49, opacity: 0.52),
+      (id: 'b', inner: 1.50, outer: 1.91, opacity: 0.82),
+      (id: 'a', inner: 1.98, outer: 2.28, opacity: 0.68),
+      (id: 'f', inner: 2.31, outer: 2.35, opacity: 0.42),
+      (id: 'outer', inner: 2.39, outer: 2.56, opacity: 0.16),
+    ];
 
-    ring.raycastable = false;
-    ring.position = vm.Vector3(0, 0.015, 0);
-    state.spinNode.add(ring);
+    for (final band in bands) {
+      final ring = Node(
+        mesh: Mesh(
+          _geometries.saturnBand(
+            planet.radius * band.inner,
+            planet.radius * band.outer,
+          ),
+          _materials.saturnRing(
+            texture: texture,
+            opacity: band.opacity,
+          ),
+        ),
+      )
+        ..name = '${planet.id}:ring:${band.id}'
+        ..rotation = tilt;
+
+      ring.raycastable = false;
+      ring.position = vm.Vector3(0, 0.012, 0);
+      state.spinNode.add(ring);
+    }
   }
   void _buildOrbit(Scene scene, Planet planet) {
     final node = Node(
