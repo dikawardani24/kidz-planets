@@ -12,27 +12,17 @@ class PlanetSoundService {
   final List<AudioPlayer> _players;
   int _activeIndex = 0;
   int _generation = 0;
-  Timer? _fadeTimer;
 
   Future<void> playBody(Planet body) =>
       _play(PlanetSoundCatalog.body(body.id));
 
   Future<void> stop() async {
-    ++_generation;
-    _fadeTimer?.cancel();
-    _fadeTimer = null;
-    for (final player in _players) {
-      try {
-        await player.stop();
-        await player.setVolume(0);
-      } catch (_) {}
-    }
+    final generation = ++_generation;
+    await _fadeOut(generation);
   }
 
   Future<void> dispose() async {
     ++_generation;
-    _fadeTimer?.cancel();
-    _fadeTimer = null;
     for (final player in _players) {
       try {
         await player.stop();
@@ -41,10 +31,33 @@ class PlanetSoundService {
     }
   }
 
+  Future<void> _fadeOut(int generation) async {
+    const duration = Duration(milliseconds: 220);
+    const steps = 11;
+    const stepDuration = Duration(milliseconds: 20);
+    final player = _players[_activeIndex];
+    final startedAt = DateTime.now();
+
+    for (var step = 1; step <= steps; step++) {
+      await Future<void>.delayed(stepDuration);
+      if (generation != _generation) return;
+      final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
+      final t = (elapsed / duration.inMilliseconds).clamp(0.0, 1.0);
+      final eased = 1 - (t * t * (3 - 2 * t));
+      await player.setVolume(0.42 * eased);
+    }
+
+    if (generation != _generation) return;
+    for (final p in _players) {
+      try {
+        await p.stop();
+        await p.setVolume(0);
+      } catch (_) {}
+    }
+  }
+
   Future<void> _play(String path) async {
     final generation = ++_generation;
-    _fadeTimer?.cancel();
-    _fadeTimer = null;
 
     final incomingIndex = 1 - _activeIndex;
     final outgoingIndex = _activeIndex;
