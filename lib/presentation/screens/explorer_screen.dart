@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../../infrastructure/services/scene_providers.dart';
-import '../../../infrastructure/services/planet_tts_provider.dart';
+import '../../../infrastructure/services/planet_narration_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/overlays/bottom_nav.dart';
 import '../widgets/overlays/toast_overlay.dart';
@@ -22,12 +22,12 @@ class ExplorerScreen extends ConsumerWidget {
 
     ref.listen<ExplorerState>(explorerControllerProvider, (prev, next) {
       if (prev?.selectedPlanetId != next.selectedPlanetId) {
-        final tts = ref.read(planetTtsServiceProvider);
+        final narration = ref.read(planetNarrationServiceProvider);
         if (next.selectedPlanetId == null) {
-          tts.stop();
+          narration.stop();
         } else {
           final planet = ref.read(planetByIdProvider(next.selectedPlanetId!));
-          tts.speakPlanet(planet);
+          narration.speakPlanet(planet);
         }
       }
 
