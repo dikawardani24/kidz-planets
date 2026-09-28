@@ -21,7 +21,7 @@ class PlanetsGridPanel extends ConsumerWidget {
         const SizedBox(height: 10),
         Container(width: 44, height: 5, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(99))),
         Padding(padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-          child: Row(children: [const Expanded(child: Text('Choose a Planet', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Colors.white))),
+          child: Row(children: [const Expanded(child: Text('Explore Worlds', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Colors.white))),
             GestureDetector(onTap: () => notifier.setTab(ExplorerTab.explore),
               child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(999)),
