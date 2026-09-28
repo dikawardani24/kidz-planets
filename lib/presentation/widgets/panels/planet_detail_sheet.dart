@@ -18,31 +18,66 @@ class PlanetDetailSheet extends ConsumerWidget {
     final ui = ref.watch(explorerControllerProvider);
     final notifier = ref.read(explorerControllerProvider.notifier);
 
-    // The description card is independent from the toggle control. This
-    // allows the toggle to remain visible after the card collapses.
-    if (!ui.detailCardVisible) {
-      return const SizedBox.shrink();
-    }
-
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      alignment: Alignment.topCenter,
-      child: AppTheme.glass(
-        radius: BorderRadius.circular(24),
-        padding: const EdgeInsets.fromLTRB(14, 13, 14, 11),
-        child: _DetailContent(
-          planet: planet,
-          ui: ui,
-          onClose: notifier.closeDetail,
-          onHotspot: (hotspot) {
-            ref
-                .read(planetNarrationServiceProvider)
-                .speakHotspot(hotspot);
-            notifier.showHotspot(hotspot);
-          },
-        ),
-      ),
+    // Keep the card in the layout while AnimatedSwitcher transitions it
+    // to zero size. Because the card sits above the standalone toggle, the
+    // collapse animation contracts toward the toggle instead of disappearing
+    // abruptly.
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      reverseDuration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      layoutBuilder: (currentChild, previousChildren) {
+        return AnimatedSize(
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeInOutCubic,
+          alignment: Alignment.bottomCenter,
+          child: Stack(
+            alignment: Alignment.bottomCenter,
+            children: [
+              ...previousChildren,
+              if (currentChild != null) currentChild,
+            ],
+          ),
+        );
+      },
+      transitionBuilder: (child, animation) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return SizeTransition(
+          sizeFactor: curved,
+          axisAlignment: 1.0,
+          child: FadeTransition(
+            opacity: curved,
+            child: child,
+          ),
+        );
+      },
+      child: ui.detailCardVisible
+          ? AppTheme.glass(
+              key: const ValueKey('planet-detail-card-visible'),
+              radius: BorderRadius.circular(24),
+              padding: const EdgeInsets.fromLTRB(14, 13, 14, 11),
+              child: _DetailContent(
+                planet: planet,
+                ui: ui,
+                onClose: notifier.closeDetail,
+                onHotspot: (hotspot) {
+                  ref
+                      .read(planetNarrationServiceProvider)
+                      .speakHotspot(hotspot);
+                  notifier.showHotspot(hotspot);
+                },
+              ),
+            )
+          : const SizedBox(
+              key: ValueKey('planet-detail-card-collapsed'),
+              width: 0,
+              height: 0,
+            ),
     );
   }
 }
