@@ -1448,7 +1448,7 @@
 
             if (intersects.length > 0) {
                 let obj = intersects[0].object;
-                while (obj.parent && obj.parent !== scene) {
+                while (obj.parent && obj.parent !== solarSystemGroup && obj.parent !== scene) {
                     obj = obj.parent;
                 }
                 const found = planetMeshes.find(p => p.group === obj);
