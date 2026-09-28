@@ -27,6 +27,9 @@ class ExplorerState extends Equatable {
     this.celebrationTitle,
     this.celebrationDescription,
     this.activeMissionId = 1,
+    this.missionGuideVisible = true,
+    this.missionHintLevel = 0,
+    this.wrongSelectionKey = 0,
   });
 
   final ExplorerTab tab;
@@ -52,6 +55,9 @@ class ExplorerState extends Equatable {
   final String? celebrationTitle;
   final String? celebrationDescription;
   final int? activeMissionId;
+  final bool missionGuideVisible;
+  final int missionHintLevel;
+  final int wrongSelectionKey;
 
   bool get hasSelection => selectedPlanetId != null;
   bool get celebrationVisible => celebrationTitle != null && celebrationDescription != null;
@@ -80,6 +86,9 @@ class ExplorerState extends Equatable {
     Object? celebrationTitle = _sentinel,
     Object? celebrationDescription = _sentinel,
     Object? activeMissionId = _sentinel,
+    bool? missionGuideVisible,
+    int? missionHintLevel,
+    int? wrongSelectionKey,
   }) {
     return ExplorerState(
       tab: tab ?? this.tab,
@@ -105,6 +114,9 @@ class ExplorerState extends Equatable {
       celebrationTitle: identical(celebrationTitle, _sentinel) ? this.celebrationTitle : celebrationTitle as String?,
       celebrationDescription: identical(celebrationDescription, _sentinel) ? this.celebrationDescription : celebrationDescription as String?,
       activeMissionId: identical(activeMissionId, _sentinel) ? this.activeMissionId : activeMissionId as int?,
+      missionGuideVisible: missionGuideVisible ?? this.missionGuideVisible,
+      missionHintLevel: missionHintLevel ?? this.missionHintLevel,
+      wrongSelectionKey: wrongSelectionKey ?? this.wrongSelectionKey,
     );
   }
 
@@ -112,20 +124,23 @@ class ExplorerState extends Equatable {
   List<Object?> get props => [
         tab, running, speed, showOrbits, showLabels, selectedPlanetId, focusedPlanetId,
         detailZoom, detailTheta, detailPhi, detailTitleOverride, detailDescriptionOverride, detailCardVisible, spinHintVisible,
-        playModeBannerVisible, playgroundAlertIcon, playgroundAlertTitle, playgroundAlertDescription, missions, toasts, celebrationTitle, celebrationDescription, activeMissionId,
+        playModeBannerVisible, playgroundAlertIcon, playgroundAlertTitle, playgroundAlertDescription, missions, toasts, celebrationTitle, celebrationDescription, activeMissionId, missionGuideVisible, missionHintLevel, wrongSelectionKey,
       ];
 }
 
 const _sentinel = Object();
 
 class MissionState extends Equatable {
-  const MissionState({required this.id, required this.title, required this.description, required this.targetPlanetId, this.completed = false});
+  const MissionState({required this.id, required this.title, required this.description, required this.targetPlanetId, this.startPoint, this.direction, this.hint, this.completed = false});
   final int id;
   final String title;
   final String description;
   final String targetPlanetId;
+  final String? startPoint;
+  final String? direction;
+  final String? hint;
   final bool completed;
-  MissionState copyWith({bool? completed}) => MissionState(id: id, title: title, description: description, targetPlanetId: targetPlanetId, completed: completed ?? this.completed);
+  MissionState copyWith({bool? completed}) => MissionState(id: id, title: title, description: description, targetPlanetId: targetPlanetId, startPoint: startPoint, direction: direction, hint: hint, completed: completed ?? this.completed);
   @override
   List<Object?> get props => [id, completed];
 }
