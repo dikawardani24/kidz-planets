@@ -153,6 +153,12 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   }
 
   void closeCelebration() {
+    // The success cue loops for the whole celebration, so this is the only
+    // place it can be stopped: the dialog is dismissed through here and
+    // nowhere else. The planet bed is a different service instance, so fading
+    // this out does not disturb the narration that starts on the next state
+    // change.
+    _missionSound.stop();
     state = state.copyWith(celebrationTitle: null, celebrationDescription: null);
   }
 
@@ -209,7 +215,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     final targetName = mission.title
         .replaceFirst('Find ', '')
         .replaceFirst('Visit ', '');
-    _missionSound.playMissionSuccess();
+    _missionSound.startMissionSuccess();
     HapticFeedback.mediumImpact();
     showCelebration(
       'Mission ${mission.id} Complete!',

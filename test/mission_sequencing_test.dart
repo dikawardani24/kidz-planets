@@ -16,9 +16,10 @@ ExplorerState _state({
 }
 
 void main() {
-  // A mission success plays its own 0.65 cue while the celebration dialog is
-  // up. Planet narration runs at 0.92, so it has to wait for the dialog to be
-  // dismissed or it buries the cue and reads the dialog out loud.
+  // A mission success loops its cue for as long as the celebration dialog is up,
+  // so nothing else may speak over it. Planet narration runs at 0.92, so it has
+  // to wait for the dialog to be dismissed or it buries the cue and reads the
+  // dialog out loud.
 
   test('planet audio is held while the celebration is showing', () {
     expect(
@@ -65,5 +66,19 @@ void main() {
       isTrue,
       reason: 'a half-raised celebration must not stall the voice forever',
     );
+  });
+
+  test('the gate agrees with celebrationVisible in both directions', () {
+    // The loop keeps running until celebrationVisible goes false, so a
+    // disagreement between the gate and the dialog would either clip the cue
+    // or leave it playing after the dialog is gone.
+    for (final celebrating in [true, false]) {
+      final state = _state(celebrating: celebrating);
+      expect(
+        canStartPlanetAudio(current: state, wrongSelectionKeyAtSelect: 0),
+        isNot(state.celebrationVisible),
+        reason: 'celebrating=$celebrating',
+      );
+    }
   });
 }
