@@ -45,33 +45,71 @@ class ExplorerScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppTheme.space950,
       resizeToAvoidBottomInset: false,
-      body: LayoutBuilder(builder: (context, constraints) {
-        final width = constraints.maxWidth >= 600 ? 390.0 : constraints.maxWidth;
-        return Center(child: SizedBox(
-          width: width,
-          height: constraints.maxHeight,
-          child: Stack(fit: StackFit.expand, children: [
-            const SolarSystemSceneView(),
-            const Positioned(top: 0, left: 0, right: 0, child: ExplorerTopBar()),
-            const ExplorerInteractionOverlays(),
-            const ToastOverlay(),
-            if (ui.tab == ExplorerTab.playground)
-              const Positioned(left: 12, right: 12, top: 64, bottom: 66, child: PlaygroundPanel()),
-            if (ui.tab == ExplorerTab.missions)
-              const Positioned(left: 12, right: 12, top: 64, bottom: 66, child: MissionsPanel()),
-            if (ui.hasSelection && ui.tab == ExplorerTab.explore)
-              Positioned(left: 16, right: 16, bottom: 88, child: _DetailWrapper(planetId: ui.selectedPlanetId!)),
-            if (ui.hasSelection && ui.tab == ExplorerTab.explore)
-              const Positioned.fill(child: DetailSideRails()),
-            const ExplorerBottomNav(),
-            if (ui.celebrationVisible)
-              Positioned.fill(child: _CelebrationModal(
-                title: ui.celebrationTitle!,
-                description: ui.celebrationDescription!,
-              )),
-          ]),
-        ));
-      }),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isLandscape = constraints.maxWidth > constraints.maxHeight;
+          final horizontalInset = isLandscape ? 24.0 : 0.0;
+
+          // The scene is intentionally allowed to use the entire viewport.
+          // The previous 390px width cap made landscape render as a narrow
+          // portrait-sized canvas with unused space on both sides.
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              const SolarSystemSceneView(),
+              const Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: ExplorerTopBar(),
+              ),
+              const ExplorerInteractionOverlays(),
+              const ToastOverlay(),
+
+              if (ui.tab == ExplorerTab.playground)
+                Positioned(
+                  left: horizontalInset + 12,
+                  right: horizontalInset + 12,
+                  top: isLandscape ? 68 : 64,
+                  bottom: isLandscape ? 72 : 66,
+                  child: const PlaygroundPanel(),
+                ),
+
+              if (ui.tab == ExplorerTab.missions)
+                Positioned(
+                  left: horizontalInset + 12,
+                  right: horizontalInset + 12,
+                  top: isLandscape ? 68 : 64,
+                  bottom: isLandscape ? 72 : 66,
+                  child: const MissionsPanel(),
+                ),
+
+              if (ui.hasSelection && ui.tab == ExplorerTab.explore)
+                Positioned(
+                  left: isLandscape ? null : 16,
+                  right: isLandscape ? 16 : 16,
+                  top: isLandscape ? 72 : null,
+                  bottom: isLandscape ? 72 : 88,
+                  width: isLandscape ? 330 : null,
+                  child: _DetailWrapper(planetId: ui.selectedPlanetId!),
+                ),
+
+              if (ui.hasSelection && ui.tab == ExplorerTab.explore)
+                const Positioned.fill(child: DetailSideRails()),
+
+              const ExplorerBottomNav(),
+
+              if (ui.celebrationVisible)
+                Positioned.fill(
+                  child: _CelebrationModal(
+                    title: ui.celebrationTitle!,
+                    description: ui.celebrationDescription!,
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -79,6 +117,7 @@ class ExplorerScreen extends ConsumerWidget {
 class _DetailWrapper extends ConsumerWidget {
   const _DetailWrapper({required this.planetId});
   final String planetId;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final planet = ref.watch(planetByIdProvider(planetId));
