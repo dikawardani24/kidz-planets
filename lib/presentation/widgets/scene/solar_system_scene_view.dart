@@ -64,6 +64,9 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
           onScaleStart: _onScaleStart,
           onScaleUpdate: _onScaleUpdate,
           onScaleEnd: _onScaleEnd,
+          onDoubleTap: () {
+            ref.read(explorerControllerProvider.notifier).resetDetailView();
+          },
           onTapUp: (d) => _onTapUp(d, size),
           child: Stack(
             fit: StackFit.expand,
