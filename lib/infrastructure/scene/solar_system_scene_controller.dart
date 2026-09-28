@@ -34,6 +34,8 @@ abstract class SolarSystemSceneController {
   void addSpinBoost(double amount);
   String? pickPlanet(Offset screenPosition, Size viewSize, PerspectiveCamera camera);
   void spinPlanet(String planetId, double delta);
+  void rotatePlanet(String planetId, double dx, double dy);
+  void rotateSolarSystem(double dx, double dy);
   void orbitBy(double dx, double dy);
   void pinch(double scale);
   void dispose();
@@ -153,7 +155,7 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
     );
     if (hit == null) return null;
     Node? node = hit.node;
-    while (node != null && node.parent != _scene.root) {
+    while (node != null && node.parent != _builder.solarSystemRoot) {
       node = node.parent;
     }
     if (node == null) return null;
@@ -170,6 +172,14 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
     render.spinNode.rotation = render.spinNode.rotation *
         vm.Quaternion.axisAngle(vm.Vector3(0, 1, 0), delta);
   }
+
+  @override
+  void rotatePlanet(String planetId, double dx, double dy) =>
+      _builder.rotatePlanet(planetId, dx, dy);
+
+  @override
+  void rotateSolarSystem(double dx, double dy) =>
+      _builder.rotateSolarSystem(dx, dy);
 
   @override
   void orbitBy(double dx, double dy) => _rig.orbitBy(dx, dy);
