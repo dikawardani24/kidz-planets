@@ -65,6 +65,7 @@ class _DetailContent extends StatelessWidget {
   const _DetailContent({
     required this.planet,
     required this.ui,
+    required this.onSpeak,
     required this.onPlayMode,
     required this.onClose,
     required this.onHotspot,
