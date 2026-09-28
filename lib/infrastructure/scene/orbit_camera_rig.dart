@@ -12,7 +12,7 @@ import 'solar_system_scene_builder.dart';
 /// Owns the orbit camera math shared by the 3D view and the 2D label
 /// overlay (SRP: camera rig only).
 class OrbitCameraRig {
-  OrbitCameraRig({required CameraRigState state}) : _state = state;
+  OrbitCameraRig({required this._state});
 
   final CameraRigState _state;
   double _focusedPlanetRadius = 1.0;
@@ -107,10 +107,9 @@ class OrbitCameraRig {
 /// Projects planet world positions to screen space for floating labels.
 class LabelProjector {
   LabelProjector({
-    required SolarSystemSceneBuilder builder,
-    required List<Planet> planets,
-  })  : _builder = builder,
-        _planets = planets;
+    required this._builder,
+    required this._planets,
+  });
 
   final SolarSystemSceneBuilder _builder;
   final List<Planet> _planets;

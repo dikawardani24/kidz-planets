@@ -42,9 +42,8 @@ abstract class SolarSystemSceneController {
 /// Default implementation wiring builder + animator + camera (DIP: depends
 /// on [SimulationClock] abstraction, not on widgets).
 class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
-  SolarSystemSceneControllerImpl({required SimulationClock clock})
-      : _clock = clock,
-        _scene = Scene(),
+  SolarSystemSceneControllerImpl({required this._clock})
+      : _scene = Scene(),
         _textures = AssetTextureProvider(),
         _geometries = GeometryFactory(),
         _rigState = CameraRigState() {

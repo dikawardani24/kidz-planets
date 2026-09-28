@@ -14,12 +14,10 @@ import 'solar_system_scene_builder.dart';
 /// transforms directly — no widget rebuilds involved.
 class SolarSystemAnimator {
   SolarSystemAnimator({
-    required SimulationClock clock,
-    required SolarSystemSceneBuilder builder,
+    required this._clock,
+    required this._builder,
     required List<Planet> planets,
-  })  : _clock = clock,
-        _builder = builder,
-        _planets = {for (final p in planets) p.id: p};
+  })  : _planets = {for (final p in planets) p.id: p};
 
   final SimulationClock _clock;
   final SolarSystemSceneBuilder _builder;

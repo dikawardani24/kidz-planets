@@ -58,7 +58,7 @@ class GeometryFactory {
 /// Creates materials from loaded textures (SRP: materials only, DIP:
 /// depends on [TextureProvider], not on Flutter asset APIs).
 class PlanetMaterialFactory {
-  PlanetMaterialFactory({Color? debugTint}) : _debugTint = debugTint;
+  PlanetMaterialFactory({this._debugTint});
 
   final Color? _debugTint;
 

@@ -20,7 +20,7 @@ class MissionsPanel extends ConsumerWidget {
             SizedBox(height: 3), Text('Explore and verify NASA worlds!', style: TextStyle(fontSize: 10.5, color: Color(0xFF9CA9D8))),
           ])),
           AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.star, size: 11, color: AppTheme.accentAmber), const SizedBox(width: 5), Text(completed.toString() + ' / ' + ui.missions.length.toString(), style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppTheme.accentAmber))])),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.star, size: 11, color: AppTheme.accentAmber), const SizedBox(width: 5), Text('$completed / ${ui.missions.length}', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppTheme.accentAmber))])),
         ]),
         const SizedBox(height: 10),
         ClipRRect(borderRadius: BorderRadius.circular(99), child: Container(height: 9, color: AppTheme.space800, child: FractionallySizedBox(alignment: Alignment.centerLeft, widthFactor: progress, child: Container(decoration: const BoxDecoration(gradient: LinearGradient(colors: [AppTheme.accentIndigo, AppTheme.accentAmber])))))),

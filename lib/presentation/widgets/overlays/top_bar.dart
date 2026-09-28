@@ -98,7 +98,7 @@ class ExplorerControlPills extends ConsumerWidget {
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         const Icon(Icons.speed, size: 14, color: AppTheme.accentSky),
         SizedBox(width: 105, child: Slider(value: ui.speed.clamp(0, 4), min: 0, max: 4, divisions: 8, activeColor: AppTheme.accentAmber, inactiveColor: Colors.white24, onChanged: notifier.setSpeed)),
-        Text(ui.speed.toStringAsFixed(1) + 'x', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppTheme.accentAmber)),
+        Text('${ui.speed.toStringAsFixed(1)}x', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppTheme.accentAmber)),
         const SizedBox(width: 6),
         _MiniToggle(label: 'Orbits', active: ui.showOrbits, onTap: notifier.toggleOrbits),
         const SizedBox(width: 5),
@@ -114,5 +114,5 @@ class _MiniToggle extends StatelessWidget {
   Widget build(BuildContext context) => GestureDetector(onTap: onTap, child: Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
     decoration: BoxDecoration(color: active ? AppTheme.accentViolet.withValues(alpha: .55) : Colors.white.withValues(alpha: .05), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white.withValues(alpha: .10))),
-    child: Text(label + ': ' + (active ? 'On' : 'Off'), style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: Colors.white))));
+    child: Text('$label: ${active ? 'On' : 'Off'}', style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: Colors.white))));
 }

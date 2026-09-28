@@ -23,7 +23,6 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   PerspectiveCamera? _lastCamera;
   List<PlanetLabelFrame> _labelFrames = const [];
   double _lastScale = 1.0;
-  double _pinchStartZoom = 1.0;
 
   @override
   void initState() {
@@ -111,9 +110,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   }
 
   void _onScaleStart(ScaleStartDetails details) {
-    final ui = ref.read(explorerControllerProvider);
     _lastScale = 1.0;
-    _pinchStartZoom = ui.detailZoom;
   }
 
   void _onScaleEnd(ScaleEndDetails details) {

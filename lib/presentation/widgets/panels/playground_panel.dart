@@ -46,7 +46,7 @@ class PlaygroundPanel extends ConsumerWidget {
             Row(children: [
               const Icon(Icons.speed, color: AppTheme.accentSky, size: 15), const SizedBox(width: 5),
               const Text('Orbit Speed', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white70)),
-              const Spacer(), Text(ui.speed.toStringAsFixed(1) + 'x', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppTheme.accentAmber)),
+              const Spacer(), Text('${ui.speed.toStringAsFixed(1)}x', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppTheme.accentAmber)),
             ]),
             Slider(value: ui.speed.clamp(0, 4), min: 0, max: 4, divisions: 8, activeColor: AppTheme.accentAmber, inactiveColor: Colors.white24, onChanged: notifier.setSpeed),
             Row(children: [
@@ -76,7 +76,7 @@ class _Toggle extends StatelessWidget {
     decoration: BoxDecoration(color: active ? AppTheme.accentViolet.withValues(alpha: .5) : Colors.white.withValues(alpha: .05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withValues(alpha: .1))),
     child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
       Icon(active ? Icons.check_circle : Icons.circle_outlined, size: 12, color: active ? AppTheme.accentAmber : Colors.white38),
-      const SizedBox(width: 5), Text(label + ': ' + (active ? 'On' : 'Off'), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+      const SizedBox(width: 5), Text('$label: ${active ? 'On' : 'Off'}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
     ]),
   ));
 }

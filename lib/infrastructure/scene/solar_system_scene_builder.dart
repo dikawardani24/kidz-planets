@@ -17,12 +17,10 @@ import 'texture_provider.dart';
 /// the starfield is an inside-out textured dome.
 class SolarSystemSceneBuilder {
   SolarSystemSceneBuilder({
-    required TextureProvider textures,
-    required GeometryFactory geometries,
-    required PlanetMaterialFactory materials,
-  })  : _textures = textures,
-        _geometries = geometries,
-        _materials = materials;
+    required this._textures,
+    required this._geometries,
+    required this._materials,
+  });
 
   final TextureProvider _textures;
   final GeometryFactory _geometries;
