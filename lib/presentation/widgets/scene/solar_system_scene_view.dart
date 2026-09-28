@@ -147,16 +147,12 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
         if (ui.hasSelection) {
           final currentZoom = ref.read(explorerControllerProvider).detailZoom;
           final nextZoom = currentZoom / incrementalScale;
-          // Pinching outward far enough leaves detail mode. This makes the
-          // overview reachable directly from the scene, without requiring
-          // the facts dialog as an exit mechanism.
-          if (nextZoom >= 2.58) {
-            ref.read(explorerControllerProvider.notifier).closeDetail();
-          } else {
-            ref.read(explorerControllerProvider.notifier).updateDetailCamera(
-                  zoom: nextZoom.clamp(0.4, 2.6),
-                );
-          }
+          // Pinch zoom is persistent: releasing the gesture must not
+          // leave detail mode or reset the current zoom. Leaving detail is
+          // handled explicitly, not as a side effect of ScaleEnd.
+          ref.read(explorerControllerProvider.notifier).updateDetailCamera(
+                zoom: nextZoom.clamp(0.4, 2.6),
+              );
         } else {
           controller.pinch(incrementalScale);
         }
