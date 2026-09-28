@@ -134,6 +134,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   void completeFirstPendingFor(String planetId) {
     final idx = state.missions.indexWhere((m) => m.targetPlanetId == planetId && !m.completed);
     if (idx < 0) return;
+    final mission = state.missions[idx];
     final updated = List<MissionState>.from(state.missions);
     updated[idx] = mission.copyWith(completed: true);
     state = state.copyWith(missions: updated);

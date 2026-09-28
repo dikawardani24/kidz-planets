@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scene/scene.dart';
 
+import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../../domain/entities/planet.dart';
 import '../../../infrastructure/scene/scene_models.dart';
@@ -275,7 +276,6 @@ class _PlanetLabelsOverlay extends StatelessWidget {
   final List<PlanetLabelFrame> frames;
   final List<Planet> planets;
   final bool showLabels;
-  final bool zoomAllowsLabels;
   final String? selectedId;
   @override
   Widget build(BuildContext context) {
