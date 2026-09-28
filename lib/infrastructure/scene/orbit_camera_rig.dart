@@ -12,9 +12,11 @@ import 'solar_system_scene_builder.dart';
 /// Owns the orbit camera math shared by the 3D view and the 2D label
 /// overlay (SRP: camera rig only).
 class OrbitCameraRig {
-  OrbitCameraRig({required CameraRigState state}) : _state = state;
+  OrbitCameraRig({required this._state});
 
   final CameraRigState _state;
+  double _focusedPlanetRadius = 1.0;
+  bool _focusedPlanetIsSun = false;
   CameraRigState get state => _state;
 
   static const double kOverviewRadius = 46.0;
@@ -46,6 +48,8 @@ class OrbitCameraRig {
     final render = builder.states[planetId];
     if (render == null) return;
     final p = render.node.position;
+    _focusedPlanetRadius = render.radius;
+    _focusedPlanetIsSun = render.isSun;
     const k = 0.12;
     _state.targetX += (p.x - _state.targetX) * k;
     _state.targetY += (p.y - _state.targetY) * k;
@@ -57,6 +61,8 @@ class OrbitCameraRig {
     _state.targetX *= (1 - k);
     _state.targetY *= (1 - k);
     _state.targetZ *= (1 - k);
+    _focusedPlanetRadius = 1.0;
+    _focusedPlanetIsSun = false;
     if (_state.radius < kOverviewRadius) {
       _state.radius += (kOverviewRadius - _state.radius) * 0.05;
     }
@@ -92,17 +98,18 @@ class OrbitCameraRig {
     );
   }
 
-  double _detailRadius(double zoom) =>
-      (16.0 / zoom).clamp(5.0, 30.0);
+  double _detailRadius(double zoom) {
+    final baseDistance = _focusedPlanetRadius * (_focusedPlanetIsSun ? 3.4 : 3.6);
+    return (baseDistance * zoom).clamp(2.5, 30.0);
+  }
 }
 
 /// Projects planet world positions to screen space for floating labels.
 class LabelProjector {
   LabelProjector({
-    required SolarSystemSceneBuilder builder,
-    required List<Planet> planets,
-  })  : _builder = builder,
-        _planets = planets;
+    required this._builder,
+    required this._planets,
+  });
 
   final SolarSystemSceneBuilder _builder;
   final List<Planet> _planets;

@@ -46,3 +46,15 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Kokoro neural narration generation (local-only tooling)
+.venv-kokoro/
+__pycache__/
+*.pyo
+*.wav
+.kokoro/
+*.pth
+*.pt
+*.safetensors
+# pyenv pins the local interpreter; it is machine-specific, not project config.
+.python-version

@@ -6,14 +6,19 @@ class Hotspot extends Equatable {
     required this.title,
     required this.description,
     required this.icon,
+    this.narration,
   });
 
   final String title;
   final String description;
   final String icon;
 
+  /// Spoken copy, written for the ear rather than the screen. Falls back to
+  /// [description] when absent so the sheet never goes mute.
+  final String? narration;
+
   @override
-  List<Object?> get props => [title, description, icon];
+  List<Object?> get props => [title, description, icon, narration];
 }
 
 /// Immutable description of one solar-system body.
@@ -37,6 +42,7 @@ class Planet extends Equatable {
     required this.temperature,
     required this.dayLength,
     required this.hotspots,
+    this.narration,
     this.ringTextureAsset,
     this.ringInnerFactor = 1.35,
     this.ringOuterFactor = 2.1,
@@ -47,6 +53,11 @@ class Planet extends Equatable {
   final String name;
   final String tag;
   final String fact;
+
+  /// Conversational script read aloud for this body. Kept separate from
+  /// [fact] so the spoken voice can address the child directly while the
+  /// on-screen text stays factual. Falls back to [fact] when absent.
+  final String? narration;
 
   /// Visual 3D radius in world units (already kid-scaled).
   final double radius;

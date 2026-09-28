@@ -14,12 +14,10 @@ import 'solar_system_scene_builder.dart';
 /// transforms directly — no widget rebuilds involved.
 class SolarSystemAnimator {
   SolarSystemAnimator({
-    required SimulationClock clock,
-    required SolarSystemSceneBuilder builder,
+    required this._clock,
+    required this._builder,
     required List<Planet> planets,
-  })  : _clock = clock,
-        _builder = builder,
-        _planets = {for (final p in planets) p.id: p};
+  })  : _planets = {for (final p in planets) p.id: p};
 
   final SimulationClock _clock;
   final SolarSystemSceneBuilder _builder;
@@ -28,6 +26,19 @@ class SolarSystemAnimator {
   StreamSubscription<double>? _subscription;
 
   double _spinBoost = 0.0;
+  final Map<String, double> _orbitRadiusOverrides = {};
+
+  void setOrbitRadius(String planetId, double radius) {
+    _orbitRadiusOverrides[planetId] = radius;
+    final state = _builder.states[planetId];
+    if (state == null) return;
+    final planet = _planets[planetId];
+    if (planet == null) return;
+    final angle = math.atan2(state.node.position.z, state.node.position.x);
+    state.node.position = vm.Vector3(math.cos(angle) * radius, 0, math.sin(angle) * radius);
+  }
+
+  void resetOrbitRadius(String planetId) => _orbitRadiusOverrides.remove(planetId);
 
   /// Extra spin velocity from finger swipes in detail mode.
   void addSpinBoost(double amount) {
@@ -50,11 +61,12 @@ class SolarSystemAnimator {
       if (planet == null) continue;
       final state = entry.value;
       if (!planet.isSun && planet.orbitRadius > 0) {
+        final radius = _orbitRadiusOverrides[planet.id] ?? planet.orbitRadius;
         final angle = planet.startAngle + t * planet.orbitSpeed;
         state.node.position = vm.Vector3(
-          math.cos(angle) * planet.orbitRadius,
+          math.cos(angle) * radius,
           0,
-          math.sin(angle) * planet.orbitRadius,
+          math.sin(angle) * radius,
         );
       }
       // Self-spin: slow ambient + finger momentum.
@@ -69,6 +81,7 @@ class SolarSystemAnimator {
   }
 
   void detach() {
+    _orbitRadiusOverrides.clear();
     _subscription?.cancel();
     _subscription = null;
   }

@@ -7,11 +7,15 @@ class PlanetRenderState {
     required this.id,
     required this.node,
     required this.spinNode,
+    required this.radius,
+    required this.isSun,
   });
 
   final String id;
   final Node node;
   final Node spinNode;
+  final double radius;
+  final bool isSun;
 }
 
 /// Read model for one floating label frame.

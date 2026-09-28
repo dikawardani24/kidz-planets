@@ -58,7 +58,7 @@ class GeometryFactory {
 /// Creates materials from loaded textures (SRP: materials only, DIP:
 /// depends on [TextureProvider], not on Flutter asset APIs).
 class PlanetMaterialFactory {
-  PlanetMaterialFactory({Color? debugTint}) : _debugTint = debugTint;
+  PlanetMaterialFactory({this._debugTint});
 
   final Color? _debugTint;
 
@@ -102,14 +102,17 @@ class PlanetMaterialFactory {
       ..doubleSided = true;
   }
 
-  /// Saturn band: strip texture, double-sided so it reads from below.
-  UnlitMaterial saturnRing({required TextureSource? texture}) {
+  /// Saturn ring band inspired by NASA's translucent ring imagery.
+  UnlitMaterial saturnRing({
+    TextureSource? texture,
+    double opacity = 0.8,
+  }) {
     final material = UnlitMaterial(colorTexture: texture);
-    if (texture == null) {
-      material.baseColorFactor = vm.Vector4(0.89, 0.79, 0.55, 0.85);
-    }
     material.alphaMode = AlphaMode.blend;
     material.doubleSided = true;
+    // Soft icy-beige rather than a saturated gold. Alpha is intentionally low:
+    // NASA imagery shows the rings are translucent and reveal Saturn/shadows.
+    material.baseColorFactor = vm.Vector4(0.88, 0.83, 0.70, opacity);
     return material;
   }
 

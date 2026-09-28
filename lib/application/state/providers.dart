@@ -44,6 +44,5 @@ final explorerControllerProvider =
     clock: ref.watch(simulationClockProvider),
     initialMissions: missions,
   );
-  ref.onDispose(controller.dispose);
   return controller;
 });
