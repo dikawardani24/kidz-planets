@@ -61,7 +61,9 @@ class PlanetSoundService {
       if (generation != _generation) return;
 
       _activeIndex = incomingIndex;
-      await incoming.play();
+      // `play()` remains pending until playback finishes, so it must not be
+      // awaited here or the crossfade would never start during a transition.
+      unawaited(_startPlayback(incoming, path));
       if (generation != _generation) return;
 
       const duration = Duration(milliseconds: 220);
@@ -91,3 +93,11 @@ class PlanetSoundService {
 abstract final class PlanetSoundCatalog {
   static String body(String id) => 'assets/audio/sfx/planets/$id.wav';
 }
+
+  Future<void> _startPlayback(AudioPlayer player, String path) async {
+    try {
+      await player.play();
+    } catch (error) {
+      debugPrint('Planet sound playback failed: $path ($error)');
+    }
+  }
