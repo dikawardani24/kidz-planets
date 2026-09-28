@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/mission.dart';
 import '../../domain/entities/planet.dart';
+import '../../infrastructure/services/planet_sound_service.dart';
 import '../state/explorer_state.dart';
 import '../state/simulation_clock.dart';
 
@@ -11,6 +12,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
       : super(ExplorerState(missions: initialMissions.map((m) => MissionState(id: m.id, title: m.title, description: m.description, targetPlanetId: m.targetPlanetId, startPoint: m.startPoint, direction: m.direction, hint: m.hint)).toList()));
 
   final SimulationClock _clock;
+  final PlanetSoundService _missionSound = PlanetSoundService();
   Timer? _toastTimer;
   Timer? _spinHintTimer;
   Timer? _playModeTimer;
@@ -179,7 +181,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
 
     final mission = state.missions[idx];
     if (mission.targetPlanetId != planetId) {
-      SystemSound.play(SystemSoundType.alert);
+      _missionSound.playMissionFailure();
       HapticFeedback.lightImpact();
       _wrongFeedbackTimer?.cancel();
       state = state.copyWith(
@@ -207,7 +209,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     final targetName = mission.title
         .replaceFirst('Find ', '')
         .replaceFirst('Visit ', '');
-    SystemSound.play(SystemSoundType.click);
+    _missionSound.playMissionSuccess();
     HapticFeedback.mediumImpact();
     showCelebration(
       'Mission ${mission.id} Complete!',
@@ -222,6 +224,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     _spinHintTimer?.cancel();
     _playModeTimer?.cancel();
     _wrongFeedbackTimer?.cancel();
+    _missionSound.dispose();
     super.dispose();
   }
 }
