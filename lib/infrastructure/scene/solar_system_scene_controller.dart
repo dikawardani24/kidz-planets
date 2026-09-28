@@ -111,10 +111,11 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   @override
   void tick(double deltaSeconds, ExplorerState ui) {
     _clock.tick(deltaSeconds);
-    _animator?.tick(deltaSeconds);
     final focused = ui.focusedPlanetId;
+    _animator?.setFocusedPlanet(focused);
+    _animator?.tick(deltaSeconds);
     if (focused != null) {
-      _rig.focusOn(focused, _builder);
+      _rig.focusOn(focused, _builder, deltaSeconds: deltaSeconds);
     } else {
       _rig.releaseFocus();
     }
