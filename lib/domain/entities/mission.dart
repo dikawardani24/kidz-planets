@@ -7,6 +7,9 @@ class Mission extends Equatable {
     required this.title,
     required this.description,
     required this.targetPlanetId,
+    this.startPoint,
+    this.direction,
+    this.hint,
     this.completed = false,
   });
 
@@ -14,6 +17,9 @@ class Mission extends Equatable {
   final String title;
   final String description;
   final String targetPlanetId;
+  final String? startPoint;
+  final String? direction;
+  final String? hint;
   final bool completed;
 
   Mission copyWith({bool? completed}) => Mission(
@@ -21,6 +27,9 @@ class Mission extends Equatable {
         title: title,
         description: description,
         targetPlanetId: targetPlanetId,
+        startPoint: startPoint,
+        direction: direction,
+        hint: hint,
         completed: completed ?? this.completed,
       );
 
