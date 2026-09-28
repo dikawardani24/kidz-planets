@@ -272,6 +272,20 @@ class SolarSystemSceneBuilder {
         vm.Quaternion.axisAngle(axis, angle);
   }
 
+  void rotatePlanetAngularVelocity(String planetId, double angularX, double angularY, double deltaSeconds) {
+    final state = states[planetId];
+    if (state == null) return;
+    final dx = angularX * deltaSeconds / 0.009;
+    final dy = angularY * deltaSeconds / 0.009;
+    rotatePlanet(planetId, dx, dy);
+  }
+
+  void rotateSolarSystemAngularVelocity(double angularX, double angularY, double deltaSeconds) {
+    final dx = angularX * deltaSeconds / 0.009;
+    final dy = angularY * deltaSeconds / 0.009;
+    rotateSolarSystem(dx, dy);
+  }
+
   void setOrbitsVisible(bool visible) {
     for (final node in orbitNodes.values) {
       node.visible = visible;
