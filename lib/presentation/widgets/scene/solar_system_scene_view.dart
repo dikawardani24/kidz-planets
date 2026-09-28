@@ -25,6 +25,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   double _lastScale = 1.0;
   double _angularVelocityX = 0.0;
   double _angularVelocityY = 0.0;
+  bool _zoomLabelsVisible = true;
 
   @override
   void initState() {
@@ -86,7 +87,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
               _PlanetLabelsOverlay(
                 frames: _labelFrames,
                 planets: planets,
-                showLabels: ui.showLabels,
+                showLabels: ui.showLabels && _zoomLabelsVisible,
                 selectedId: ui.selectedPlanetId,
               ),
             ],
@@ -99,9 +100,33 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     final camera = _lastCamera;
     if (camera == null || size.isEmpty) return;
     final frames = controller.projectLabels(camera, size);
-    if (_framesEqual(frames, _labelFrames)) return;
+    final ui = ref.read(explorerControllerProvider);
+    final shouldShow = _shouldShowLabelsForZoom(ui);
+    if (_framesEqual(frames, _labelFrames) && shouldShow == _zoomLabelsVisible) return;
     if (!mounted) return;
-    setState(() => _labelFrames = frames);
+    setState(() {
+      _labelFrames = frames;
+      _zoomLabelsVisible = shouldShow;
+    });
+  }
+
+  bool _shouldShowLabelsForZoom(ExplorerState ui) {
+    // The user-controlled toggle is the master switch. Automatic hiding only
+    // reacts to zoom while labels are enabled.
+    if (!ui.showLabels) return false;
+
+    if (ui.hasSelection) {
+      // In detail mode, detailZoom > 1 means zooming out.
+      return ui.detailZoom <= 1.75;
+    }
+
+    // Overview camera radius grows as the user zooms out.
+    // Keep a little hysteresis so labels do not flicker around the boundary.
+    final radius = ref.read(solarSystemSceneControllerProvider).rigState.radius;
+    if (_zoomLabelsVisible) {
+      return radius < 60.0;
+    }
+    return radius < 56.0;
   }
 
   bool _framesEqual(List<PlanetLabelFrame> a, List<PlanetLabelFrame> b) {
@@ -253,24 +278,31 @@ class _PlanetLabelsOverlay extends StatelessWidget {
   final String? selectedId;
   @override
   Widget build(BuildContext context) {
-    if (!showLabels) return const SizedBox.shrink();
     final byId = {for (final p in planets) p.id: p};
-    return Stack(
-      children: [
-        for (final frame in frames)
-          if (frame.visible && frame.id != selectedId && byId.containsKey(frame.id))
-            Positioned(
-              left: frame.screenX - 60,
-              top: frame.screenY - 18,
-              width: 120,
-              child: _LabelChip(
-                name: byId[frame.id]!.name,
-                colorValue: byId[frame.id]!.colorValue,
-                selected: frame.id == selectedId,
-                planetId: frame.id,
-              ),
-            ),
-      ],
+    return IgnorePointer(
+      ignoring: !showLabels,
+      child: AnimatedOpacity(
+        opacity: showLabels ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        child: Stack(
+          children: [
+            for (final frame in frames)
+              if (frame.visible && frame.id != selectedId && byId.containsKey(frame.id))
+                Positioned(
+                  left: frame.screenX - 60,
+                  top: frame.screenY - 18,
+                  width: 120,
+                  child: _LabelChip(
+                    name: byId[frame.id]!.name,
+                    colorValue: byId[frame.id]!.colorValue,
+                    selected: frame.id == selectedId,
+                    planetId: frame.id,
+                  ),
+                ),
+          ],
+        ),
+      ),
     );
   }
 }
