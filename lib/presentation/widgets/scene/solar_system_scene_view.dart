@@ -23,6 +23,8 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   PerspectiveCamera? _lastCamera;
   List<PlanetLabelFrame> _labelFrames = const [];
   double _lastScale = 1.0;
+  double _angularVelocityX = 0.0;
+  double _angularVelocityY = 0.0;
 
   @override
   void initState() {
@@ -111,10 +113,18 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
 
   void _onScaleStart(ScaleStartDetails details) {
     _lastScale = 1.0;
+    _angularVelocityX = 0.0;
+    _angularVelocityY = 0.0;
+    ref.read(solarSystemSceneControllerProvider).setRotationVelocity(
+          angularX: 0,
+          angularY: 0,
+        );
   }
 
   void _onScaleEnd(ScaleEndDetails details) {
     _lastScale = 1.0;
+    // Keep the last gesture velocity. The scene controller damps it every
+    // rendered frame, giving the globe/model a natural inertial finish.
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details) {
@@ -124,6 +134,12 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     // Two pointers = pinch zoom. One pointer = orbit/spin.
     final incrementalScale = details.scale / _lastScale;
     if (details.pointerCount >= 2) {
+      _angularVelocityX = 0.0;
+      _angularVelocityY = 0.0;
+      controller.setRotationVelocity(
+        angularX: 0,
+        angularY: 0,
+      );
       if (incrementalScale.isFinite && incrementalScale > 0) {
         if (ui.hasSelection) {
           final currentZoom = ref.read(explorerControllerProvider).detailZoom;
@@ -148,10 +164,23 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
           // Rotate the actual planet, not the camera. The scene controller
           // applies the delta in the planet's local frame.
           controller.rotatePlanet(selectedId, dx, dy);
+          _angularVelocityX = dy * 0.009 * 60.0;
+          _angularVelocityY = dx * 0.009 * 60.0;
+          controller.setRotationVelocity(
+            planetId: selectedId,
+            angularX: _angularVelocityX,
+            angularY: _angularVelocityY,
+          );
         }
       } else {
         // Rotate the actual solar-system model, not the camera.
         controller.rotateSolarSystem(dx, dy);
+        _angularVelocityX = dy * 0.009 * 60.0;
+        _angularVelocityY = dx * 0.009 * 60.0;
+        controller.setRotationVelocity(
+          angularX: _angularVelocityX,
+          angularY: _angularVelocityY,
+        );
       }
     }
   }
