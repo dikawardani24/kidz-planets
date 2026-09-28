@@ -7,7 +7,7 @@ import '../state/simulation_clock.dart';
 
 class ExplorerController extends StateNotifier<ExplorerState> {
   ExplorerController({required this._clock, required List<Mission> initialMissions})
-      : super(ExplorerState(missions: initialMissions.map((m) => MissionState(id: m.id, title: m.title, description: m.description, targetPlanetId: m.targetPlanetId)).toList()));
+      : super(ExplorerState(missions: initialMissions.map((m) => MissionState(id: m.id, title: m.title, description: m.description, targetPlanetId: m.targetPlanetId, startPoint: m.startPoint, direction: m.direction, hint: m.hint)).toList()));
 
   final SimulationClock _clock;
   Timer? _toastTimer;
@@ -132,11 +132,14 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     final idx = state.missions.indexWhere((m) => m.targetPlanetId == planetId && !m.completed);
     if (idx < 0) return;
     final updated = List<MissionState>.from(state.missions);
-    final mission = updated[idx];
     updated[idx] = mission.copyWith(completed: true);
     state = state.copyWith(missions: updated);
     showCelebration(mission.title, 'Fantastic! Mission successfully verified: ${mission.title}!');
     showToast('Mission complete: ${mission.title}');
+  }
+
+  void toggleMissionGuide() {
+    state = state.copyWith(missionGuideVisible: !state.missionGuideVisible);
   }
 
   void showCelebration(String title, String description) {
@@ -166,12 +169,22 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     final activeId = state.activeMissionId;
     if (activeId == null) return;
     final idx = state.missions.indexWhere(
-      (m) => m.id == activeId && !m.completed && m.targetPlanetId == planetId,
+      (m) => m.id == activeId && !m.completed,
     );
     if (idx < 0) return;
 
+    final mission = state.missions[idx];
+    if (mission.targetPlanetId != planetId) {
+      state = state.copyWith(
+        missionGuideVisible: true,
+        missionHintLevel: (state.missionHintLevel + 1).clamp(1, 3),
+        wrongSelectionKey: state.wrongSelectionKey + 1,
+      );
+      showToast('💡 Let’s look at the clue again!');
+      return;
+    }
+
     final updated = List<MissionState>.from(state.missions);
-    final mission = updated[idx];
     updated[idx] = mission.copyWith(completed: true);
 
     final nextIndex = updated.indexWhere((m) => !m.completed);
