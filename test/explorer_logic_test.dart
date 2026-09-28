@@ -13,11 +13,17 @@ ExplorerController makeController() {
 
 void main() {
   test('catalog has sun + 8 planets with textures', () {
-    expect(PlanetCatalog.planets.length, 9);
+    expect(PlanetCatalog.planets.length, 27);
+    expect(PlanetCatalog.moons.length, 18);
     expect(PlanetCatalog.planets.first.id, 'sun');
-    for (final p in PlanetCatalog.planets) {
+    for (final p in PlanetCatalog.planets.where((p) => !p.isMoon)) {
       expect(p.textureAsset, startsWith('assets/textures/'));
       expect(p.radius, greaterThan(0));
+    }
+    for (final moon in PlanetCatalog.moons) {
+      expect(moon.isMoon, isTrue);
+      expect(moon.parentPlanetId, isNotNull);
+      expect(moon.radius, greaterThan(0));
     }
     final saturn = PlanetCatalog.planets.firstWhere((p) => p.id == 'saturn');
     expect(saturn.hasRing, isTrue);
