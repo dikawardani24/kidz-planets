@@ -16,8 +16,9 @@ const double kCompanionEdge = 8;
 const double kMoveHandleSize = 40;
 const Offset kMoveHandleOffset = Offset(118, 108);
 
-/// The persistent 3D mission companion flying non-stop all over the screen
-/// in circles, zig-zags, or along edges with a smooth, high-end rocket jet flame effect.
+/// The persistent 3D mission companion.
+/// Flies non-stop all over the screen in overview mode, but gracefully
+/// settles at the bottom of the screen when the user focuses on a planet.
 class MissionCompanion extends ConsumerStatefulWidget {
   const MissionCompanion({super.key, this.controllerFactory});
 
@@ -50,11 +51,16 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
 
     _flightTicker.addListener(() {
       if (!mounted) return;
-      ref.read(avatarControllerProvider.notifier).updateFlight(
-            0.016,
-            _lastViewport,
-            _lastMaxPosition,
-          );
+      final ui = ref.read(explorerControllerProvider);
+      final pose = ref.read(avatarControllerProvider);
+      // Only fly around when NOT focused on a planet
+      if (!ui.hasSelection && pose.idleAction == AvatarIdleAction.flying) {
+        ref.read(avatarControllerProvider.notifier).updateFlight(
+              0.016,
+              _lastViewport,
+              _lastMaxPosition,
+            );
+      }
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -90,6 +96,15 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
         );
         _lastMaxPosition = maxPosition;
 
+        final hasFocus = ui.hasSelection;
+
+        // When focused on a planet, dock neatly at the bottom center of the screen
+        final bottomAnchor = Offset(
+          (viewport.width / 2 - kCompanionBoxWidth / 2)
+              .clamp(kCompanionEdge, viewport.width - kCompanionBoxWidth - kCompanionEdge),
+          viewport.height - kCompanionBoxHeight - 85,
+        );
+
         final home = Offset(maxPosition.dx, viewport.height * 0.42);
 
         if (!_placed && pose.screenPosition == null) {
@@ -102,7 +117,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
           });
         }
 
-        final rawPosition = pose.screenPosition ?? home;
+        final rawPosition = hasFocus ? bottomAnchor : (pose.screenPosition ?? home);
         final position = Offset(
           rawPosition.dx.clamp(0.0, maxPosition.dx),
           rawPosition.dy.clamp(0.0, maxPosition.dy),
@@ -126,6 +141,30 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
           viewport: viewport,
         );
 
+        final isIceWorld = ui.selectedPlanetId == 'neptune' ||
+            ui.selectedPlanetId == 'uranus' ||
+            ui.selectedPlanetId == 'pluto';
+        final isHotWorld = ui.selectedPlanetId == 'sun' ||
+            ui.selectedPlanetId == 'mercury' ||
+            ui.selectedPlanetId == 'venus';
+
+        String companionText = 'Wheee! Flying all over space! 🚀';
+        if (hasFocus) {
+          if (isIceWorld) {
+            companionText = 'Brrrr! So freezing cold here! 🥶';
+          } else if (isHotWorld) {
+            companionText = 'Phew! It is scorching hot! ☀️';
+          } else {
+            companionText = 'Inspecting NASA 3D details! ✨';
+          }
+        } else if (pose.idleAction == AvatarIdleAction.sendingHeart) {
+          companionText = 'Sending space love! ❤️';
+        } else if (pose.idleAction == AvatarIdleAction.dancing) {
+          companionText = 'Boogie time! 🎶';
+        } else if (pose.idleAction == AvatarIdleAction.thinking) {
+          companionText = 'Hmm... exploring ideas!';
+        }
+
         return Stack(
           clipBehavior: Clip.none,
           children: [
@@ -139,13 +178,15 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
               top: placement.top,
               width: kBubbleWidth,
               child: _Bubble(
-                text: pose.idleAction == AvatarIdleAction.sendingHeart
-                    ? 'Sending space love! ❤️'
-                    : 'Wheee! Flying all over space! 🚀',
+                text: companionText,
                 below: placement.below,
-                accent: pose.isHeartVisible
-                    ? const Color(0xFFEC4899)
-                    : avatarAccent(ui.avatarMood),
+                accent: isIceWorld
+                    ? const Color(0xFF38BDF8)
+                    : isHotWorld
+                        ? const Color(0xFFFBBF24)
+                        : pose.isHeartVisible
+                            ? const Color(0xFFEC4899)
+                            : avatarAccent(ui.avatarMood),
               ),
             ),
             Positioned(
@@ -156,7 +197,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  if (pose.idleAction == AvatarIdleAction.flying)
+                  if (!hasFocus && pose.idleAction == AvatarIdleAction.flying)
                     AnimatedBuilder(
                       animation: _flightTicker,
                       builder: (context, _) =>
@@ -195,31 +236,33 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
                       ready: _ready,
                       controller: _controller,
                       mood: ui.avatarMood,
-                      idleAction: pose.idleAction,
+                      idleAction: hasFocus ? AvatarIdleAction.sitting : pose.idleAction,
+                      selectedPlanetId: ui.selectedPlanetId,
                     ),
                   ),
                 ],
               ),
             ),
-            Positioned(
-              left: (position.dx + kMoveHandleOffset.dx).clamp(
-                kCompanionEdge,
-                (viewport.width - kMoveHandleSize - kCompanionEdge)
-                    .clamp(kCompanionEdge, double.infinity),
+            if (!hasFocus)
+              Positioned(
+                left: (position.dx + kMoveHandleOffset.dx).clamp(
+                  kCompanionEdge,
+                  (viewport.width - kMoveHandleSize - kCompanionEdge)
+                      .clamp(kCompanionEdge, double.infinity),
+                ),
+                top: (position.dy + kMoveHandleOffset.dy).clamp(
+                  kCompanionEdge,
+                  (viewport.height - kMoveHandleSize - kCompanionEdge)
+                      .clamp(kCompanionEdge, double.infinity),
+                ),
+                width: kMoveHandleSize,
+                height: kMoveHandleSize,
+                child: _MoveHandle(
+                  onMove: (delta) => ref
+                      .read(avatarControllerProvider.notifier)
+                      .moveBy(delta: delta, maxPosition: maxPosition),
+                ),
               ),
-              top: (position.dy + kMoveHandleOffset.dy).clamp(
-                kCompanionEdge,
-                (viewport.height - kMoveHandleSize - kCompanionEdge)
-                    .clamp(kCompanionEdge, double.infinity),
-              ),
-              width: kMoveHandleSize,
-              height: kMoveHandleSize,
-              child: _MoveHandle(
-                onMove: (delta) => ref
-                    .read(avatarControllerProvider.notifier)
-                    .moveBy(delta: delta, maxPosition: maxPosition),
-              ),
-            ),
           ],
         );
       },
@@ -227,7 +270,6 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
   }
 }
 
-/// Smooth, animated rocket exhaust flame and jet fog plume.
 class _RocketExhaustFlame extends StatelessWidget {
   const _RocketExhaustFlame({required this.progress});
   final double progress;
@@ -236,15 +278,15 @@ class _RocketExhaustFlame extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       clipBehavior: Clip.none,
-      children: List.generate(5, (i) {
-        final factor = (progress + i * 0.2) % 1.0;
-        final size = 64.0 * (1.0 - factor * 0.35);
+      children: List.generate(6, (i) {
+        final factor = (progress + i * 0.18) % 1.0;
+        final size = 60.0 * (1.0 - factor * 0.35);
         final opacity = (1.0 - factor).clamp(0.0, 1.0);
         return Positioned(
           left: kCompanionBoxWidth / 2 -
               size / 2 +
-              (math.sin(i + progress * math.pi * 4) * 18),
-          top: kCompanionBoxHeight - 10 + (factor * 85),
+              (math.sin(i + progress * math.pi * 4) * 20),
+          top: kCompanionBoxHeight - 10 + (factor * 90),
           child: Opacity(
             opacity: opacity * 0.95,
             child: Container(
@@ -254,9 +296,9 @@ class _RocketExhaustFlame extends StatelessWidget {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFFFFFFFF).withValues(alpha: 0.98), // White hot core
-                    const Color(0xFF38BDF8).withValues(alpha: 0.92), // Bright cyan plasma
-                    const Color(0xFF0284C7).withValues(alpha: 0.55), // Deep blue flame
+                    const Color(0xFFFFFFFF).withValues(alpha: 0.98),
+                    const Color(0xFF38BDF8).withValues(alpha: 0.92),
+                    const Color(0xFF0284C7).withValues(alpha: 0.55),
                     Colors.transparent,
                   ],
                   stops: const [0.0, 0.3, 0.7, 1.0],
@@ -276,12 +318,14 @@ class _CompanionScene extends StatelessWidget {
     required this.controller,
     required this.mood,
     required this.idleAction,
+    required this.selectedPlanetId,
   });
 
   final bool ready;
   final AvatarSceneController controller;
   final AvatarMood mood;
   final AvatarIdleAction idleAction;
+  final String? selectedPlanetId;
 
   @override
   Widget build(BuildContext context) {
@@ -290,7 +334,7 @@ class _CompanionScene extends StatelessWidget {
     return SceneView(
       controller.scene,
       camera: AvatarSceneControllerImpl.camera,
-      onTick: (elapsed, _) => controller.tick(elapsed, mood, idleAction),
+      onTick: (elapsed, _) => controller.tick(elapsed, mood, idleAction, selectedPlanetId),
     );
   }
 }

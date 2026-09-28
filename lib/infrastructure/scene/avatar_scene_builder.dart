@@ -10,7 +10,10 @@ import '../../application/state/explorer_state.dart';
 import 'avatar_geometry.dart';
 import 'avatar_materials.dart';
 
-/// Builds and owns the companion's flutter_scene graph (SRP: scene only).
+/// Builds and owns the sleek Sci-Fi Robot / Space Drone companion graph.
+///
+/// Clean, adorable, high-tech floating robot buddy with a glowing digital visor screen,
+/// anti-gravity thruster ring, comms antenna, and dynamic planetary reactions.
 class AvatarSceneBuilder {
   AvatarSceneBuilder({
     required this.geometries,
@@ -25,22 +28,22 @@ class AvatarSceneBuilder {
   final Node targetPivot = Node(name: 'avatar-target');
 
   Node? _antennaNode;
-  Node? _leftArm;
-  Node? _rightArm;
+  Node? _leftPod;
+  Node? _rightPod;
 
   UnlitMaterial? _visorMaterial;
   UnlitMaterial? _targetMaterial;
 
   void build(Scene scene) {
     scene
-      ..environmentIntensity = 0.55
+      ..environmentIntensity = 0.60
       ..add(
         Node(name: 'avatar:light')
           ..addComponent(
             DirectionalLightComponent.aimed(
               DirectionalLight(
                 color: vm.Vector3(1.0, 0.97, 0.92),
-                intensity: 2.6,
+                intensity: 2.8,
               ),
               vm.Vector3(0.4, -1.0, 0.6),
             ),
@@ -55,154 +58,47 @@ class AvatarSceneBuilder {
   }
 
   void _buildBody() {
-    final suit = materials.suit();
-    final helmetMat = materials.helmetDome();
-    final trim = materials.trim();
-    final beltMat = materials.belt();
-    final soleMat = materials.sole();
-    final visor = materials.visor();
-    final pack = materials.pack();
-    final panelMat = materials.chestPanel();
-    final tankMat = materials.tank();
-    final redBtn = materials.buttonRed();
-    final greenBtn = materials.buttonGreen();
-    final yellowBtn = materials.buttonYellow();
+    final chassisMat = materials.chassis();
+    final trimMat = materials.trim();
+    final visorMat = materials.visorScreen();
+    final beaconMat = materials.beacon();
 
+    _visorMaterial = visorMat;
+
+    // Main spherical robot chassis
     bodyRoot.add(
-      _mesh('torso', geometries.torso(), suit)
-        ..position = vm.Vector3(0, 0.02, 0),
+      _mesh('chassis', geometries.chassis(), chassisMat)
+        ..position = vm.Vector3(0, 0.05, 0),
     );
 
+    // Digital visor screen face
     bodyRoot.add(
-      _mesh('waist', geometries.waist(), suit)
-        ..position = vm.Vector3(0, -0.13, 0),
-    );
-    bodyRoot.add(
-      _mesh('belt', geometries.belt(), beltMat)
-        ..position = vm.Vector3(0, -0.10, 0),
-    );
-    bodyRoot.add(
-      _mesh('belt-buckle', geometries.badge(), materials.badge())
-        ..position = vm.Vector3(0, -0.10, -0.145),
+      _mesh('visor', geometries.visorScreen(), visorMat)
+        ..position = vm.Vector3(0, 0.05, -0.145),
     );
 
+    // Anti-gravity thruster ring at base
     bodyRoot.add(
-      _mesh('collar', geometries.collar(), trim)
-        ..position = vm.Vector3(0, 0.18, 0),
+      _mesh('thruster-ring', geometries.thrusterRing(), trimMat)
+        ..position = vm.Vector3(0, -0.14, 0),
     );
 
-    bodyRoot.add(
-      _mesh('chest-panel', geometries.chestPanel(), panelMat)
-        ..position = vm.Vector3(0, 0.04, -0.165),
-    );
-    bodyRoot.add(
-      _mesh('btn-red', geometries.chestButton(), redBtn)
-        ..position = vm.Vector3(-0.04, 0.05, -0.184),
-    );
-    bodyRoot.add(
-      _mesh('btn-green', geometries.chestButton(), greenBtn)
-        ..position = vm.Vector3(0.0, 0.05, -0.184),
-    );
-    bodyRoot.add(
-      _mesh('btn-yellow', geometries.chestButton(), yellowBtn)
-        ..position = vm.Vector3(0.04, 0.05, -0.184),
-    );
-
-    bodyRoot.add(
-      _mesh('pack', geometries.pack(), pack)
-        ..position = vm.Vector3(0, 0.05, 0.21),
-    );
-    bodyRoot.add(
-      _mesh('tank-left', geometries.oxygenTank(), tankMat)
-        ..position = vm.Vector3(-0.075, 0.05, 0.25),
-    );
-    bodyRoot.add(
-      _mesh('tank-right', geometries.oxygenTank(), tankMat)
-        ..position = vm.Vector3(0.075, 0.05, 0.25),
-    );
-
-    bodyRoot.add(
-      _mesh('helmet', geometries.helmet(), helmetMat)
-        ..position = vm.Vector3(0, 0.40, 0),
-    );
-
-    bodyRoot.add(
-      _mesh('ear-left', geometries.helmetEar(), trim)
-        ..position = vm.Vector3(-0.165, 0.40, 0),
-    );
-    bodyRoot.add(
-      _mesh('ear-right', geometries.helmetEar(), trim)
-        ..position = vm.Vector3(0.165, 0.40, 0),
-    );
-
-    _visorMaterial = visor;
-    bodyRoot.add(
-      _mesh('visor', geometries.visor(), visor)
-        ..position = vm.Vector3(0, 0.39, -0.155),
-    );
-
-    bodyRoot.add(
-      _mesh('shoulder-left', geometries.shoulderPad(), trim)
-        ..position = vm.Vector3(-0.20, 0.12, 0),
-    );
-    bodyRoot.add(
-      _mesh('shoulder-right', geometries.shoulderPad(), trim)
-        ..position = vm.Vector3(0.20, 0.12, 0),
-    );
-
-    _leftArm = _mesh('arm-left', geometries.arm(), suit)
-      ..position = vm.Vector3(-0.215, 0.01, 0);
-    _rightArm = _mesh('arm-right', geometries.arm(), suit)
-      ..position = vm.Vector3(0.215, 0.01, 0);
-
-    final leftGlove = _mesh('glove-left', geometries.glove(), trim)
-      ..position = vm.Vector3(-0.215, -0.09, 0);
-    final rightGlove = _mesh('glove-right', geometries.glove(), trim)
-      ..position = vm.Vector3(0.215, -0.09, 0);
-
+    // Side floating sensor pods
+    _leftPod = _mesh('pod-left', geometries.sidePod(), trimMat)
+      ..position = vm.Vector3(-0.20, 0.05, 0);
+    _rightPod = _mesh('pod-right', geometries.sidePod(), trimMat)
+      ..position = vm.Vector3(0.20, 0.05, 0);
     bodyRoot
-      ..add(_leftArm!)
-      ..add(_rightArm!)
-      ..add(leftGlove)
-      ..add(rightGlove);
+      ..add(_leftPod!)
+      ..add(_rightPod!);
 
-    bodyRoot
-      ..add(
-        _mesh('leg-left', geometries.leg(), suit)
-          ..position = vm.Vector3(-0.085, -0.27, 0),
-      )
-      ..add(
-        _mesh('leg-right', geometries.leg(), suit)
-          ..position = vm.Vector3(0.085, -0.27, 0),
-      )
-      ..add(
-        _mesh('boot-left', geometries.boot(), trim)
-          ..position = vm.Vector3(-0.085, -0.41, -0.01),
-      )
-      ..add(
-        _mesh('boot-right', geometries.boot(), trim)
-          ..position = vm.Vector3(0.085, -0.41, -0.01),
-      )
-      ..add(
-        _mesh('sole-left', geometries.bootSole(), soleMat)
-          ..position = vm.Vector3(-0.085, -0.44, 0.01),
-      )
-      ..add(
-        _mesh('sole-right', geometries.bootSole(), soleMat)
-          ..position = vm.Vector3(0.085, -0.44, 0.01),
-      );
-
+    // Antenna stem and glowing beacon
     bodyRoot.add(
-      _mesh('badge', geometries.badge(), materials.badge())..position =
-          vm.Vector3(-0.07, 0.12, -0.17),
+      _mesh('antenna-stem', geometries.antennaStem(), trimMat)
+        ..position = vm.Vector3(0, 0.22, 0),
     );
-
-    bodyRoot.add(
-      _mesh('antenna-stem', geometries.antennaStem(), trim)
-        ..position = vm.Vector3(0, 0.60, 0.02),
-    );
-    _antennaNode = _mesh('antenna-tip', geometries.antennaTip(), materials.badge())
-      ..position = vm.Vector3(0, 0.67, 0.02);
+    _antennaNode = _mesh('antenna-tip', geometries.antennaTip(), beaconMat)
+      ..position = vm.Vector3(0, 0.30, 0);
     bodyRoot.add(_antennaNode!);
   }
 
@@ -241,78 +137,74 @@ class AvatarSceneBuilder {
     ) * vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), pose.pitchClamped);
   }
 
-  void tick(Duration elapsed, AvatarMood mood, AvatarIdleAction idleAction) {
+  void tick(Duration elapsed, AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId) {
     final t = elapsed.inMicroseconds / 1e6;
 
-    double bob = 0.0;
-    double slump = 0.0;
-    double armLift = 0.0;
-    double bodyTilt = 0.0;
+    double hover = 0.0;
+    double tilt = 0.0;
 
-    if (mood == AvatarMood.success || idleAction == AvatarIdleAction.dancing) {
-      final speed = idleAction == AvatarIdleAction.dancing ? 9.0 : 7.0;
-      bob = math.sin(t * speed).abs() * 0.07;
-      armLift = -1.6 + math.sin(t * 7.0) * 0.4;
-      bodyTilt = math.sin(t * 6.0) * 0.15;
+    final isIceWorld = selectedPlanetId == 'neptune' ||
+        selectedPlanetId == 'uranus' ||
+        selectedPlanetId == 'pluto';
+    final isHotWorld = selectedPlanetId == 'sun' ||
+        selectedPlanetId == 'mercury' ||
+        selectedPlanetId == 'venus';
+
+    if (isIceWorld) {
+      // Shivering / vibrating when cold
+      hover = math.sin(t * 30.0) * 0.008;
+      tilt = math.sin(t * 20.0) * 0.08;
+    } else if (isHotWorld) {
+      // Fast bobbing when hot
+      hover = math.sin(t * 8.0) * 0.03;
+      tilt = 0.15;
+    } else if (idleAction == AvatarIdleAction.dancing) {
+      hover = math.sin(t * 9.0).abs() * 0.06;
+      tilt = math.sin(t * 6.0) * 0.25;
     } else if (idleAction == AvatarIdleAction.thinking) {
-      bob = math.sin(t * 2.0) * 0.008;
-      armLift = -0.9;
-      bodyTilt = -0.08;
+      hover = math.sin(t * 2.0) * 0.01;
+      tilt = -0.15;
     } else if (idleAction == AvatarIdleAction.sitting) {
-      bob = -0.14; // sits down lower
-    } else if (idleAction == AvatarIdleAction.flying) {
-      bob = math.sin(t * 5.0) * 0.04;
-      bodyTilt = 0.2; // flying tilt forward
+      hover = -0.10;
     } else {
-      bob = math.sin(t * 2.2) * 0.010;
-    }
-
-    if (mood == AvatarMood.wrong || mood == AvatarMood.retry) {
-      bob *= 0.35;
-      slump = -0.10;
+      // Gentle floating hover
+      hover = math.sin(t * 3.0) * 0.018;
     }
 
     bodyRoot
-      ..position = vm.Vector3(0, bob + 0.02, 0)
-      ..rotation = vm.Quaternion.axisAngle(vm.Vector3(0, 0, 1), slump + bodyTilt);
+      ..position = vm.Vector3(0, hover + 0.02, 0)
+      ..rotation = vm.Quaternion.axisAngle(vm.Vector3(0, 0, 1), tilt);
 
-    final sway = math.sin(t * 1.6) * 0.16;
-    _leftArm?.rotation = vm.Quaternion.axisAngle(
-      vm.Vector3(0, 0, 1),
-      (armLift != 0.0 ? armLift : -0.35) + sway,
-    );
-    _rightArm?.rotation = vm.Quaternion.axisAngle(
-      vm.Vector3(0, 0, 1),
-      (armLift != 0.0 ? armLift : -0.35) - sway,
-    );
-
-    final talking = mood == AvatarMood.instruction || mood == AvatarMood.retry || idleAction == AvatarIdleAction.dancing || idleAction == AvatarIdleAction.sendingHeart;
-    final antennaRate = talking ? 9.0 : 1.5;
-    final antennaSwing = talking ? 0.22 : 0.06;
+    // Antenna pulse
+    final pulseRate = isIceWorld ? 15.0 : (isHotWorld ? 12.0 : 3.0);
     _antennaNode?.position = vm.Vector3(
-      math.sin(t * antennaRate) * antennaSwing,
-      0.67,
-      0.02,
+      math.sin(t * pulseRate) * 0.03,
+      0.30,
+      0,
     );
 
-    _setVisorTint(mood, idleAction);
+    _setVisorColor(mood, idleAction, selectedPlanetId);
   }
 
-  void _setVisorTint(AvatarMood mood, AvatarIdleAction idleAction) {
+  void _setVisorColor(AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId) {
     final material = _visorMaterial;
     if (material == null) return;
-    final color = switch (idleAction) {
-      AvatarIdleAction.dancing => const Color(0xFF10B981), // Emerald green
-      AvatarIdleAction.thinking => const Color(0xFF8B5CF6), // Violet
-      AvatarIdleAction.sitting => const Color(0xFF64748B), // Slate
-      AvatarIdleAction.flying => const Color(0xFF06B6D4), // Cyan
-      AvatarIdleAction.sendingHeart => const Color(0xFFEC4899), // Pink
-      AvatarIdleAction.none => switch (mood) {
-          AvatarMood.instruction => const Color(0xFF38BDF8),
-          AvatarMood.searching => const Color(0xFF0EA5E9),
-          AvatarMood.wrong => const Color(0xFF7C3AED),
-          AvatarMood.retry => const Color(0xFF8B7CFF),
-          AvatarMood.success => const Color(0xFFF59E0B),
+    final color = switch (selectedPlanetId) {
+      'neptune' || 'uranus' || 'pluto' => const Color(0xFF38BDF8), // Freezing ice blue
+      'sun' || 'mercury' || 'venus' => const Color(0xFFFBBF24), // Scorching orange/yellow
+      _ => switch (idleAction) {
+          AvatarIdleAction.dancing => const Color(0xFF10B981),
+          AvatarIdleAction.thinking => const Color(0xFF8B5CF6),
+          AvatarIdleAction.sitting => const Color(0xFF64748B),
+          AvatarIdleAction.flying => const Color(0xFF06B6D4),
+          AvatarIdleAction.sendingHeart => const Color(0xFFEC4899),
+          AvatarIdleAction.none => switch (mood) {
+              AvatarMood.instruction => const Color(0xFF38BDF8),
+              AvatarMood.searching => const Color(0xFF0EA5E9),
+              AvatarMood.wrong => const Color(0xFF7C3AED),
+              AvatarMood.retry => const Color(0xFF8B7CFF),
+              AvatarMood.success => const Color(0xFFF59E0B),
+            },
         },
     };
     if (_visorColor == color) return;

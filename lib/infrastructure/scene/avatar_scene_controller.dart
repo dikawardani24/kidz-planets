@@ -15,7 +15,7 @@ abstract class AvatarSceneController {
   bool get isRealScene;
 
   void ensureBuilt();
-  void tick(Duration elapsed, AvatarMood mood, AvatarIdleAction idleAction);
+  void tick(Duration elapsed, AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId);
   void applyPose(AvatarState pose);
   void showTarget({required bool visible, required Color color});
   void dispose();
@@ -63,8 +63,8 @@ class AvatarSceneControllerImpl implements AvatarSceneController {
   }
 
   @override
-  void tick(Duration elapsed, AvatarMood mood, AvatarIdleAction idleAction) =>
-      _builder.tick(elapsed, mood, idleAction);
+  void tick(Duration elapsed, AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId) =>
+      _builder.tick(elapsed, mood, idleAction, selectedPlanetId);
 
   @override
   void applyPose(AvatarState pose) => _builder.setRotation(pose);
