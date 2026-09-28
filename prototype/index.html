@@ -584,6 +584,7 @@
                 specularFile: 'earth_specular_2048.jpg',
                 cloudsFile: 'earth_clouds_1024.png',
                 moonFile: 'moon_lroc_2k.jpg',
+                moonHeightFile: 'moon_height_1024.jpg',
                 diameter: '12,742 km',
                 temp: '15°C',
                 hotspots: [
@@ -993,10 +994,15 @@
                     if (p.hasMoon && p.moonFile) {
                         const moonGeo = new THREE.SphereGeometry(0.28, 32, 32);
                         const moonTex = loadPlanetTexture(p.moonFile, 'threejs', 'moon');
+                        const moonHeightTex = p.moonHeightFile
+                            ? loadPlanetTexture(p.moonHeightFile, 'threejs', 'moon-height')
+                            : null;
                         const moonMat = new THREE.MeshStandardMaterial({
                             map: moonTex,
-                            roughness: 0.92,
-                            metalness: 0.05
+                            bumpMap: moonHeightTex,
+                            bumpScale: 0.035,
+                            roughness: 0.97,
+                            metalness: 0.0
                         });
                         const moonMesh = new THREE.Mesh(moonGeo, moonMat);
                         moonMesh.name = 'moon';
