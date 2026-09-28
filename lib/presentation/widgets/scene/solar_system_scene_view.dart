@@ -139,22 +139,19 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     }
 
     if (details.pointerCount == 1) {
+      final dx = details.focalPointDelta.dx;
+      final dy = details.focalPointDelta.dy;
+
       if (ui.hasSelection) {
         final selectedId = ui.selectedPlanetId;
         if (selectedId != null) {
-          controller.spinPlanet(selectedId, details.focalPointDelta.dx * 0.009);
+          // Rotate the actual planet, not the camera. The scene controller
+          // applies the delta in the planet's local frame.
+          controller.rotatePlanet(selectedId, dx, dy);
         }
-        final current = ref.read(explorerControllerProvider);
-        ref.read(explorerControllerProvider.notifier).updateDetailCamera(
-              theta: current.detailTheta + details.focalPointDelta.dx * 0.008,
-              phi: (current.detailPhi + details.focalPointDelta.dy * 0.006)
-                  .clamp(-0.45, 1.35),
-            );
       } else {
-        controller.orbitBy(
-          details.focalPointDelta.dx,
-          details.focalPointDelta.dy,
-        );
+        // Rotate the actual solar-system model, not the camera.
+        controller.rotateSolarSystem(dx, dy);
       }
     }
   }
