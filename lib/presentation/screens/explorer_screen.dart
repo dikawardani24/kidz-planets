@@ -90,23 +90,17 @@ class ExplorerScreen extends ConsumerWidget {
 
               if (ui.hasSelection && ui.tab == ExplorerTab.explore)
                 Positioned(
-                  left: isLandscape ? null : 16,
+                  left: isLandscape ? 16 : 16,
                   right: isLandscape ? 68 : 16,
-                  top: isLandscape ? 72 : null,
-                  bottom: isLandscape ? null : 116,
+                  bottom: 116,
                   width: isLandscape ? 330 : null,
-                  child: _DetailWrapper(planetId: ui.selectedPlanetId!),
-                ),
-
-              // The facts toggle is always centered above the bottom
-              // navigation, independent of orientation and card visibility.
-              if (ui.hasSelection && ui.tab == ExplorerTab.explore)
-                const Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 76,
-                  child: Center(
-                    child: DetailDescriptionToggle(),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const DetailDescriptionToggle(),
+                      const SizedBox(height: 8),
+                      _DetailWrapper(planetId: ui.selectedPlanetId!),
+                    ],
                   ),
                 ),
 
