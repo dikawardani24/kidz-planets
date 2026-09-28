@@ -45,8 +45,8 @@ class DetailDescriptionToggle extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
-      onTap: () async {
-        await showGeneralDialog<void>(
+      onTap: () {
+        showGeneralDialog<void>(
           context: context,
           barrierDismissible: true,
           barrierLabel: 'Planet facts',
@@ -81,12 +81,6 @@ class DetailDescriptionToggle extends ConsumerWidget {
             );
           },
         );
-
-        // Dismissing facts also leaves detail mode, restoring the previous
-        // behavior where closing the detail view smoothly zooms back out.
-        if (context.mounted) {
-          ref.read(explorerControllerProvider.notifier).closeDetail();
-        }
       },
       child: AppTheme.glass(
         pill: true,
