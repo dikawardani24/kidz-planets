@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../panels/mission_guide.dart';
 
 class ExplorerTopBar extends ConsumerWidget {
   const ExplorerTopBar({super.key});
@@ -109,7 +110,9 @@ class ExplorerInteractionOverlays extends ConsumerWidget {
             );
       if (activeMission != null) {
         return _Banner(
-          top: top + 12,
+          top: top + 8,
+          interactive: true,
+          onTap: () => showMissionDialog(context, ref),
           borderColor: const Color(0x665B8CFF),
           background: const Color(0xD9040712),
           textColor: const Color(0xFFD9E4FF),
@@ -118,7 +121,7 @@ class ExplorerInteractionOverlays extends ConsumerWidget {
             children: [
               const Icon(Icons.explore, size: 13, color: AppTheme.accentSky),
               const SizedBox(width: 7),
-              Text('Mission ${activeMission.id}: ${activeMission.title}'),
+              Text('Mission \${activeMission.id}: \${activeMission.title}'),
             ],
           ),
         );
@@ -136,14 +139,48 @@ class ExplorerInteractionOverlays extends ConsumerWidget {
 }
 
 class _Banner extends StatelessWidget {
-  const _Banner({required this.top, required this.borderColor, required this.background, required this.textColor, required this.child});
-  final double top; final Color borderColor; final Color background; final Color textColor; final Widget child;
+  const _Banner({
+    required this.top,
+    required this.borderColor,
+    required this.background,
+    required this.textColor,
+    required this.child,
+    this.interactive = false,
+    this.onTap,
+  });
+
+  final double top;
+  final Color borderColor;
+  final Color background;
+  final Color textColor;
+  final Widget child;
+  final bool interactive;
+  final VoidCallback? onTap;
+
   @override
-  Widget build(BuildContext context) => Positioned(top: top, left: 0, right: 0, child: IgnorePointer(child: Center(child: Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-    decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(999), border: Border.all(color: borderColor), boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 14)]),
-    child: DefaultTextStyle(style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: textColor), child: child),
-  ))));
+  Widget build(BuildContext context) => Positioned(
+    top: top,
+    left: 0,
+    right: 0,
+    child: Center(
+      child: GestureDetector(
+        onTap: interactive ? onTap : null,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: borderColor),
+            boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 14)],
+          ),
+          child: DefaultTextStyle.merge(
+            style: TextStyle(color: textColor, fontSize: 10, fontWeight: FontWeight.w700),
+            child: child,
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class ExplorerControlPills extends ConsumerWidget {
