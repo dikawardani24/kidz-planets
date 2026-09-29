@@ -40,16 +40,6 @@ class AvatarGeometryFactory {
         () => CapsuleGeometry(radius: 0.08, height: 0.06, radialSegments: 16, capRings: 3),
       );
 
-  MeshGeometry avatarEye() => _cache.putIfAbsent(
-        'avatar-eye',
-        () => SphereGeometry(radius: 0.027, segments: 12, rings: 8),
-      );
-
-  MeshGeometry avatarMouth() => _cache.putIfAbsent(
-        'avatar-mouth',
-        () => SphereGeometry(radius: 0.018, segments: 12, rings: 8),
-      );
-
   /// Stand-in for the mission target.
   MeshGeometry target() => _cache.putIfAbsent(
         'target',
