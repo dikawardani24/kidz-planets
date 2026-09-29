@@ -5,7 +5,11 @@ import 'package:kidz_planets/application/state/avatar_state.dart';
 void main() {
   late AvatarController controller;
 
+  // AvatarController runs a periodic flight-style timer, so a controller that
+  // is never disposed outlives its test and trips the "timer is still active"
+  // check in any later testWidgets test in this file.
   setUp(() => controller = AvatarController());
+  tearDown(() => controller.dispose());
 
   group('rotation', () {
     test('starts unrotated and unplaced', () {

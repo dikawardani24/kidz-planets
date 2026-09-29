@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show Offset, Size;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/avatar_state.dart';
@@ -90,6 +91,13 @@ class AvatarController extends StateNotifier<AvatarState> {
   void dispose() {
     _styleTimer?.cancel();
     super.dispose();
+  }
+
+  /// Pins the flight path so each [FlightStyle] branch of [updateFlight] can
+  /// be exercised deterministically; in production the 6s switcher owns it.
+  @visibleForTesting
+  void debugSetFlightStyle(FlightStyle style) {
+    state = state.copyWith(flightStyle: style);
   }
 
   void rotateBy({required double dx, required double dy}) {

@@ -21,6 +21,9 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # Used directly by the controller tests to drive the toast, spin-hint and
+  # flight-style timers without waiting in real time.
+  fake_async: ^1.3.3
 
 flutter:
   uses-material-design: true

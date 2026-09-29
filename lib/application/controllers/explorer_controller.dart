@@ -13,7 +13,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
 
   final SimulationClock _clock;
   final PlanetSoundService _missionSound = PlanetSoundService();
-  Timer? _toastTimer;
+  final Map<int, Timer> _toastTimers = {};
   Timer? _spinHintTimer;
   Timer? _playModeTimer;
   int _toastKey = 0;
@@ -176,13 +176,17 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   }
 
   void showToast(String text) {
-    _toastTimer?.cancel();
     final key = ++_toastKey;
     state = state.copyWith(toasts: [...state.toasts, ToastMessage(key: key, text: text)]);
-    _toastTimer = Timer(const Duration(seconds: 3), () {
+    // One timer per toast: a single shared timer was cancelled by the next
+    // toast, which left every earlier toast on screen with nothing left to
+    // dismiss it.
+    final timer = Timer(const Duration(seconds: 3), () {
+      _toastTimers.remove(key);
       if (!mounted) return;
       state = state.copyWith(toasts: state.toasts.where((t) => t.key != key).toList());
     });
+    _toastTimers[key] = timer;
   }
 
   void _setExperimentAlert(String title, String description) {
@@ -255,7 +259,10 @@ class ExplorerController extends StateNotifier<ExplorerState> {
 
   @override
   void dispose() {
-    _toastTimer?.cancel();
+    for (final timer in _toastTimers.values) {
+      timer.cancel();
+    }
+    _toastTimers.clear();
     _spinHintTimer?.cancel();
     _playModeTimer?.cancel();
     _missionSound.dispose();
