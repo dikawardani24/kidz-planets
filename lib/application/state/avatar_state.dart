@@ -13,6 +13,19 @@ enum AvatarIdleAction {
 
 enum FlightStyle { edge, zigzag, circle }
 
+/// Short-lived reactions triggered by direct touch or exploration events.
+enum AvatarReaction {
+  none,
+  happy,
+  surprised,
+  sad,
+  dizzy,
+  excited,
+  sleepy,
+  laughing,
+  talking,
+}
+
 /// Where the mission companion sits on screen and which way it faces.
 class AvatarState extends Equatable {
   const AvatarState({
@@ -23,6 +36,8 @@ class AvatarState extends Equatable {
     this.isHeartVisible = false,
     this.flightStyle = FlightStyle.circle,
     this.flightTime = 0.0,
+    this.reaction = AvatarReaction.none,
+    this.reactionUntil = 0,
   });
 
   /// Top-left corner of the companion box, in logical pixels.
@@ -34,6 +49,8 @@ class AvatarState extends Equatable {
   final bool isHeartVisible;
   final FlightStyle flightStyle;
   final double flightTime;
+  final AvatarReaction reaction;
+  final int reactionUntil;
 
   static const double pitchLimit = 0.55;
 
@@ -47,6 +64,8 @@ class AvatarState extends Equatable {
     bool? isHeartVisible,
     FlightStyle? flightStyle,
     double? flightTime,
+    AvatarReaction? reaction,
+    int? reactionUntil,
   }) {
     return AvatarState(
       screenPosition: screenPosition ?? this.screenPosition,
@@ -56,6 +75,8 @@ class AvatarState extends Equatable {
       isHeartVisible: isHeartVisible ?? this.isHeartVisible,
       flightStyle: flightStyle ?? this.flightStyle,
       flightTime: flightTime ?? this.flightTime,
+      reaction: reaction ?? this.reaction,
+      reactionUntil: reactionUntil ?? this.reactionUntil,
     );
   }
 
@@ -68,5 +89,7 @@ class AvatarState extends Equatable {
         isHeartVisible,
         flightStyle,
         flightTime,
+        reaction,
+        reactionUntil,
       ];
 }
