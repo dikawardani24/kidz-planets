@@ -60,12 +60,17 @@ void main() {
 
     final container = ProviderScope.containerOf(
         tester.element(find.byType(PlanetDetailSheet)));
+    // The longest description in the whole catalogue, to check the sheet
+    // reflows rather than clipping. Carried with its owner because a hotspot
+    // is only identified by a slug, and slugs repeat across planets.
     final longest = PlanetCatalog.planets
         .expand((p) => p.hotspots)
         .reduce((a, b) => a.description.length > b.description.length ? a : b);
+    final longestPlanet = PlanetCatalog.planets.firstWhere(
+        (p) => p.hotspots.contains(longest));
     container
         .read(explorerControllerProvider.notifier)
-        .showHotspot(longest);
+        .showHotspot(longest, planetId: longestPlanet.id);
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../../domain/entities/planet.dart';
+import '../../../l10n/localized_planet.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../theme/app_theme.dart';
 
@@ -67,6 +68,7 @@ class _PlanetCard extends ConsumerWidget {
   final Planet planet; final bool selected;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final body = localizedPlanet(planet, Localizations.localeOf(context));
     return GestureDetector(
       onTap: () {
         ref.read(explorerControllerProvider.notifier)
@@ -84,10 +86,10 @@ class _PlanetCard extends ConsumerWidget {
             Container(width: 26, height: 26, decoration: BoxDecoration(shape: BoxShape.circle,
               gradient: LinearGradient(colors: [Color(planet.colorValue), Color(planet.colorValue).withValues(alpha: 0.55)]))),
             const SizedBox(width: 8),
-            Expanded(child: Text(planet.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white))),
+            Expanded(child: Text(body.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white))),
           ]),
           const SizedBox(height: 5),
-          Text(planet.tag, style: const TextStyle(fontSize: 11, color: Colors.white70), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(body.tag, style: const TextStyle(fontSize: 11, color: Colors.white70), maxLines: 1, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 3),
           Text(planet.diameter, style: const TextStyle(fontSize: 10, color: Colors.white38)),
         ])));

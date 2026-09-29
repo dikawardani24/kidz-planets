@@ -177,5 +177,6 @@
   "companionFlying": "Wheee! Flying all over space! 🚀",
   "companionCold": "Brrrr! So freezing cold here! 🥶",
   "companionHot": "Phew! It is scorching hot! ☀️",
-  "companionThinking": "Hmm... exploring ideas!"
+  "companionThinking": "Hmm... exploring ideas!",
+  "toastSandboxReady": "Sandbox Ready! Run interactive NASA 3D experiments below."
 }

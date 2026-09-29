@@ -4,6 +4,7 @@ import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../../infrastructure/services/planet_narration_provider.dart';
 import '../../../l10n/generated/app_localizations.dart';
+import '../../../l10n/localized_mission.dart';
 import '../../theme/app_theme.dart';
 
 void showMissionDialog(BuildContext context, WidgetRef ref) {
@@ -33,7 +34,7 @@ class MissionGuide extends ConsumerWidget {
     final t = AppLocalizations.of(context);
     final matches = ui.missions.where((m) => m.id == ui.activeMissionId);
     if (matches.isEmpty || matches.first.completed) return const SizedBox.shrink();
-    final mission = matches.first;
+    final mission = localizedMission(matches.first, Localizations.localeOf(context));
     return Align(alignment: Alignment.topCenter, child: GestureDetector(
       onTap: () => showMissionDialog(context, ref),
       child: AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
@@ -54,20 +55,23 @@ class _MissionDialog extends ConsumerWidget {
     // Read live rather than snapshotted at open time, so revealing a clue
     // updates the text without having to reopen the dialog.
     final level = ref.watch(explorerControllerProvider.select((s) => s.missionHintLevel));
-    final clue = mission.clueAt(level);
-    final hasMoreClues = level < mission.hints.length - 1;
+    // Resolved on every build, so switching language while the dialog is open
+    // retranslates it in place instead of leaving the old language on screen.
+    final copy = localizedMission(mission, Localizations.localeOf(context));
+    final clue = copy.clueAt(level);
+    final hasMoreClues = level < copy.hints.length - 1;
     return Material(color: Colors.transparent, child: SafeArea(child: Center(child: Padding(padding: const EdgeInsets.all(20), child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 430, maxHeight: 620),
       child: AppTheme.glass(radius: BorderRadius.circular(28), padding: const EdgeInsets.all(18), child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [const Text('🚀', style: TextStyle(fontSize: 22)), const SizedBox(width: 8), Expanded(child: Text(t.missionHeading(mission.id), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: AppTheme.accentSky))), IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close_rounded, color: Colors.white70))]),
-        Text(mission.title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
+        Text(copy.title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
         const SizedBox(height: 8),
-        Text(mission.description, style: const TextStyle(fontSize: 12, height: 1.45, color: Color(0xFFC7D2FE))),
+        Text(copy.description, style: const TextStyle(fontSize: 12, height: 1.45, color: Color(0xFFC7D2FE))),
         const SizedBox(height: 14),
         Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: AppTheme.space800.withValues(alpha: .75), borderRadius: BorderRadius.circular(18)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(t.missionStartHere, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: AppTheme.accentAmber)),
-          const SizedBox(height: 5), Text(t.missionStartAt(mission.startPoint ?? t.missionStartAtDefault), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
-          const SizedBox(height: 7), Text('➡️  ${mission.direction ?? t.missionDirectionDefault}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFDDEAFE))),
+          const SizedBox(height: 5), Text(t.missionStartAt(copy.startPoint ?? t.missionStartAtDefault), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
+          const SizedBox(height: 7), Text('➡️  ${copy.direction ?? t.missionDirectionDefault}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFDDEAFE))),
         ])),
         const SizedBox(height: 12),
         Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: AppTheme.accentSky.withValues(alpha: .25))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

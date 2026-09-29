@@ -5,6 +5,8 @@ import 'package:kidz_planets/application/state/simulation_clock.dart';
 import 'package:kidz_planets/data/repositories/solar_system_repository_impl.dart';
 import 'package:kidz_planets/data/datasources/solar_system_local_datasource.dart';
 
+import 'helpers/app_messages.dart';
+
 /// A wrong pick is the companion's job alone.
 ///
 /// The user asked for no dialog, no hint overlay, no toast, no failure sound,
@@ -83,7 +85,7 @@ void main() {
     test('dismissing a celebration calms it back down', () {
       final c = makeController();
       c
-        ..showCelebration('Mission 1 Complete!', 'You discovered Earth.')
+        ..showCelebration(TestMessages.title, TestMessages.description)
         ..setAvatarMood(AvatarMood.success);
       expect(c.state.celebrationVisible, isTrue);
 

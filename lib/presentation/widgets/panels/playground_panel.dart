@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/state/providers.dart';
 import '../../../infrastructure/services/scene_providers.dart';
 import '../../../l10n/generated/app_localizations.dart';
+import '../../../l10n/resolve_message.dart';
 import '../../theme/app_theme.dart';
 
 class PlaygroundPanel extends ConsumerWidget {
@@ -39,8 +40,8 @@ class PlaygroundPanel extends ConsumerWidget {
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(ui.playgroundAlertIcon, style: const TextStyle(fontSize: 20)), const SizedBox(width: 9),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(ui.playgroundAlertTitle, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFFFFE7A3))),
-              const SizedBox(height: 2), Text(ui.playgroundAlertDescription, style: const TextStyle(fontSize: 10, color: Colors.white70)),
+              Text(ui.playgroundAlertTitle.resolve(t, Localizations.localeOf(context)), style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFFFFE7A3))),
+              const SizedBox(height: 2), Text(ui.playgroundAlertDescription.resolve(t, Localizations.localeOf(context)), style: const TextStyle(fontSize: 10, color: Colors.white70)),
             ])),
           ])),
           const SizedBox(height: 10),
