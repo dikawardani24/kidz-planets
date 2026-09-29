@@ -71,7 +71,7 @@ class AvatarSceneControllerImpl implements AvatarSceneController {
   void applyPose(AvatarState pose) => _builder.setRotation(pose);
 
   @override
-  void applyReaction(AvatarReaction reaction) => _builder.setReaction(reaction);
+  void applyReaction(AvatarReaction reaction) {}
 
   @override
   void showTarget({required bool visible, required Color color}) =>
