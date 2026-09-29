@@ -8,6 +8,7 @@ import '../../../application/state/avatar_state.dart';
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../../infrastructure/scene/avatar_scene_controller.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import 'avatar_speech.dart';
 
 const double kCompanionBoxWidth = 132;
@@ -144,21 +145,22 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
             ui.selectedPlanetId == 'mercury' ||
             ui.selectedPlanetId == 'venus';
 
-        String companionText = 'Wheee! Flying all over space! 🚀';
+        final t = AppLocalizations.of(context);
+        String companionText = t.companionFlying;
         if (hasFocus) {
           if (isIceWorld) {
-            companionText = 'Brrrr! So freezing cold here! 🥶';
+            companionText = t.companionCold;
           } else if (isHotWorld) {
-            companionText = 'Phew! It is scorching hot! ☀️';
+            companionText = t.companionHot;
           } else {
-            companionText = 'Inspecting NASA 3D details! ✨';
+            companionText = t.companionInspecting;
           }
         } else if (pose.idleAction == AvatarIdleAction.sendingHeart) {
-          companionText = 'Sending space love! ❤️';
+          companionText = t.companionSpaceLove;
         } else if (pose.idleAction == AvatarIdleAction.dancing) {
-          companionText = 'Boogie time! 🎶';
+          companionText = t.companionBoogie;
         } else if (pose.idleAction == AvatarIdleAction.thinking) {
-          companionText = 'Hmm... exploring ideas!';
+          companionText = t.companionThinking;
         }
 
         return Stack(
@@ -344,7 +346,7 @@ class _MoveHandle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: 'Move the space buddy',
+      label: AppLocalizations.of(context).companionMoveLabel,
       button: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,

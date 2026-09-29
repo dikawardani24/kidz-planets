@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/mission.dart';
 import '../../domain/entities/planet.dart';
 import '../../infrastructure/services/planet_sound_service.dart';
+import '../state/app_message.dart';
 import '../state/explorer_state.dart';
 import '../state/simulation_clock.dart';
 
@@ -46,7 +47,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
 
     state = state.copyWith(
       selectedPlanetId: id, focusedPlanetId: id, detailZoom: 1.0,
-      detailTheta: 0.65, detailPhi: 0.28, detailTitleOverride: null, detailDescriptionOverride: null,
+      detailTheta: 0.65, detailPhi: 0.28, detailHotspot: null,
       // Facts are opened explicitly from the Show facts dialog trigger.
       detailCardVisible: false,
       playModeBannerVisible: false, spinHintVisible: true,
@@ -65,7 +66,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     _spinHintTimer?.cancel();
     _playModeTimer?.cancel();
     state = state.copyWith(
-      selectedPlanetId: null, focusedPlanetId: null, detailTitleOverride: null, detailDescriptionOverride: null, detailCardVisible: false,
+      selectedPlanetId: null, focusedPlanetId: null, detailHotspot: null, detailCardVisible: false,
       spinHintVisible: false, playModeBannerVisible: false,
     );
   }
@@ -87,13 +88,22 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     state = state.copyWith(detailZoom: 1.0, detailTheta: 0.65, detailPhi: 0.28);
   }
 
-  void showHotspot(Hotspot hotspot) {
-    state = state.copyWith(detailTitleOverride: hotspot.title, detailDescriptionOverride: hotspot.description);
-    final polar = hotspot.title.contains('Polar') || hotspot.title.contains('Ice');
-    final rings = hotspot.title.contains('Ring') || hotspot.title.contains('Cassini') || hotspot.title.contains('Tilt');
-    final storm = hotspot.title.contains('Storm') || hotspot.title.contains('Spot') || hotspot.title.contains('Flares');
-    updateDetailCamera(phi: polar ? .95 : rings ? .65 : state.detailPhi, zoom: rings ? .85 : state.detailZoom);
-    if (storm) showToast(hotspot.title);
+  void showHotspot(Hotspot hotspot, {required String planetId}) {
+    final ref = HotspotRef(planetId: planetId, hotspot: hotspot);
+    state = state.copyWith(detailHotspot: ref);
+
+    // Matched on the slug, not the title. The title is display copy and
+    // changes with the language, so keying camera framing off words in it
+    // would silently stop working the moment a translation lands.
+    final slug = hotspot.slug;
+    const polar = {'polar_ice_caps', 'white_cirrus_clouds', 'cratered_face'};
+    const rings = {'icy_rings'};
+    const storm = {'great_red_spot', 'runaway_heat', 'solar_wind'};
+    updateDetailCamera(
+      phi: polar.contains(slug) ? .95 : rings.contains(slug) ? .65 : state.detailPhi,
+      zoom: rings.contains(slug) ? .85 : state.detailZoom,
+    );
+    if (storm.contains(slug)) showHotspotToast(ref);
   }
 
   void updateDetailCamera({double? zoom, double? theta, double? phi}) {
@@ -107,18 +117,34 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   void runExperiment(String experiment) {
     switch (experiment) {
       case 'earth':
-        _setExperimentAlert('🔥 Earth Moved Closer!', 'Intense solar radiation evaporates oceans instantly!');
+        _setExperimentAlert(
+          icon: '🔥',
+          title: const AppMessage(AppMessageId.alertEarthTitle),
+          description: const AppMessage(AppMessageId.alertEarthDescription),
+        );
         break;
       case 'saturn':
-        _setExperimentAlert('🪐 Saturn Rings Focused!', 'Rings consist of billions of icy space boulders with Cassini gap!');
+        _setExperimentAlert(
+          icon: '🪐',
+          title: const AppMessage(AppMessageId.alertSaturnTitle),
+          description: const AppMessage(AppMessageId.alertSaturnDescription),
+        );
         selectPlanet('saturn');
         break;
       case 'jupiter':
-        _setExperimentAlert('🌪️ Jupiter Storm Focused!', 'The Great Red Spot is a monster storm wider than planet Earth!');
+        _setExperimentAlert(
+          icon: '🌪️',
+          title: const AppMessage(AppMessageId.alertJupiterTitle),
+          description: const AppMessage(AppMessageId.alertJupiterDescription),
+        );
         selectPlanet('jupiter');
         break;
       case 'sun':
-        _setExperimentAlert('☀️ Blazing Sun Focused!', 'Nuclear fusion heats the core to 15,000,000°C with dynamic solar flares!');
+        _setExperimentAlert(
+          icon: '☀️',
+          title: const AppMessage(AppMessageId.alertSunTitle),
+          description: const AppMessage(AppMessageId.alertSunDescription),
+        );
         selectPlanet('sun');
         break;
     }
@@ -127,8 +153,15 @@ class ExplorerController extends StateNotifier<ExplorerState> {
 
   void resetPlayground() {
     _clock.setSpeed(1.0);
-    state = state.copyWith(speed: 1.0, showOrbits: true, showLabels: true, playgroundAlertIcon: '🔥', playgroundAlertTitle: 'Sandbox Ready!', playgroundAlertDescription: 'Run interactive NASA 3D experiments below.');
-    showToast('🔥 Sandbox Ready! Run interactive NASA 3D experiments below.');
+    state = state.copyWith(
+      speed: 1.0,
+      showOrbits: true,
+      showLabels: true,
+      playgroundAlertIcon: '🔥',
+      playgroundAlertTitle: const AppMessage(AppMessageId.alertSandboxTitle),
+      playgroundAlertDescription: const AppMessage(AppMessageId.alertSandboxDescription),
+    );
+    showToast(const AppMessage(AppMessageId.toastSandboxReady));
   }
 
   void completeFirstPendingFor(String planetId) {
@@ -138,8 +171,13 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     final updated = List<MissionState>.from(state.missions);
     updated[idx] = mission.copyWith(completed: true);
     state = state.copyWith(missions: updated);
-    showCelebration(mission.title, 'Fantastic! Mission successfully verified: ${mission.title}!');
-    showToast('Mission complete: ${mission.title}');
+    showCelebration(
+      AppMessage(AppMessageId.celebrationMissionTitle, {'id': mission.id}),
+      // The planet id, not its name: the name is catalogue copy and the
+      // controller has no locale, so the view resolves it.
+      AppMessage(AppMessageId.celebrationDiscovered, {'planetId': planetId}),
+    );
+    showToast(AppMessage(AppMessageId.toastMissionVerified, {'title': mission.title}));
   }
 
   /// Reveals the next, blunter clue for the active mission.
@@ -155,7 +193,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     state = state.copyWith(missionHintLevel: state.missionHintLevel + 1);
   }
 
-  void showCelebration(String title, String description) {
+  void showCelebration(AppMessage title, AppMessage description) {
     state = state.copyWith(celebrationTitle: title, celebrationDescription: description);
   }
 
@@ -184,12 +222,27 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     state = state.copyWith(avatarMood: mood);
   }
 
-  void showToast(String text) {
+  /// Echoes a hotspot's name as a toast, for the dramatic ones that announce
+  /// themselves. The name comes from the catalogue, so the toast carries the
+  /// hotspot rather than a string and the view resolves the right language.
+  void showHotspotToast(HotspotRef hotspot) {
     final key = ++_toastKey;
-    state = state.copyWith(toasts: [...state.toasts, ToastMessage(key: key, text: text)]);
-    // One timer per toast: a single shared timer was cancelled by the next
-    // toast, which left every earlier toast on screen with nothing left to
-    // dismiss it.
+    state = state.copyWith(
+      toasts: [...state.toasts, ToastMessage(key: key, hotspot: hotspot)],
+    );
+    _startToastTimer(key);
+  }
+
+  void showToast(AppMessage message) {
+    final key = ++_toastKey;
+    state = state.copyWith(toasts: [...state.toasts, ToastMessage(key: key, message: message)]);
+    _startToastTimer(key);
+  }
+
+  /// One timer per toast: a single shared timer was cancelled by the next
+  /// toast, which left every earlier toast on screen with nothing left to
+  /// dismiss it.
+  void _startToastTimer(int key) {
     final timer = Timer(const Duration(seconds: 3), () {
       _toastTimers.remove(key);
       if (!mounted) return;
@@ -198,9 +251,18 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     _toastTimers[key] = timer;
   }
 
-  void _setExperimentAlert(String title, String description) {
-    final icon = title.startsWith('☀️') ? '☀️' : title.startsWith('🪐') ? '🪐' : title.startsWith('🌪️') ? '🌪️' : '🔥';
-    state = state.copyWith(playgroundAlertIcon: icon, playgroundAlertTitle: title, playgroundAlertDescription: description);
+  void _setExperimentAlert({
+    required String icon,
+    required AppMessage title,
+    required AppMessage description,
+  }) {
+    // The icon used to be parsed back out of the title's leading emoji, which
+    // only worked because the title was an English literal starting with it.
+    state = state.copyWith(
+      playgroundAlertIcon: icon,
+      playgroundAlertTitle: title,
+      playgroundAlertDescription: description,
+    );
   }
 
   void _checkMission(String planetId) {
@@ -218,10 +280,10 @@ class ExplorerController extends StateNotifier<ExplorerState> {
       // narration here, because the avatar reacting in place already says it
       // and a child should not be interrupted by four things at once.
       //
-      // `missionGuideVisible` is deliberately not set, so the mission dialog
-      // does not open on a miss, and the hint level does not advance, so there
-      // is no escalated clue to read out. The companion's own bubble is the
-      // feedback, and it holds until the child tries again.
+      // The mission dialog does not open on a miss, and the hint level does
+      // not advance, so there is no escalated clue to read out. The
+      // companion's own bubble is the feedback, and it holds until the child
+      // tries again.
       HapticFeedback.lightImpact();
       state = state.copyWith(
         wrongSelectionKey: state.wrongSelectionKey + 1,
@@ -245,16 +307,13 @@ class ExplorerController extends StateNotifier<ExplorerState> {
       // drops back to calm when the celebration dialog is dismissed.
       avatarMood: AvatarMood.success,
     );
-    final targetName = mission.title
-        .replaceFirst('Find ', '')
-        .replaceFirst('Visit ', '');
     _missionSound.startMissionSuccess();
     HapticFeedback.mediumImpact();
     showCelebration(
-      'Mission ${mission.id} Complete!',
-      'You discovered $targetName. Ready for the next mission?',
+      AppMessage(AppMessageId.celebrationMissionTitle, {'id': mission.id}),
+      AppMessage(AppMessageId.celebrationDiscovered, {'planetId': planetId}),
     );
-    showToast('🚀 Mission complete: ${mission.title}');
+    showToast(AppMessage(AppMessageId.toastMissionComplete, {'title': mission.title}));
   }
 
   /// Moves the companion from disappointed to encouraging.

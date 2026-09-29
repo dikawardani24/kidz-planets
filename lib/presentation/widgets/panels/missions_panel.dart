@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../theme/app_theme.dart';
 
 class MissionsPanel extends ConsumerWidget {
@@ -13,15 +14,16 @@ class MissionsPanel extends ConsumerWidget {
     final completed = ui.missions.where((m) => m.completed).length;
     final activeId = ui.activeMissionId;
     final progress = ui.missions.isEmpty ? 0.0 : completed / ui.missions.length;
+    final t = AppLocalizations.of(context);
     return AppTheme.glass(radius: BorderRadius.circular(24), padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
       child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [Icon(Icons.rocket_launch, color: AppTheme.accentSky, size: 18), SizedBox(width: 7), Text('Space Missions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white))]),
-            SizedBox(height: 3), Text('Explore and verify NASA worlds!', style: TextStyle(fontSize: 10.5, color: Color(0xFF9CA9D8))),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [const Icon(Icons.rocket_launch, color: AppTheme.accentSky, size: 18), SizedBox(width: 7), Flexible(child: Text(t.spaceMissions, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white)))]),
+            SizedBox(height: 3), Text(t.spaceMissionsSubtitle, style: TextStyle(fontSize: 10.5, color: Color(0xFF9CA9D8))),
           ])),
           AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.star, size: 11, color: AppTheme.accentAmber), const SizedBox(width: 5), Text('$completed / ${ui.missions.length}', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppTheme.accentAmber))])),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.star, size: 11, color: AppTheme.accentAmber), const SizedBox(width: 5), Text(t.missionCount(completed, ui.missions.length), style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppTheme.accentAmber))])),
         ]),
         const SizedBox(height: 10),
         ClipRRect(borderRadius: BorderRadius.circular(99), child: Container(height: 9, color: AppTheme.space800, child: FractionallySizedBox(alignment: Alignment.centerLeft, widthFactor: progress, child: Container(decoration: const BoxDecoration(gradient: LinearGradient(colors: [AppTheme.accentIndigo, AppTheme.accentAmber])))))),
@@ -39,7 +41,7 @@ class MissionsPanel extends ConsumerWidget {
             ])),
             GestureDetector(onTap: m.completed || m.id != activeId ? null : () { notifier.setTab(ExplorerTab.explore); notifier.selectPlanet(m.targetPlanetId); },
               child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: m.completed ? const Color(0x3322C55E) : AppTheme.accentIndigo, borderRadius: BorderRadius.circular(999)),
-                child: Text(m.completed ? 'Done' : m.id == activeId ? 'Find →' : 'Locked', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: m.completed ? const Color(0xFF86EFAC) : Colors.white)))),
+                child: Text(m.completed ? t.missionStatusDone : m.id == activeId ? t.missionStatusActive : t.missionStatusLocked, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: m.completed ? const Color(0xFF86EFAC) : Colors.white)))),
           ]),
         ))),
       ])));

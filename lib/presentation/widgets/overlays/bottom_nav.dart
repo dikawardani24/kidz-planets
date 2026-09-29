@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../theme/app_theme.dart';
 
 class ExplorerBottomNav extends ConsumerWidget {
@@ -11,6 +12,7 @@ class ExplorerBottomNav extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ui = ref.watch(explorerControllerProvider);
     final notifier = ref.read(explorerControllerProvider.notifier);
+    final t = AppLocalizations.of(context);
     final isLandscape =
         MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height;
 
@@ -22,19 +24,19 @@ class ExplorerBottomNav extends ConsumerWidget {
         children: [
           _NavItem(
             icon: Icons.public,
-            label: 'Explore',
+            label: t.navExplore,
             selected: ui.tab == ExplorerTab.explore,
             onTap: () => notifier.setTab(ExplorerTab.explore),
           ),
           _NavItem(
             icon: Icons.science_outlined,
-            label: 'Playground',
+            label: t.navPlayground,
             selected: ui.tab == ExplorerTab.playground,
             onTap: () => notifier.setTab(ExplorerTab.playground),
           ),
           _NavItem(
             icon: Icons.rocket_launch_outlined,
-            label: 'Missions',
+            label: t.navMissions,
             selected: ui.tab == ExplorerTab.missions,
             onTap: () => notifier.setTab(ExplorerTab.missions),
           ),

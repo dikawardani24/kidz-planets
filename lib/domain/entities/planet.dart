@@ -1,5 +1,17 @@
 import 'package:equatable/equatable.dart';
 
+/// Turns a hotspot title into the key used for both its audio file and its
+/// translation row.
+///
+/// Lives in the domain layer because a hotspot is identified by nothing but
+/// its title, and both the audio catalog and the translation table need that
+/// identity. Letting the two derive it separately is how a translated title
+/// ends up pointing at a file that was never recorded.
+String hotspotSlug(String title) => title
+    .toLowerCase()
+    .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+    .replaceAll(RegExp(r'^_+|_+$'), '');
+
 /// A kid-friendly hotspot shown in the planet detail sheet.
 class Hotspot extends Equatable {
   const Hotspot({
@@ -17,8 +29,32 @@ class Hotspot extends Equatable {
   /// [description] when absent so the sheet never goes mute.
   final String? narration;
 
+  /// Stable key for this hotspot, used for its audio filename and its
+  /// translation row. Derived from the English title because that is the only
+  /// field that has to exist before the app can load either.
+  String get slug => hotspotSlug(title);
+
   @override
   List<Object?> get props => [title, description, icon, narration];
+}
+
+/// A hotspot together with the body it belongs to.
+///
+/// A [Hotspot] on its own is not enough to address: [Hotspot.slug] is only
+/// unique within one planet, so the audio file and the translation row both
+/// need the owner. The detail sheet and the toast carry this rather than a
+/// string, so the view resolves the name in the active language instead of
+/// freezing whatever English the catalogue happened to hold.
+class HotspotRef extends Equatable {
+  const HotspotRef({required this.planetId, required this.hotspot});
+
+  final String planetId;
+  final Hotspot hotspot;
+
+  String get slug => hotspot.slug;
+
+  @override
+  List<Object?> get props => [planetId, hotspot];
 }
 
 /// Immutable description of one solar-system body.

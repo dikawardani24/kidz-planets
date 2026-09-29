@@ -1,15 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kidz_planets/application/state/explorer_state.dart';
+import 'package:kidz_planets/domain/entities/planet.dart';
+
+import 'helpers/app_messages.dart';
 
 void main() {
   group('copyWith', () {
     const base = ExplorerState(
       selectedPlanetId: 'earth',
       focusedPlanetId: 'earth',
-      detailTitleOverride: 'Rings',
-      detailDescriptionOverride: 'Ice and rock',
-      celebrationTitle: 'Nice',
-      celebrationDescription: 'You found it.',
+      detailHotspot: HotspotRef(
+        planetId: 'saturn',
+        hotspot: Hotspot(title: 'Icy Rings', description: 'Ice and rock', icon: '💍'),
+      ),
+      celebrationTitle: TestMessages.title,
+      celebrationDescription: TestMessages.description,
       activeMissionId: 2,
       detailZoom: 1.5,
       missionHintLevel: 3,
@@ -23,7 +28,7 @@ void main() {
       final next = base.copyWith(detailZoom: 2);
 
       expect(next.selectedPlanetId, 'earth');
-      expect(next.detailTitleOverride, 'Rings');
+      expect(next.detailHotspot, base.detailHotspot);
       expect(next.activeMissionId, 2);
       expect(next.missionHintLevel, 3);
     });
@@ -43,13 +48,9 @@ void main() {
     });
 
     test('an explicit null clears the hotspot override', () {
-      final next = base.copyWith(
-        detailTitleOverride: null,
-        detailDescriptionOverride: null,
-      );
+      final next = base.copyWith(detailHotspot: null);
 
-      expect(next.detailTitleOverride, isNull);
-      expect(next.detailDescriptionOverride, isNull);
+      expect(next.detailHotspot, isNull);
     });
 
     test('an explicit null clears the celebration', () {
@@ -98,17 +99,17 @@ void main() {
   group('celebrationVisible', () {
     test('needs both halves of the celebration', () {
       expect(
-        const ExplorerState(celebrationTitle: 'Nice').celebrationVisible,
+        const ExplorerState(celebrationTitle: TestMessages.title).celebrationVisible,
         isFalse,
       );
       expect(
-        const ExplorerState(celebrationDescription: 'Yes').celebrationVisible,
+        const ExplorerState(celebrationDescription: TestMessages.description).celebrationVisible,
         isFalse,
       );
       expect(
         const ExplorerState(
-          celebrationTitle: 'Nice',
-          celebrationDescription: 'Yes',
+          celebrationTitle: TestMessages.title,
+          celebrationDescription: TestMessages.description,
         ).celebrationVisible,
         isTrue,
       );
@@ -192,9 +193,22 @@ void main() {
       expect(a, isNot(a.copyWith(completed: true)));
     });
 
-    test('toast equality tracks key and text', () {
-      expect(const ToastMessage(key: 1, text: 'a'), const ToastMessage(key: 1, text: 'a'));
-      expect(const ToastMessage(key: 1, text: 'a'), isNot(const ToastMessage(key: 2, text: 'a')));
+    test('toast equality tracks key and content', () {
+      expect(const ToastMessage(key: 1, message: TestMessages.any),
+          const ToastMessage(key: 1, message: TestMessages.any));
+      expect(const ToastMessage(key: 1, message: TestMessages.any),
+          isNot(const ToastMessage(key: 2, message: TestMessages.any)));
+    });
+
+    test('a toast carries either a message or a hotspot, never both', () {
+      expect(() => ToastMessage(
+            key: 1,
+            message: TestMessages.any,
+            hotspot: const HotspotRef(
+              planetId: 'saturn',
+              hotspot: Hotspot(title: 'Icy Rings', description: 'Ice and rock', icon: '💍'),
+            ),
+          ), throwsAssertionError);
     });
   });
 

@@ -2,9 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../application/state/app_message.dart';
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../../infrastructure/services/scene_providers.dart';
+import '../../../l10n/generated/app_localizations.dart';
+import '../../../l10n/resolve_message.dart';
 import '../../../infrastructure/services/planet_narration_provider.dart';
 import '../../../infrastructure/services/planet_sound_provider.dart';
 import '../theme/app_theme.dart';
@@ -208,11 +211,12 @@ class _CelebrationModal extends ConsumerWidget {
     required this.description,
   });
 
-  final String title;
-  final String description;
+  final AppMessage title;
+  final AppMessage description;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppLocalizations.of(context);
     return Container(
       color: AppTheme.space950.withValues(alpha: .85),
       child: Center(
@@ -234,7 +238,7 @@ class _CelebrationModal extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                title,
+                title.resolve(t, Localizations.localeOf(context)),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 23,
@@ -244,7 +248,7 @@ class _CelebrationModal extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                description,
+                description.resolve(t, Localizations.localeOf(context)),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 12,

@@ -8,6 +8,7 @@ import 'package:kidz_planets/application/state/explorer_state.dart';
 import 'package:kidz_planets/application/state/providers.dart';
 import 'package:kidz_planets/infrastructure/scene/avatar_scene_controller.dart';
 import 'package:kidz_planets/presentation/widgets/panels/avatar_speech.dart';
+import 'helpers/localized_app.dart';
 import 'package:kidz_planets/presentation/widgets/panels/mission_companion.dart';
 
 /// Bubble placement is pure geometry, so it is exercised directly: the point of
@@ -228,15 +229,11 @@ void main() {
 /// back, so a test can inspect what the overlay asked the 3D layer to do.
 Future<_FakeController> _pumpCompanion(WidgetTester tester) async {
   final controller = _FakeController();
-  await tester.pumpWidget(
-    ProviderScope(
-      child: MaterialApp(
-        home: Scaffold(
-          body: MissionCompanion(controllerFactory: () => controller),
-        ),
-      ),
+  await tester.pumpWidget(localizedApp(
+    Scaffold(
+      body: MissionCompanion(controllerFactory: () => controller),
     ),
-  );
+  ));
   // Enough pumps to run the post-frame scene build and to commit the
   // starting position.
   await tester.pump();

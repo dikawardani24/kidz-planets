@@ -1,4 +1,6 @@
 import 'package:equatable/equatable.dart';
+import '../../domain/entities/planet.dart';
+import 'app_message.dart';
 
 enum ExplorerTab { explore, playground, missions }
 
@@ -38,14 +40,13 @@ class ExplorerState extends Equatable {
     this.detailZoom = 1.0,
     this.detailTheta = 0.65,
     this.detailPhi = 0.28,
-    this.detailTitleOverride,
-    this.detailDescriptionOverride,
+    this.detailHotspot,
     this.detailCardVisible = true,
     this.spinHintVisible = false,
     this.playModeBannerVisible = false,
     this.playgroundAlertIcon = '🔥',
-    this.playgroundAlertTitle = 'Sandbox Ready!',
-    this.playgroundAlertDescription = 'Run interactive NASA 3D experiments below.',
+    this.playgroundAlertTitle = const AppMessage(AppMessageId.alertSandboxTitle),
+    this.playgroundAlertDescription = const AppMessage(AppMessageId.alertSandboxDescription),
     this.missions = const [],
     this.toasts = const [],
     this.celebrationTitle,
@@ -66,18 +67,19 @@ class ExplorerState extends Equatable {
   final double detailZoom;
   final double detailTheta;
   final double detailPhi;
-  final String? detailTitleOverride;
-  final String? detailDescriptionOverride;
+  /// The hotspot whose copy the detail card is showing instead of the body's.
+  /// Null means the card is describing the planet itself.
+  final HotspotRef? detailHotspot;
   final bool detailCardVisible;
   final bool spinHintVisible;
   final bool playModeBannerVisible;
   final String playgroundAlertIcon;
-  final String playgroundAlertTitle;
-  final String playgroundAlertDescription;
+  final AppMessage playgroundAlertTitle;
+  final AppMessage playgroundAlertDescription;
   final List<MissionState> missions;
   final List<ToastMessage> toasts;
-  final String? celebrationTitle;
-  final String? celebrationDescription;
+  final AppMessage? celebrationTitle;
+  final AppMessage? celebrationDescription;
   final int? activeMissionId;
 
   /// How many extra clues the child has asked for on [activeMissionId].
@@ -115,14 +117,13 @@ class ExplorerState extends Equatable {
     double? detailZoom,
     double? detailTheta,
     double? detailPhi,
-    Object? detailTitleOverride = _sentinel,
-    Object? detailDescriptionOverride = _sentinel,
+    Object? detailHotspot = _sentinel,
     bool? detailCardVisible,
     bool? spinHintVisible,
     bool? playModeBannerVisible,
     String? playgroundAlertIcon,
-    String? playgroundAlertTitle,
-    String? playgroundAlertDescription,
+    AppMessage? playgroundAlertTitle,
+    AppMessage? playgroundAlertDescription,
     List<MissionState>? missions,
     List<ToastMessage>? toasts,
     Object? celebrationTitle = _sentinel,
@@ -143,8 +144,7 @@ class ExplorerState extends Equatable {
       detailZoom: detailZoom ?? this.detailZoom,
       detailTheta: detailTheta ?? this.detailTheta,
       detailPhi: detailPhi ?? this.detailPhi,
-      detailTitleOverride: identical(detailTitleOverride, _sentinel) ? this.detailTitleOverride : detailTitleOverride as String?,
-      detailDescriptionOverride: identical(detailDescriptionOverride, _sentinel) ? this.detailDescriptionOverride : detailDescriptionOverride as String?,
+      detailHotspot: identical(detailHotspot, _sentinel) ? this.detailHotspot : detailHotspot as HotspotRef?,
       detailCardVisible: detailCardVisible ?? this.detailCardVisible,
       spinHintVisible: spinHintVisible ?? this.spinHintVisible,
       playModeBannerVisible: playModeBannerVisible ?? this.playModeBannerVisible,
@@ -153,8 +153,8 @@ class ExplorerState extends Equatable {
       playgroundAlertDescription: playgroundAlertDescription ?? this.playgroundAlertDescription,
       missions: missions ?? this.missions,
       toasts: toasts ?? this.toasts,
-      celebrationTitle: identical(celebrationTitle, _sentinel) ? this.celebrationTitle : celebrationTitle as String?,
-      celebrationDescription: identical(celebrationDescription, _sentinel) ? this.celebrationDescription : celebrationDescription as String?,
+      celebrationTitle: identical(celebrationTitle, _sentinel) ? this.celebrationTitle : celebrationTitle as AppMessage?,
+      celebrationDescription: identical(celebrationDescription, _sentinel) ? this.celebrationDescription : celebrationDescription as AppMessage?,
       activeMissionId: identical(activeMissionId, _sentinel) ? this.activeMissionId : activeMissionId as int?,
       missionHintLevel: missionHintLevel ?? this.missionHintLevel,
       wrongSelectionKey: wrongSelectionKey ?? this.wrongSelectionKey,
@@ -165,7 +165,7 @@ class ExplorerState extends Equatable {
   @override
   List<Object?> get props => [
         tab, running, speed, showOrbits, showLabels, selectedPlanetId, focusedPlanetId,
-        detailZoom, detailTheta, detailPhi, detailTitleOverride, detailDescriptionOverride, detailCardVisible, spinHintVisible,
+        detailZoom, detailTheta, detailPhi, detailHotspot, detailCardVisible, spinHintVisible,
         playModeBannerVisible, playgroundAlertIcon, playgroundAlertTitle, playgroundAlertDescription, missions, toasts, celebrationTitle, celebrationDescription, activeMissionId, missionHintLevel, wrongSelectionKey, avatarMood,
       ];
 }
@@ -198,9 +198,21 @@ class MissionState extends Equatable {
 }
 
 class ToastMessage extends Equatable {
-  const ToastMessage({required this.key, required this.text});
+  const ToastMessage({required this.key, this.message, this.hotspot})
+      : assert(
+          (message == null) != (hotspot == null),
+          'a toast carries either an AppMessage or a Hotspot, not both',
+        );
+
   final int key;
-  final String text;
+
+  /// Controller-authored copy, resolved through [AppMessageId].
+  final AppMessage? message;
+
+  /// Catalogue copy, resolved against the active locale by the view. Used for
+  /// hotspot names, which are data rather than UI strings.
+  final HotspotRef? hotspot;
+
   @override
-  List<Object?> get props => [key, text];
+  List<Object?> get props => [key, message, hotspot];
 }

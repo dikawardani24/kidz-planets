@@ -5,6 +5,8 @@ import '../../../application/state/providers.dart';
 import '../../../domain/entities/planet.dart';
 import '../../../infrastructure/services/planet_narration_provider.dart';
 import '../../../infrastructure/services/planet_sound_provider.dart';
+import '../../../l10n/generated/app_localizations.dart';
+import '../../../l10n/localized_planet.dart';
 import '../../theme/app_theme.dart';
 import '../overlays/top_bar.dart';
 
@@ -28,7 +30,7 @@ class PlanetDetailSheet extends ConsumerWidget {
           ref
               .read(planetNarrationServiceProvider)
               .speakHotspot(hotspot);
-          ref.read(explorerControllerProvider.notifier).showHotspot(hotspot);
+          ref.read(explorerControllerProvider.notifier).showHotspot(hotspot, planetId: planet.id);
         },
       ),
     );
@@ -259,6 +261,16 @@ class _DetailContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Resolved once here rather than per field, so the heading, the body
+    // copy, and the hotspot pills cannot disagree about which language they
+    // are in, and a language change repaints all of them together.
+    final body = localizedPlanet(planet, Localizations.localeOf(context));
+    final selected = ui.detailHotspot;
+    final shownHotspot = selected == null
+        ? null
+        : body.hotspots
+            .where((h) => h.hotspot.slug == selected.slug)
+            .firstOrNull;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxHeight: 220),
       child: SingleChildScrollView(
@@ -284,7 +296,7 @@ class _DetailContent extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        ui.detailTitleOverride ?? planet.name,
+                        shownHotspot?.title ?? body.name,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
@@ -293,7 +305,7 @@ class _DetailContent extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        planet.tag,
+                        body.tag,
                         style: const TextStyle(
                           fontSize: 10.5,
                           fontWeight: FontWeight.w600,
@@ -320,7 +332,7 @@ class _DetailContent extends StatelessWidget {
             ),
             const SizedBox(height: 9),
             Text(
-              ui.detailDescriptionOverride ?? planet.fact,
+              shownHotspot?.description ?? body.fact,
               style: const TextStyle(
                 fontSize: 10.5,
                 height: 1.45,
@@ -333,7 +345,7 @@ class _DetailContent extends StatelessWidget {
                 Expanded(
                   child: _Stat(
                     icon: Icons.straighten,
-                    title: 'Diameter',
+                    title: AppLocalizations.of(context).statDiameter,
                     value: planet.diameter,
                   ),
                 ),
@@ -341,7 +353,7 @@ class _DetailContent extends StatelessWidget {
                 Expanded(
                   child: _Stat(
                     icon: Icons.thermostat,
-                    title: 'Avg Temp',
+                    title: AppLocalizations.of(context).statAvgTemp,
                     value: planet.temperature,
                   ),
                 ),
@@ -352,9 +364,9 @@ class _DetailContent extends StatelessWidget {
               spacing: 6,
               runSpacing: 6,
               children: [
-                for (final hotspot in planet.hotspots)
+                for (final entry in body.hotspots)
                   GestureDetector(
-                    onTap: () => onHotspot(hotspot),
+                    onTap: () => onHotspot(entry.hotspot),
                     child: AppTheme.glass(
                       pill: true,
                       radius: BorderRadius.circular(999),
@@ -366,12 +378,12 @@ class _DetailContent extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            hotspot.icon,
+                            entry.hotspot.icon,
                             style: const TextStyle(fontSize: 11),
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            hotspot.title,
+                            entry.title,
                             style: const TextStyle(
                               fontSize: 9.5,
                               fontWeight: FontWeight.w700,

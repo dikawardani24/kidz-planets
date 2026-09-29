@@ -2,14 +2,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kidz_planets/application/state/explorer_state.dart';
 import 'package:kidz_planets/presentation/screens/explorer_screen.dart';
 
+import 'helpers/app_messages.dart';
+
 ExplorerState _state({
   String? selectedPlanetId = 'earth',
   bool celebrating = false,
 }) {
   return ExplorerState(
     selectedPlanetId: selectedPlanetId,
-    celebrationTitle: celebrating ? 'Mission 1 Complete!' : null,
-    celebrationDescription: celebrating ? 'You discovered Earth.' : null,
+    celebrationTitle: celebrating ? TestMessages.title : null,
+    celebrationDescription: celebrating ? TestMessages.description : null,
   );
 }
 
@@ -49,7 +51,7 @@ void main() {
   });
 
   test('celebrationVisible needs both title and description', () {
-    final partial = ExplorerState(celebrationTitle: 'Mission 1 Complete!');
+    final partial = const ExplorerState(celebrationTitle: TestMessages.title);
     expect(partial.celebrationVisible, isFalse);
     expect(
       canStartPlanetAudio(current: partial),
