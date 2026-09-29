@@ -202,20 +202,6 @@ class ExplorerScreen extends ConsumerWidget {
   }
 }
 
-class _DetailWrapper extends ConsumerWidget {
-  const _DetailWrapper({required this.planetId});
-  final String planetId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final planet = ref.watch(planetByIdProvider(planetId));
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 290),
-      child: PlanetDetailSheet(planet: planet),
-    );
-  }
-}
-
 class _CelebrationModal extends ConsumerWidget {
   const _CelebrationModal({
     required this.title,

@@ -5,6 +5,7 @@ import 'package:flutter_scene/scene.dart';
 import 'package:kidz_planets/application/controllers/avatar_controller.dart';
 import 'package:kidz_planets/application/state/avatar_state.dart';
 import 'package:kidz_planets/application/state/explorer_state.dart';
+import 'package:kidz_planets/application/state/providers.dart';
 import 'package:kidz_planets/infrastructure/scene/avatar_scene_controller.dart';
 import 'package:kidz_planets/presentation/widgets/panels/avatar_speech.dart';
 import 'package:kidz_planets/presentation/widgets/panels/mission_companion.dart';
@@ -16,6 +17,10 @@ import 'package:kidz_planets/presentation/widgets/panels/mission_companion.dart'
 /// separate.
 void main() {
   const viewport = Size(400, 800);
+
+  /// The line shown while the companion is idling over the scene: no planet is
+  /// focused and no mission beat has started yet.
+  const idleLine = 'Wheee! Flying all over space! 🚀';
 
   ({double top, BubbleSide side, bool below}) place({
     required double left,
@@ -98,30 +103,14 @@ void main() {
     // have, so the 3D body is backed by a stand-in controller. Everything
     // tested here is the overlay around it: placement, the two gestures, the
     // bubble, and the mood wiring.
-    Future<void> pumpCompanion(WidgetTester tester) async {
-      await tester.pumpWidget(
-        ProviderScope(
-          child: MaterialApp(
-            home: Scaffold(
-              body: MissionCompanion(controllerFactory: _FakeController.new),
-            ),
-          ),
-        ),
-      );
-      // Enough pumps to run the post-frame scene build and to commit the
-      // starting position.
-      await tester.pump();
-      await tester.pump();
-    }
-
     testWidgets('says something before any mission runs', (tester) async {
-      await pumpCompanion(tester);
-      expect(find.textContaining('wait right here'), findsOneWidget);
+      await _pumpCompanion(tester);
+      expect(find.text(idleLine), findsOneWidget);
     });
 
     testWidgets('move handle exists and is labelled for the child',
         (tester) async {
-      await pumpCompanion(tester);
+      await _pumpCompanion(tester);
       expect(find.bySemanticsLabel('Move the space buddy'), findsOneWidget);
     });
 
@@ -130,9 +119,9 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
-      await pumpCompanion(tester);
+      await _pumpCompanion(tester);
 
-      final bubble = find.textContaining('wait right here');
+      final bubble = find.text(idleLine);
       expect(bubble, findsOneWidget);
       // The bubble is the widest thing the companion owns, so if it is on
       // screen the character below it must be too.
@@ -142,7 +131,7 @@ void main() {
     });
 
     testWidgets('the move handle moves without rotating', (tester) async {
-      await pumpCompanion(tester);
+      await _pumpCompanion(tester);
       final container = ProviderScope.containerOf(
         tester.element(find.byType(MissionCompanion)),
       );
@@ -162,12 +151,97 @@ void main() {
     });
   });
 
+  group('the 3D layer is actually driven', () {
+    // The overlay state is not the point on its own: what matters is that the
+    // pose and the mission target reach the 3D layer, so these read the calls
+    // the stand-in controller recorded rather than the provider state the
+    // widget already had.
+    testWidgets('the pose reaches the 3D layer, not just the state',
+        (tester) async {
+      final fake = await _pumpCompanion(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MissionCompanion)),
+      );
+
+      // Drag the character body, not the move handle in its bottom-right
+      // corner, so this is a rotation rather than a move.
+      final body = container.read(avatarControllerProvider).screenPosition!;
+      await tester.dragFrom(
+        body + const Offset(kCompanionBoxWidth / 2, kCompanionBoxHeight / 2),
+        const Offset(80, 40),
+      );
+      await tester.pump();
+
+      final pose = container.read(avatarControllerProvider);
+      expect(pose.yaw, greaterThan(0), reason: 'dragging right turns it');
+      expect(fake.poses, isNotEmpty);
+      expect(fake.poses.last.yaw, pose.yaw);
+      expect(fake.poses.last.pitch, pose.pitch);
+    });
+
+    testWidgets('moving updates the position without re-aiming', (tester) async {
+      final fake = await _pumpCompanion(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MissionCompanion)),
+      );
+      final before = container.read(avatarControllerProvider).screenPosition;
+
+      await tester.drag(
+        find.bySemanticsLabel('Move the space buddy'),
+        const Offset(-50, -30),
+      );
+      await tester.pump();
+
+      final pose = container.read(avatarControllerProvider);
+      expect(pose.screenPosition, isNot(before), reason: 'the move took effect');
+      expect(fake.poses.last.yaw, 0, reason: 'a move must not re-aim the model');
+      expect(fake.poses.last.pitch, 0);
+    });
+
+    testWidgets('the target ring follows the active mission', (tester) async {
+      final fake = await _pumpCompanion(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MissionCompanion)),
+      );
+
+      final mission = container.read(explorerControllerProvider).activeMission!;
+      final target =
+          container.read(planetByIdProvider(mission.targetPlanetId));
+
+      expect(fake.targets, isNotEmpty);
+      expect(fake.targets.last.visible, isTrue);
+      // The colour has to be the mission target's own, not a hardcoded one, so
+      // a mission change repoints the ring without touching the widget.
+      expect(fake.targets.last.color, Color(target.colorValue));
+    });
+  });
+
   group('pitch limits', () {
     test('the exposed pitch never exceeds the readable range', () {
       const state = AvatarState(pitch: 99);
       expect(state.pitchClamped.abs(), AvatarState.pitchLimit);
     });
   });
+}
+
+/// Pumps the companion over a stand-in controller and hands that controller
+/// back, so a test can inspect what the overlay asked the 3D layer to do.
+Future<_FakeController> _pumpCompanion(WidgetTester tester) async {
+  final controller = _FakeController();
+  await tester.pumpWidget(
+    ProviderScope(
+      child: MaterialApp(
+        home: Scaffold(
+          body: MissionCompanion(controllerFactory: () => controller),
+        ),
+      ),
+    ),
+  );
+  // Enough pumps to run the post-frame scene build and to commit the
+  // starting position.
+  await tester.pump();
+  await tester.pump();
+  return controller;
 }
 
 
@@ -178,8 +252,15 @@ void main() {
 class _FakeController implements AvatarSceneController {
   final List<({double yaw, double pitch})> poses = [];
   final List<({bool visible, Color color})> targets = [];
+
+  // Recorded but never asserted on: `_CompanionScene` short-circuits to a plain
+  // box while `isRealScene` is false, so the per-frame tick never reaches a
+  // stand-in. They are kept so a fake that does run a scene can assert on the
+  // full tick signature.
   Duration? lastTick;
   AvatarMood? lastMood;
+  AvatarIdleAction? lastIdleAction;
+  String? lastSelectedPlanetId;
 
   @override
   Scene get scene => throw StateError('no GPU scene in a widget test');
@@ -194,13 +275,21 @@ class _FakeController implements AvatarSceneController {
   void ensureBuilt() {}
 
   @override
-  void tick(Duration elapsed, AvatarMood mood) {
+  void tick(
+    Duration elapsed,
+    AvatarMood mood,
+    AvatarIdleAction idleAction,
+    String? selectedPlanetId,
+  ) {
     lastTick = elapsed;
     lastMood = mood;
+    lastIdleAction = idleAction;
+    lastSelectedPlanetId = selectedPlanetId;
   }
 
   @override
-  void applyPose(pose) => poses.add((yaw: pose.yaw, pitch: pose.pitch));
+  void applyPose(AvatarState pose) =>
+      poses.add((yaw: pose.yaw, pitch: pose.pitch));
 
   @override
   void showTarget({required bool visible, required Color color}) =>

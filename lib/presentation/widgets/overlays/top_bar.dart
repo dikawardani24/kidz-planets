@@ -101,13 +101,10 @@ class ExplorerInteractionOverlays extends ConsumerWidget {
         child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.gamepad, size: 13, color: AppTheme.accentAmber), SizedBox(width: 6), Text('Play Mode Active: Spin & explore freely!')]));
     }
     if (!ui.hasSelection && ui.tab == ExplorerTab.explore) {
-      final activeId = ui.activeMissionId;
-      final activeMission = activeId == null
-          ? null
-          : ui.missions.cast<MissionState?>().firstWhere(
-              (m) => m?.id == activeId,
-              orElse: () => null,
-            );
+      // The same getter the companion uses, so the banner and the target ring
+      // can never disagree. Recomputing it here by id alone would keep naming a
+      // mission the child has already finished.
+      final activeMission = ui.activeMission;
       if (activeMission != null) {
         return _Banner(
           top: top + 8,
@@ -121,7 +118,7 @@ class ExplorerInteractionOverlays extends ConsumerWidget {
             children: [
               const Icon(Icons.explore, size: 13, color: AppTheme.accentSky),
               const SizedBox(width: 7),
-              Text('Mission ' + activeMission.id.toString() + ': ' + activeMission.title),
+              Text('Mission ${activeMission.id}: ${activeMission.title}'),
             ],
           ),
         );
@@ -197,14 +194,4 @@ class ExplorerControlPills extends ConsumerWidget {
         const SizedBox(width: 6),
       ]));
   }
-}
-
-class _MiniToggle extends StatelessWidget {
-  const _MiniToggle({required this.label, required this.active, required this.onTap});
-  final String label; final bool active; final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => GestureDetector(onTap: onTap, child: Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-    decoration: BoxDecoration(color: active ? AppTheme.accentViolet.withValues(alpha: .55) : Colors.white.withValues(alpha: .05), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white.withValues(alpha: .10))),
-    child: Text('$label: ${active ? 'On' : 'Off'}', style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: Colors.white))));
 }

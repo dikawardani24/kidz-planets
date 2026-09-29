@@ -134,6 +134,28 @@ _Mp3Stream _readMp3(Uint8List bytes) {
   );
 }
 
+/// What a shipped mission cue is expected to be.
+///
+/// The two cues are deliberately different shapes: the success cue is a longer
+/// stereo jingle that loops for as long as the celebration dialog is on screen,
+/// and the failure cue is a short mono blip. Asserting one shape for both hid
+/// a swapped or re-encoded asset, so each carries its own expectations.
+class _Cue {
+  const _Cue({
+    required this.path,
+    required this.channels,
+    required this.bitrateKbps,
+    required this.minDuration,
+    required this.maxDuration,
+  });
+
+  final String path;
+  final int channels;
+  final int bitrateKbps;
+  final Duration minDuration;
+  final Duration maxDuration;
+}
+
 void main() {
   // RootBundle needs a binding to resolve the asset manifest.
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -150,8 +172,20 @@ void main() {
   });
 
   final sounds = {
-    'success': PlanetSoundCatalog.missionSuccess,
-    'failure': PlanetSoundCatalog.missionFailure,
+    'success': _Cue(
+      path: PlanetSoundCatalog.missionSuccess,
+      channels: 2,
+      bitrateKbps: 160,
+      minDuration: const Duration(seconds: 3),
+      maxDuration: const Duration(seconds: 5),
+    ),
+    'failure': _Cue(
+      path: PlanetSoundCatalog.missionFailure,
+      channels: 1,
+      bitrateKbps: 96,
+      minDuration: const Duration(milliseconds: 300),
+      maxDuration: const Duration(milliseconds: 800),
+    ),
   };
 
   for (final sound in sounds.entries) {
@@ -160,11 +194,11 @@ void main() {
       // RootBundle from the generated build/unit_test_assets/ bundle, which
       // keeps serving files that have since been deleted from the tree.
       // Tests run with the package root as the working directory.
-      final file = File(sound.value);
+      final file = File(sound.value.path);
       expect(
         file.existsSync(),
         isTrue,
-        reason: '${sound.value} is missing; regenerate or re-download it',
+        reason: '${sound.value.path} is missing; regenerate or re-download it',
       );
       expect(file.lengthSync(), greaterThan(1024));
     });
@@ -172,7 +206,7 @@ void main() {
     test('mission ${sound.key} asset is bundled and decodable', () async {
       // RootBundle is exactly what AudioPlayer.setAsset reads from, so a
       // missing pubspec asset entry or a wrong filename fails here.
-      final data = await rootBundle.load(sound.value);
+      final data = await rootBundle.load(sound.value.path);
       final bytes = data.buffer.asUint8List(
         data.offsetInBytes,
         data.lengthInBytes,
@@ -184,27 +218,29 @@ void main() {
       expect(
         bytes[firstFrame],
         0xff,
-        reason: 'no MPEG frame sync in ${sound.value}',
+        reason: 'no MPEG frame sync in ${sound.value.path}',
       );
       expect(
         bytes[firstFrame + 1] & 0xe0,
         0xe0,
-        reason: 'malformed MPEG sync word in ${sound.value}',
+        reason: 'malformed MPEG sync word in ${sound.value.path}',
       );
 
       final stream = _readMp3(bytes);
-      expect(stream.channels, 1, reason: 'cues are mono');
+      expect(stream.channels, sound.value.channels,
+          reason: 'the shipped ${sound.key} cue is '
+              '${sound.value.channels == 1 ? 'mono' : 'stereo'}');
       // Matches the 24 kHz used by the narration and by
       // tool/generate_planet_sfx.py, so the cue needs no resampling.
       expect(stream.sampleRate, 24000);
-      expect(stream.bitrateKbps, 96);
+      expect(stream.bitrateKbps, sound.value.bitrateKbps);
 
       // A cue that is silent or unbounded would be a bug in its own right:
       // missions replay these every time a planet is tapped, and the success
       // cue loops until the celebration is dismissed. The tolerance is one
       // frame because the last frame is zero-padded to 576 samples.
-      expect(stream.duration, greaterThanOrEqualTo(const Duration(milliseconds: 400)));
-      expect(stream.duration, lessThanOrEqualTo(const Duration(milliseconds: 600)));
+      expect(stream.duration, greaterThanOrEqualTo(sound.value.minDuration));
+      expect(stream.duration, lessThanOrEqualTo(sound.value.maxDuration));
     });
   }
 }

@@ -52,7 +52,7 @@ class DetailDescriptionToggle extends ConsumerWidget {
           barrierLabel: 'Planet facts',
           barrierColor: Colors.black.withValues(alpha: .68),
           transitionDuration: const Duration(milliseconds: 280),
-          pageBuilder: (_, __, ___) => Dialog(
+          pageBuilder: (_, _, _) => Dialog(
             backgroundColor: Colors.transparent,
             insetPadding: const EdgeInsets.symmetric(
               horizontal: 20,
@@ -66,7 +66,7 @@ class DetailDescriptionToggle extends ConsumerWidget {
               child: PlanetDetailSheet(planet: planet),
             ),
           ),
-          transitionBuilder: (_, animation, __, child) {
+          transitionBuilder: (_, animation, _, child) {
             final curved = CurvedAnimation(
               parent: animation,
               curve: Curves.easeOutCubic,
@@ -480,49 +480,6 @@ class _ZoomButton extends StatelessWidget {
           icon,
           size: small ? 13 : 16,
           color: Colors.white,
-        ),
-      ),
-    );
-  }
-}
-
-class _CollapseButton extends StatelessWidget {
-  const _CollapseButton({
-    required this.collapsed,
-    required this.onTap,
-  });
-
-  final bool collapsed;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AppTheme.glass(
-        pill: true,
-        radius: BorderRadius.circular(999),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              collapsed
-                  ? Icons.keyboard_arrow_up
-                  : Icons.keyboard_arrow_down,
-              size: 15,
-              color: AppTheme.accentSky,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              collapsed ? 'Show facts' : 'Collapse',
-              style: const TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-              ),
-            ),
-          ],
         ),
       ),
     );

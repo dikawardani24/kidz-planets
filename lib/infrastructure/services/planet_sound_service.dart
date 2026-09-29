@@ -6,11 +6,16 @@ import 'package:just_audio/just_audio.dart';
 import '../../domain/entities/planet.dart';
 
 class PlanetSoundService {
-  PlanetSoundService({AudioPlayer? player})
-      : _players = [player ?? AudioPlayer(), AudioPlayer()];
+  /// [playerFactory] builds each half of the crossfade pair, for the same
+  /// reason as in [PlanetNarrationService]: only one substituted player still
+  /// leaves a real one in the pair.
+  PlanetSoundService({AudioPlayer Function()? playerFactory})
+      : _newPlayer = playerFactory ?? AudioPlayer.new,
+        _players = List.generate(2, (_) => (playerFactory ?? AudioPlayer.new)());
 
   static const double _ambientVolume = 0.42;
 
+  final AudioPlayer Function() _newPlayer;
   final List<AudioPlayer> _players;
   int _activeIndex = 0;
   int _generation = 0;
@@ -22,10 +27,9 @@ class PlanetSoundService {
   /// Loops the success cue until [stop] or [dispose] is called.
   ///
   /// A mission keeps its celebration dialog on screen for as long as the
-  /// player wants, and a single 0.44 s jingle is easy to miss in the middle of
-  /// a tap, so the cue repeats for as long as the celebration lasts. It runs
-  /// louder than the planetary beds because there is no voice competing with
-  /// it here.
+  /// player wants, and a jingle is easy to miss in the middle of a tap, so the
+  /// cue repeats for as long as the celebration lasts. It runs louder than the
+  /// planetary beds because there is no voice competing with it here.
   Future<void> startMissionSuccess() =>
       _play(PlanetSoundCatalog.missionSuccess, volume: 0.7);
 
@@ -74,7 +78,7 @@ class PlanetSoundService {
 
   Future<void> _playOneShot(String path) async {
     try {
-      final player = AudioPlayer();
+      final player = _newPlayer();
       await player.setVolume(0.65);
       await player.setAsset(path);
       unawaited(player.play().whenComplete(player.dispose));
@@ -106,7 +110,6 @@ class PlanetSoundService {
       unawaited(_startPlayback(incoming, path));
       if (generation != _generation) return;
 
-      const duration = Duration(milliseconds: 220);
       const steps = 11;
       for (var step = 1; step <= steps; step++) {
         await Future<void>.delayed(const Duration(milliseconds: 20));

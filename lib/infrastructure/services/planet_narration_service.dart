@@ -6,8 +6,13 @@ import 'package:just_audio/just_audio.dart';
 import '../../domain/entities/planet.dart';
 
 class PlanetNarrationService {
-  PlanetNarrationService({AudioPlayer? player})
-      : _players = [player ?? AudioPlayer(), AudioPlayer()];
+  /// [playerFactory] builds each half of the crossfade pair. It is injectable
+  /// because both players are load-bearing: a test that substitutes only one
+  /// still gets a real [AudioPlayer] on the other side, whose missing platform
+  /// channel throws inside the crossfade and is then swallowed, so the call
+  /// under test never happens.
+  PlanetNarrationService({AudioPlayer Function()? playerFactory})
+      : _players = List.generate(2, (_) => (playerFactory ?? AudioPlayer.new)());
 
   final List<AudioPlayer> _players;
   int _activeIndex = 0;
@@ -133,7 +138,7 @@ abstract final class NarrationAudioCatalog {
       'assets/audio/narration/planets/$planetId.mp3';
 
   static String hotspot(String title) =>
-      'assets/audio/narration/hotspots/' + _slugify(title) + '.mp3';
+      'assets/audio/narration/hotspots/${_slugify(title)}.mp3';
 
   static String _slugify(String value) {
     return value

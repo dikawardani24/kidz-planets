@@ -15,8 +15,8 @@ void showMissionDialog(BuildContext context, WidgetRef ref) {
     barrierLabel: 'Mission details',
     barrierColor: Colors.black.withValues(alpha: .78),
     transitionDuration: const Duration(milliseconds: 280),
-    pageBuilder: (_, __, ___) => _MissionDialog(mission: matches.first, hintLevel: ui.missionHintLevel),
-    transitionBuilder: (_, animation, __, child) {
+    pageBuilder: (_, _, _) => _MissionDialog(mission: matches.first, hintLevel: ui.missionHintLevel),
+    transitionBuilder: (_, animation, _, child) {
       final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
       return FadeTransition(opacity: curved, child: ScaleTransition(scale: Tween<double>(begin: .92, end: 1).animate(curved), child: child));
     },
@@ -63,7 +63,7 @@ class _MissionDialog extends ConsumerWidget {
         ])),
         const SizedBox(height: 12),
         Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: AppTheme.accentSky.withValues(alpha: .25))), child: Row(children: [
-          ClipOval(child: SizedBox(width: 76, height: 76, child: Image.asset(planet.textureAsset, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Center(child: Text(planet.isSun ? '☀️' : '🪐', style: const TextStyle(fontSize: 34)))))),
+          ClipOval(child: SizedBox(width: 76, height: 76, child: Image.asset(planet.textureAsset, fit: BoxFit.cover, errorBuilder: (_, _, _) => Center(child: Text(planet.isSun ? '☀️' : '🪐', style: const TextStyle(fontSize: 34)))))),
           const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('LOOK FOR THIS', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: AppTheme.accentAmber)), const SizedBox(height: 5), Text(clue, style: const TextStyle(fontSize: 11, height: 1.4, color: Color(0xFFE0E7FF)))])),
           IconButton(onPressed: () => ref.read(planetNarrationServiceProvider).replay(planet), icon: const Icon(Icons.volume_up_rounded, color: AppTheme.accentSky)),
         ])),

@@ -18,8 +18,6 @@ class AvatarController extends StateNotifier<AvatarState> {
 
   Timer? _styleTimer;
   final math.Random _random = math.Random();
-  Offset? _lastMaxPosition;
-  Size? _lastViewport;
 
   void _startFlightStyleSwitcher() {
     // Switch flight patterns (circle -> zigzag -> edge) every 6 seconds for variety
@@ -35,9 +33,6 @@ class AvatarController extends StateNotifier<AvatarState> {
 
   /// Updates continuous non-stop flight movement along chosen path (edge, zigzag, circle)
   void updateFlight(double dt, Size viewport, Offset maxPosition) {
-    _lastViewport = viewport;
-    _lastMaxPosition = maxPosition;
-
     final newTime = state.flightTime + dt;
     final t = newTime * 1.8; // brisk, lively flight speed
 
@@ -111,7 +106,6 @@ class AvatarController extends StateNotifier<AvatarState> {
     required Offset delta,
     required Offset maxPosition,
   }) {
-    _lastMaxPosition = maxPosition;
     final current = state.screenPosition;
     if (current == null) return;
     state = state.copyWith(
@@ -124,7 +118,6 @@ class AvatarController extends StateNotifier<AvatarState> {
 
   void placeAt(Offset position, {Offset? maxPosition}) {
     if (maxPosition != null) {
-      _lastMaxPosition = maxPosition;
       state = state.copyWith(
         screenPosition: Offset(
           position.dx.clamp(0.0, maxPosition.dx),
