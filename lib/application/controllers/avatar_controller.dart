@@ -100,6 +100,28 @@ class AvatarController extends StateNotifier<AvatarState> {
     state = state.copyWith(flightStyle: style);
   }
 
+  void react(
+    AvatarReaction reaction, {
+    Duration duration = const Duration(milliseconds: 900),
+  }) {
+    state = state.copyWith(
+      reaction: reaction,
+      reactionUntil:
+          DateTime.now().millisecondsSinceEpoch + duration.inMilliseconds,
+      idleAction: reaction == AvatarReaction.dizzy
+          ? AvatarIdleAction.thinking
+          : state.idleAction,
+    );
+  }
+
+  void clearReaction() {
+    if (state.reaction == AvatarReaction.none) return;
+    state = state.copyWith(
+      reaction: AvatarReaction.none,
+      reactionUntil: 0,
+    );
+  }
+
   void rotateBy({required double dx, required double dy}) {
     const yawPerPixel = 0.012;
     const pitchPerPixel = 0.008;
