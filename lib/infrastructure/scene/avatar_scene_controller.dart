@@ -17,6 +17,7 @@ abstract class AvatarSceneController {
   void ensureBuilt();
   void tick(Duration elapsed, AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId);
   void applyPose(AvatarState pose);
+  void applyReaction(AvatarReaction reaction);
   void showTarget({required bool visible, required Color color});
   void dispose();
 }
@@ -68,6 +69,9 @@ class AvatarSceneControllerImpl implements AvatarSceneController {
 
   @override
   void applyPose(AvatarState pose) => _builder.setRotation(pose);
+
+  @override
+  void applyReaction(AvatarReaction reaction) => _builder.setReaction(reaction);
 
   @override
   void showTarget({required bool visible, required Color color}) =>
