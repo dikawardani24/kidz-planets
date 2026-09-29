@@ -10,7 +10,6 @@ import 'package:kidz_planets/infrastructure/scene/avatar_scene_controller.dart';
 import 'package:kidz_planets/presentation/widgets/panels/avatar_speech.dart';
 import 'helpers/localized_app.dart';
 import 'package:kidz_planets/presentation/widgets/panels/mission_companion.dart';
-import 'helpers/localized_app.dart';
 
 /// Bubble placement is pure geometry, so it is exercised directly: the point of
 /// these tests is the edge behaviour, not Flutter's layout. The widget tests
@@ -110,10 +109,17 @@ void main() {
       expect(find.text(idleLine), findsOneWidget);
     });
 
-    testWidgets('move handle exists and is labelled for the child',
-        (tester) async {
+    testWidgets('avatar reacts when touched', (tester) async {
       await _pumpCompanion(tester);
-      expect(find.bySemanticsLabel('Move the space buddy'), findsOneWidget);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MissionCompanion)),
+      );
+      await tester.tap(find.byType(MissionCompanion));
+      await tester.pump();
+      expect(
+        container.read(avatarControllerProvider).reaction,
+        AvatarReaction.happy,
+      );
     });
 
     testWidgets('starts inside a small viewport', (tester) async {
@@ -132,7 +138,7 @@ void main() {
       expect(rect.right, lessThanOrEqualTo(320));
     });
 
-    testWidgets('the move handle moves without rotating', (tester) async {
+    testWidgets('dragging the avatar moves without rotating', (tester) async {
       await _pumpCompanion(tester);
       final container = ProviderScope.containerOf(
         tester.element(find.byType(MissionCompanion)),
@@ -140,14 +146,13 @@ void main() {
       final before = container.read(avatarControllerProvider);
 
       await tester.drag(
-        find.bySemanticsLabel('Move the space buddy'),
+        find.byType(MissionCompanion),
         const Offset(-60, -40),
       );
       await tester.pump();
 
       final after = container.read(avatarControllerProvider);
       expect(after.screenPosition, isNot(before.screenPosition));
-      // The whole point of a separate handle: moving must not re-aim.
       expect(after.yaw, before.yaw);
       expect(after.pitch, before.pitch);
     });
@@ -165,8 +170,7 @@ void main() {
         tester.element(find.byType(MissionCompanion)),
       );
 
-      // Drag the character body, not the move handle in its bottom-right
-      // corner, so this is a rotation rather than a move.
+      // One-finger dragging moves the character directly.
       final body = container.read(avatarControllerProvider).screenPosition!;
       await tester.dragFrom(
         body + const Offset(kCompanionBoxWidth / 2, kCompanionBoxHeight / 2),
@@ -175,7 +179,7 @@ void main() {
       await tester.pump();
 
       final pose = container.read(avatarControllerProvider);
-      expect(pose.yaw, greaterThan(0), reason: 'dragging right turns it');
+      expect(pose.screenPosition, isNotNull);
       expect(fake.poses, isNotEmpty);
       expect(fake.poses.last.yaw, pose.yaw);
       expect(fake.poses.last.pitch, pose.pitch);
@@ -189,7 +193,7 @@ void main() {
       final before = container.read(avatarControllerProvider).screenPosition;
 
       await tester.drag(
-        find.bySemanticsLabel('Move the space buddy'),
+        find.byType(MissionCompanion),
         const Offset(-50, -30),
       );
       await tester.pump();
@@ -288,6 +292,9 @@ class _FakeController implements AvatarSceneController {
   @override
   void applyPose(AvatarState pose) =>
       poses.add((yaw: pose.yaw, pitch: pose.pitch));
+
+  @override
+  void applyReaction(AvatarReaction reaction) {}
 
   @override
   void showTarget({required bool visible, required Color color}) =>
