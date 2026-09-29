@@ -14,8 +14,6 @@ import 'avatar_speech.dart';
 const double kCompanionBoxWidth = 132;
 const double kCompanionBoxHeight = 148;
 const double kCompanionEdge = 8;
-const double kMoveHandleSize = 40;
-const Offset kMoveHandleOffset = Offset(118, 108);
 
 /// The persistent 3D Chubby Cartoon Rocket Ship mission companion.
 class MissionCompanion extends ConsumerStatefulWidget {
@@ -52,6 +50,10 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
       if (!mounted) return;
       final ui = ref.read(explorerControllerProvider);
       final pose = ref.read(avatarControllerProvider);
+      if (pose.reaction != AvatarReaction.none &&
+          pose.reactionUntil <= DateTime.now().millisecondsSinceEpoch) {
+        ref.read(avatarControllerProvider.notifier).clearReaction();
+      }
       if (!ui.hasSelection && pose.idleAction == AvatarIdleAction.flying) {
         ref.read(avatarControllerProvider.notifier).updateFlight(
               0.016,
@@ -121,6 +123,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
         );
 
         _controller.applyPose(pose);
+        _controller.applyReaction(pose.reaction);
 
         final mission = ui.activeMission;
         final targetColor = mission == null
@@ -147,7 +150,18 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
 
         final t = AppLocalizations.of(context);
         String companionText = t.companionFlying;
-        if (hasFocus) {
+        switch (pose.reaction) {
+          case AvatarReaction.happy: companionText = 'Hehe! You tickled me! 😄';
+          case AvatarReaction.surprised: companionText = 'Whoa! What was that?! 😲';
+          case AvatarReaction.sad: companionText = 'Aww... that made me sad. 🥺';
+          case AvatarReaction.dizzy: companionText = 'Wooooah... stars everywhere! 🌀';
+          case AvatarReaction.excited: companionText = 'Yaaaaay! 🚀✨';
+          case AvatarReaction.sleepy: companionText = 'Mmmm... sleepy space buddy... 😴';
+          case AvatarReaction.laughing: companionText = 'Hahaha! 😂';
+          case AvatarReaction.talking: companionText = 'Listen! I have something to tell you! 👀';
+          case AvatarReaction.none: break;
+        }
+        if (hasFocus && pose.reaction == AvatarReaction.none) {
           if (isIceWorld) {
             companionText = t.companionCold;
           } else if (isHotWorld) {
@@ -220,16 +234,31 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
                     ),
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onPanUpdate: (details) => ref
-                        .read(avatarControllerProvider.notifier)
-                        .rotateBy(dx: details.delta.dx, dy: details.delta.dy),
-                    onTap: () {
-                      if (ui.avatarMood == AvatarMood.wrong) {
-                        ref
-                            .read(explorerControllerProvider.notifier)
-                            .retryMission();
+                    onScaleUpdate: (details) {
+                      final avatar = ref.read(avatarControllerProvider.notifier);
+                      if (details.pointerCount >= 2) {
+                        avatar.rotateBy(
+                          dx: details.rotation * 18,
+                          dy: details.focalPointDelta.dy * 0.35,
+                        );
+                      } else {
+                        avatar.moveBy(
+                          delta: details.focalPointDelta,
+                          maxPosition: maxPosition,
+                        );
                       }
                     },
+                    onTap: () {
+                      ref.read(avatarControllerProvider.notifier)
+                          .react(AvatarReaction.happy);
+                      if (ui.avatarMood == AvatarMood.wrong) {
+                        ref.read(explorerControllerProvider.notifier).retryMission();
+                      }
+                    },
+                    onDoubleTap: () => ref.read(avatarControllerProvider.notifier)
+                        .react(AvatarReaction.dizzy, duration: const Duration(milliseconds: 1300)),
+                    onLongPress: () => ref.read(avatarControllerProvider.notifier)
+                        .react(AvatarReaction.sleepy, duration: const Duration(milliseconds: 1600)),
                     child: _CompanionScene(
                       ready: _ready,
                       controller: _controller,
@@ -241,26 +270,6 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
                 ],
               ),
             ),
-            if (!hasFocus)
-              Positioned(
-                left: (position.dx + kMoveHandleOffset.dx).clamp(
-                  kCompanionEdge,
-                  (viewport.width - kMoveHandleSize - kCompanionEdge)
-                      .clamp(kCompanionEdge, double.infinity),
-                ),
-                top: (position.dy + kMoveHandleOffset.dy).clamp(
-                  kCompanionEdge,
-                  (viewport.height - kMoveHandleSize - kCompanionEdge)
-                      .clamp(kCompanionEdge, double.infinity),
-                ),
-                width: kMoveHandleSize,
-                height: kMoveHandleSize,
-                child: _MoveHandle(
-                  onMove: (delta) => ref
-                      .read(avatarControllerProvider.notifier)
-                      .moveBy(delta: delta, maxPosition: maxPosition),
-                ),
-              ),
           ],
         );
       },
