@@ -16,44 +16,95 @@ class PlanetDetailSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ui = ref.watch(explorerControllerProvider);
-    final notifier = ref.read(explorerControllerProvider.notifier);
 
     return AppTheme.glass(
       radius: BorderRadius.circular(24),
-      padding: const EdgeInsets.fromLTRB(14, 13, 14, 11),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Flexible so the scrolling detail card yields height when the
-          // viewport is short. Without it the card, zoom bar and collapse
-          // button add up to more than the sheet allows and the Column
-          // overflows.
-          Flexible(
-            child: AnimatedSize(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.topCenter,
-              child: ui.detailCardVisible
-                  ? _DetailContent(
-                      planet: planet,
-                      ui: ui,
-                      onClose: notifier.closeDetail,
-                      onHotspot: (hotspot) {
-                        ref
-                            .read(planetNarrationServiceProvider)
-                            .speakHotspot(hotspot);
-                        notifier.showHotspot(hotspot);
-                      },
-                    )
-                  : const SizedBox.shrink(),
+      padding: const EdgeInsets.fromLTRB(18, 17, 18, 15),
+      child: _DetailContent(
+        planet: planet,
+        ui: ui,
+        onClose: () => Navigator.of(context).pop(),
+        onHotspot: (hotspot) {
+          ref
+              .read(planetNarrationServiceProvider)
+              .speakHotspot(hotspot);
+          ref.read(explorerControllerProvider.notifier).showHotspot(hotspot);
+        },
+      ),
+    );
+  }
+}
+
+/// Opens the full facts view as a modal dialog. The dialog owns its available
+/// space, so orientation changes do not constrain the facts card to the scene.
+class DetailDescriptionToggle extends ConsumerWidget {
+  const DetailDescriptionToggle({super.key, required this.planet});
+
+  final Planet planet;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      onTap: () {
+        showGeneralDialog<void>(
+          context: context,
+          barrierDismissible: true,
+          barrierLabel: 'Planet facts',
+          barrierColor: Colors.black.withValues(alpha: .68),
+          transitionDuration: const Duration(milliseconds: 280),
+          pageBuilder: (_, __, ___) => Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 24,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: 620,
+                maxHeight: 620,
+              ),
+              child: PlanetDetailSheet(planet: planet),
             ),
           ),
-          if (ui.detailCardVisible) const SizedBox(height: 8),
-          _CollapseButton(
-            collapsed: !ui.detailCardVisible,
-            onTap: notifier.toggleDetailCard,
-          ),
-        ],
+          transitionBuilder: (_, animation, __, child) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
+            return FadeTransition(
+              opacity: curved,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: .94, end: 1.0).animate(curved),
+                child: child,
+              ),
+            );
+          },
+        );
+      },
+      child: AppTheme.glass(
+        pill: true,
+        radius: BorderRadius.circular(999),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.keyboard_arrow_up,
+              size: 15,
+              color: AppTheme.accentSky,
+            ),
+            SizedBox(width: 4),
+            Text(
+              'Show facts',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

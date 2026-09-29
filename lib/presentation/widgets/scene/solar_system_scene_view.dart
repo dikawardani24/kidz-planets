@@ -23,6 +23,9 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   PerspectiveCamera? _lastCamera;
   List<PlanetLabelFrame> _labelFrames = const [];
   double _lastScale = 1.0;
+  double _angularVelocityX = 0.0;
+  double _angularVelocityY = 0.0;
+  bool _zoomLabelsVisible = true;
 
   @override
   void initState() {
@@ -62,6 +65,9 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
           onScaleStart: _onScaleStart,
           onScaleUpdate: _onScaleUpdate,
           onScaleEnd: _onScaleEnd,
+          onDoubleTap: () {
+            ref.read(explorerControllerProvider.notifier).resetDetailView();
+          },
           onTapUp: (d) => _onTapUp(d, size),
           child: Stack(
             fit: StackFit.expand,
@@ -81,7 +87,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
               _PlanetLabelsOverlay(
                 frames: _labelFrames,
                 planets: planets,
-                showLabels: ui.showLabels,
+                showLabels: ui.showLabels && _zoomLabelsVisible,
                 selectedId: ui.selectedPlanetId,
               ),
             ],
@@ -94,9 +100,33 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     final camera = _lastCamera;
     if (camera == null || size.isEmpty) return;
     final frames = controller.projectLabels(camera, size);
-    if (_framesEqual(frames, _labelFrames)) return;
+    final ui = ref.read(explorerControllerProvider);
+    final shouldShow = _shouldShowLabelsForZoom(ui);
+    if (_framesEqual(frames, _labelFrames) && shouldShow == _zoomLabelsVisible) return;
     if (!mounted) return;
-    setState(() => _labelFrames = frames);
+    setState(() {
+      _labelFrames = frames;
+      _zoomLabelsVisible = shouldShow;
+    });
+  }
+
+  bool _shouldShowLabelsForZoom(ExplorerState ui) {
+    // The user-controlled toggle is the master switch. Automatic hiding only
+    // reacts to zoom while labels are enabled.
+    if (!ui.showLabels) return false;
+
+    if (ui.hasSelection) {
+      // In detail mode, detailZoom > 1 means zooming out.
+      return ui.detailZoom <= 1.75;
+    }
+
+    // Overview camera radius grows as the user zooms out.
+    // Keep a little hysteresis so labels do not flicker around the boundary.
+    final radius = ref.read(solarSystemSceneControllerProvider).rigState.radius;
+    if (_zoomLabelsVisible) {
+      return radius < 60.0;
+    }
+    return radius < 56.0;
   }
 
   bool _framesEqual(List<PlanetLabelFrame> a, List<PlanetLabelFrame> b) {
@@ -111,10 +141,18 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
 
   void _onScaleStart(ScaleStartDetails details) {
     _lastScale = 1.0;
+    _angularVelocityX = 0.0;
+    _angularVelocityY = 0.0;
+    ref.read(solarSystemSceneControllerProvider).setRotationVelocity(
+          angularX: 0,
+          angularY: 0,
+        );
   }
 
   void _onScaleEnd(ScaleEndDetails details) {
     _lastScale = 1.0;
+    // Keep the last gesture velocity. The scene controller damps it every
+    // rendered frame, giving the globe/model a natural inertial finish.
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details) {
@@ -124,11 +162,21 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     // Two pointers = pinch zoom. One pointer = orbit/spin.
     final incrementalScale = details.scale / _lastScale;
     if (details.pointerCount >= 2) {
+      _angularVelocityX = 0.0;
+      _angularVelocityY = 0.0;
+      controller.setRotationVelocity(
+        angularX: 0,
+        angularY: 0,
+      );
       if (incrementalScale.isFinite && incrementalScale > 0) {
         if (ui.hasSelection) {
           final currentZoom = ref.read(explorerControllerProvider).detailZoom;
+          final nextZoom = currentZoom / incrementalScale;
+          // Pinch zoom is persistent: releasing the gesture must not
+          // leave detail mode or reset the current zoom. Leaving detail is
+          // handled explicitly, not as a side effect of ScaleEnd.
           ref.read(explorerControllerProvider.notifier).updateDetailCamera(
-                zoom: (currentZoom / incrementalScale).clamp(0.4, 2.6),
+                zoom: nextZoom.clamp(0.4, 2.6),
               );
         } else {
           controller.pinch(incrementalScale);
@@ -148,10 +196,23 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
           // Rotate the actual planet, not the camera. The scene controller
           // applies the delta in the planet's local frame.
           controller.rotatePlanet(selectedId, dx, dy);
+          _angularVelocityX = dy * 0.009 * 60.0;
+          _angularVelocityY = dx * 0.009 * 60.0;
+          controller.setRotationVelocity(
+            planetId: selectedId,
+            angularX: _angularVelocityX,
+            angularY: _angularVelocityY,
+          );
         }
       } else {
         // Rotate the actual solar-system model, not the camera.
         controller.rotateSolarSystem(dx, dy);
+        _angularVelocityX = dy * 0.009 * 60.0;
+        _angularVelocityY = dx * 0.009 * 60.0;
+        controller.setRotationVelocity(
+          angularX: _angularVelocityX,
+          angularY: _angularVelocityY,
+        );
       }
     }
   }
@@ -214,27 +275,35 @@ class _PlanetLabelsOverlay extends StatelessWidget {
   final List<PlanetLabelFrame> frames;
   final List<Planet> planets;
   final bool showLabels;
+  final bool zoomAllowsLabels;
   final String? selectedId;
   @override
   Widget build(BuildContext context) {
-    if (!showLabels) return const SizedBox.shrink();
     final byId = {for (final p in planets) p.id: p};
-    return Stack(
-      children: [
-        for (final frame in frames)
-          if (frame.visible && frame.id != selectedId && byId.containsKey(frame.id))
-            Positioned(
-              left: frame.screenX - 60,
-              top: frame.screenY - 18,
-              width: 120,
-              child: _LabelChip(
-                name: byId[frame.id]!.name,
-                colorValue: byId[frame.id]!.colorValue,
-                selected: frame.id == selectedId,
-                planetId: frame.id,
-              ),
-            ),
-      ],
+    return IgnorePointer(
+      ignoring: !showLabels,
+      child: AnimatedOpacity(
+        opacity: showLabels ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        child: Stack(
+          children: [
+            for (final frame in frames)
+              if (frame.visible && frame.id != selectedId && byId.containsKey(frame.id))
+                Positioned(
+                  left: frame.screenX - 60,
+                  top: frame.screenY - 18,
+                  width: 120,
+                  child: _LabelChip(
+                    name: byId[frame.id]!.name,
+                    colorValue: byId[frame.id]!.colorValue,
+                    selected: frame.id == selectedId,
+                    planetId: frame.id,
+                  ),
+                ),
+          ],
+        ),
+      ),
     );
   }
 }

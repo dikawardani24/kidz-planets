@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_scene/scene.dart';
@@ -30,12 +31,14 @@ abstract class SolarSystemSceneController {
   List<PlanetLabelFrame> projectLabels(
       PerspectiveCamera camera, Size viewSize);
   void setOrbitsVisible(bool visible);
+  bool labelsVisibleAtZoom(ExplorerState ui);
   void setPlanetOrbitRadius(String planetId, double radius);
   void addSpinBoost(double amount);
   String? pickPlanet(Offset screenPosition, Size viewSize, PerspectiveCamera camera);
   void spinPlanet(String planetId, double delta);
   void rotatePlanet(String planetId, double dx, double dy);
   void rotateSolarSystem(double dx, double dy);
+  void setRotationVelocity({String? planetId, required double angularX, required double angularY});
   void orbitBy(double dx, double dy);
   void pinch(double scale);
   void dispose();
@@ -71,6 +74,10 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   LabelProjector? _projector;
   bool _built = false;
   Future<void>? _buildFuture;
+  double _rotationVelocityX = 0.0;
+  double _rotationVelocityY = 0.0;
+  String? _rotationVelocityPlanetId;
+  String? _lastFocusedPlanetId;
 
   @override
   Scene get scene => _scene;
@@ -109,12 +116,45 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
       _rig.buildCamera(ui: ui);
 
   @override
+  bool labelsVisibleAtZoom(ExplorerState ui) =>
+      _rig.labelsVisibleAtZoom(ui);
+
+  @override
   void tick(double deltaSeconds, ExplorerState ui) {
     _clock.tick(deltaSeconds);
-    _animator?.tick(deltaSeconds);
     final focused = ui.focusedPlanetId;
+    if (focused != _lastFocusedPlanetId) {
+      _rotationVelocityX = 0.0;
+      _rotationVelocityY = 0.0;
+      _rotationVelocityPlanetId = focused;
+      _lastFocusedPlanetId = focused;
+    }
+    _animator?.setFocusedPlanet(focused);
+
+    if (_rotationVelocityX.abs() > 0.0001 ||
+        _rotationVelocityY.abs() > 0.0001) {
+      if (_rotationVelocityPlanetId != null) {
+        _builder.rotatePlanetAngularVelocity(
+          _rotationVelocityPlanetId!,
+          _rotationVelocityX,
+          _rotationVelocityY,
+          deltaSeconds,
+        );
+      } else {
+        _builder.rotateSolarSystemAngularVelocity(
+          _rotationVelocityX,
+          _rotationVelocityY,
+          deltaSeconds,
+        );
+      }
+      final damping = math.pow(0.055, deltaSeconds).toDouble();
+      _rotationVelocityX *= damping;
+      _rotationVelocityY *= damping;
+    }
+
+    _animator?.tick(deltaSeconds);
     if (focused != null) {
-      _rig.focusOn(focused, _builder);
+      _rig.focusOn(focused, _builder, deltaSeconds: deltaSeconds);
     } else {
       _rig.releaseFocus();
     }
@@ -182,6 +222,17 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
       _builder.rotateSolarSystem(dx, dy);
 
   @override
+  void setRotationVelocity({
+    String? planetId,
+    required double angularX,
+    required double angularY,
+  }) {
+    _rotationVelocityPlanetId = planetId;
+    _rotationVelocityX = angularX;
+    _rotationVelocityY = angularY;
+  }
+
+  @override
   void orbitBy(double dx, double dy) => _rig.orbitBy(dx, dy);
 
   @override
@@ -189,6 +240,8 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
 
   @override
   void dispose() {
+    _rotationVelocityX = 0.0;
+    _rotationVelocityY = 0.0;
     _animator?.detach();
     _textures.dispose();
     _geometries.dispose();

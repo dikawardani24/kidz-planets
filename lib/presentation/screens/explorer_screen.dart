@@ -90,12 +90,16 @@ class ExplorerScreen extends ConsumerWidget {
 
               if (ui.hasSelection && ui.tab == ExplorerTab.explore)
                 Positioned(
-                  left: isLandscape ? null : 16,
-                  right: isLandscape ? 16 : 16,
-                  top: isLandscape ? 72 : null,
-                  bottom: isLandscape ? 72 : 88,
-                  width: isLandscape ? 330 : null,
-                  child: _DetailWrapper(planetId: ui.selectedPlanetId!),
+                  left: 0,
+                  right: 0,
+                  bottom: 76,
+                  child: Center(
+                    child: DetailDescriptionToggle(
+                      planet: ref.watch(
+                        planetByIdProvider(ui.selectedPlanetId!),
+                      ),
+                    ),
+                  ),
                 ),
 
               if (ui.hasSelection && ui.tab == ExplorerTab.explore)

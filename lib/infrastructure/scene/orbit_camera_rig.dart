@@ -17,6 +17,15 @@ class OrbitCameraRig {
   final CameraRigState _state;
   double _focusedPlanetRadius = 1.0;
   bool _focusedPlanetIsSun = false;
+  String? _activeFocusId;
+  double _focusProgress = 1.0;
+  double _focusElapsed = 0.0;
+  vm.Vector3 _focusStartTarget = vm.Vector3.zero();
+  vm.Vector3 _focusTarget = vm.Vector3.zero();
+  double _focusStartRadius = kOverviewRadius;
+  double _focusTargetRadius = kOverviewRadius;
+  double _displayDetailZoom = 1.0;
+
   CameraRigState get state => _state;
 
   static const double kOverviewRadius = 46.0;
@@ -43,22 +52,69 @@ class OrbitCameraRig {
         .clamp(kMinRadius, kMaxRadius);
   }
 
+  /// Automatic readability rule for object labels.
+  ///
+  /// This does not modify the user's label preference. It only decides
+  /// whether labels should be displayed at the current camera distance.
+  bool labelsVisibleAtZoom(ExplorerState ui) {
+    if (ui.hasSelection) {
+      // In detail mode, a larger detailZoom means the camera is farther away.
+      return _displayDetailZoom <= 1.7;
+    }
+    // In overview mode, hide labels once the whole system is zoomed out
+    // enough that the chips begin to obscure the planets.
+    return _state.radius <= 62.0;
+  }
+
   /// Eases the focus target toward a planet's current world position.
-  void focusOn(String planetId, SolarSystemSceneBuilder builder) {
+  void focusOn(String planetId, SolarSystemSceneBuilder builder, {double deltaSeconds = 1 / 60}) {
     final render = builder.states[planetId];
     if (render == null) return;
-    // The system can now be rotated as a 3D object, so the selected body's
-    // actual world position must be used instead of its local orbit position.
+
     final p = render.node.globalTransform.getTranslation();
+    final destination = p.clone();
+    final destinationRadius = _detailRadius(1.0, radius: render.radius, isSun: render.isSun);
+
+    if (_activeFocusId != planetId) {
+      _activeFocusId = planetId;
+      _focusElapsed = 0.0;
+      _focusProgress = 0.0;
+      _focusStartTarget = vm.Vector3(_state.targetX, _state.targetY, _state.targetZ);
+      _focusStartRadius = _state.radius;
+      _displayDetailZoom = 1.0;
+    }
+
+    _focusTarget = destination;
+    _focusTargetRadius = destinationRadius;
     _focusedPlanetRadius = render.radius;
     _focusedPlanetIsSun = render.isSun;
-    const k = 0.12;
-    _state.targetX += (p.x - _state.targetX) * k;
-    _state.targetY += (p.y - _state.targetY) * k;
-    _state.targetZ += (p.z - _state.targetZ) * k;
+
+    // A short eased camera flight is much more stable than chasing a moving
+    // Moon every frame. The target is updated from the current world transform
+    // but interpolated, so the camera settles instead of snapping.
+    const duration = 0.82;
+    _focusElapsed = math.min(
+      _focusElapsed + deltaSeconds.clamp(0.0, 0.05).toDouble(),
+      duration,
+    );
+    final t = (_focusElapsed / duration).clamp(0.0, 1.0);
+    final eased = 1.0 - math.pow(1.0 - t, 3).toDouble();
+    _focusProgress = eased;
+
+    final target =
+        _focusStartTarget * (1.0 - eased) + _focusTarget * eased;
+    _state
+      ..targetX = target.x
+      ..targetY = target.y
+      ..targetZ = target.z
+      ..radius = _focusStartRadius +
+          (_focusTargetRadius - _focusStartRadius) * eased;
   }
 
   void releaseFocus() {
+    _activeFocusId = null;
+    _focusProgress = 1.0;
+    _focusElapsed = 0.0;
     const k = 0.08;
     _state.targetX *= (1 - k);
     _state.targetY *= (1 - k);
@@ -80,10 +136,20 @@ class OrbitCameraRig {
     double tz = _state.targetZ;
 
     if (ui.hasSelection) {
+      // During the initial focus flight, use the animated radius from
+      // [focusOn]. Previously this was replaced immediately with the final
+      // detail radius, making selection appear to teleport/zoom instantly.
+      if (_focusProgress >= 1.0) {
+        // Once focused, smooth pinch zoom independently.
+        _displayDetailZoom += (ui.detailZoom - _displayDetailZoom) * 0.18;
+        radius = _detailRadius(_displayDetailZoom);
+      } else {
+        radius = _state.radius;
+      }
+
       // Detail mode keeps the camera centered on the selected body.
       // The body itself is rotated by the gesture; the camera must not orbit
       // around it or impose a vertical pole clamp.
-      radius = _detailRadius(ui.detailZoom);
       theta = _state.theta;
       phi = _state.phi;
     }
@@ -102,13 +168,15 @@ class OrbitCameraRig {
     );
   }
 
-  double _detailRadius(double zoom) {
+  double _detailRadius(double zoom, {double? radius, bool? isSun}) {
+    final focusedRadius = radius ?? _focusedPlanetRadius;
+    final focusedIsSun = isSun ?? _focusedPlanetIsSun;
     // Moons are tiny (0.10–0.42 units) and orbit close to bright parents.
     // A floor of 2.5 buries them behind the parent/zoom math that was tuned
     // for full-size planets — so clamp relative to the focused body size.
-    final bodyMin = (_focusedPlanetRadius * 3.0).clamp(0.45, 2.5);
-    final bodyMax = (_focusedPlanetRadius * 22.0).clamp(6.0, 30.0);
-    final baseDistance = _focusedPlanetRadius * (_focusedPlanetIsSun ? 3.4 : 3.6);
+    final bodyMin = (focusedRadius * 3.0).clamp(0.45, 2.5);
+    final bodyMax = (focusedRadius * 22.0).clamp(6.0, 30.0);
+    final baseDistance = focusedRadius * (focusedIsSun ? 3.4 : 3.6);
     return (baseDistance * zoom).clamp(bodyMin, bodyMax);
   }
 }
@@ -132,7 +200,7 @@ class LabelProjector {
     for (final planet in _planets) {
       final render = _builder.states[planet.id];
       if (render == null) continue;
-      final world = render.node.position;
+      final world = render.node.globalTransform.getTranslation();
       final screen = camera.worldToScreen(world, viewSize);
       if (screen == null) continue;
       final dx = world.x - camera.position.x;

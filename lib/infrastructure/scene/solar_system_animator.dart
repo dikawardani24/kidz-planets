@@ -26,6 +26,7 @@ class SolarSystemAnimator {
   StreamSubscription<double>? _subscription;
 
   double _spinBoost = 0.0;
+  String? _focusedPlanetId;
   final Map<String, double> _orbitRadiusOverrides = {};
 
   void setOrbitRadius(String planetId, double radius) {
@@ -39,6 +40,14 @@ class SolarSystemAnimator {
   }
 
   void resetOrbitRadius(String planetId) => _orbitRadiusOverrides.remove(planetId);
+
+  /// Freezes the selected body's orbital translation while the detail camera
+  /// is focusing. This is especially important for moons: following a moving
+  /// moon while simultaneously animating the camera target creates visible
+  /// micro-jitter.
+  void setFocusedPlanet(String? planetId) {
+    _focusedPlanetId = planetId;
+  }
 
   /// Extra spin velocity from finger swipes in detail mode.
   void addSpinBoost(double amount) {
@@ -60,7 +69,8 @@ class SolarSystemAnimator {
       final planet = _planets[entry.key];
       if (planet == null) continue;
       final state = entry.value;
-      if (!planet.isSun && planet.orbitRadius > 0) {
+      if (!planet.isSun && planet.orbitRadius > 0 &&
+          planet.id != _focusedPlanetId) {
         final radius = _orbitRadiusOverrides[planet.id] ?? planet.orbitRadius;
         final angle = planet.startAngle + t * planet.orbitSpeed;
 

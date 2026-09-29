@@ -1,85 +1,139 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../../domain/entities/planet.dart';
 
-/// Plays pre-generated neural narration bundled with the app.
-///
-/// Audio files are treated as content assets rather than being synthesized
-/// on-device. This keeps the voice natural, deterministic, and independent of
-/// the device TTS engine.
-///
-/// Assets are generated locally with Kokoro; see
-/// `tool/generate_neural_narration.py`. Narration never throws: a missing or
-/// unreadable asset is reported in debug builds and ignored, so a content gap
-/// can never crash the UI.
 class PlanetNarrationService {
-  PlanetNarrationService({AudioPlayer? player}) : _player = player ?? AudioPlayer();
+  PlanetNarrationService({AudioPlayer? player})
+      : _players = [player ?? AudioPlayer(), AudioPlayer()];
 
-  final AudioPlayer _player;
-
-  Future<void> _queue = Future<void>.value();
+  final List<AudioPlayer> _players;
+  int _activeIndex = 0;
   int _generation = 0;
 
-  Future<void> speakPlanet(Planet planet) {
-    return _play(NarrationAudioCatalog.planet(planet.id));
-  }
+  Future<void> speakPlanet(Planet planet) =>
+      _play(NarrationAudioCatalog.planet(planet.id));
 
-  Future<void> speakHotspot(Hotspot hotspot) {
-    return _play(NarrationAudioCatalog.hotspot(hotspot.title));
-  }
+  Future<void> speakHotspot(Hotspot hotspot) =>
+      _play(NarrationAudioCatalog.hotspot(hotspot.title));
 
   Future<void> replay(Planet planet) => speakPlanet(planet);
 
-  Future<void> stop() {
-    _generation++;
-    _queue = _queue.then((_) => _player.stop()).catchError(_ignore);
-    return _queue;
+  Future<void> stop() async {
+    final generation = ++_generation;
+    await _fadeOut(generation);
   }
 
   Future<void> dispose() async {
-    _generation++;
-    try {
-      await _player.stop();
-    } catch (_) {}
-    await _player.dispose();
+    ++_generation;
+    for (final player in _players) {
+      try {
+        await player.stop();
+      } catch (_) {}
+      await player.dispose();
+    }
   }
 
-  static void _ignore(Object _) {}
-
-  Future<void> _play(String path) {
+  Future<void> _play(String path) async {
+    // Two players allow the outgoing narration to fade down while the new
+    // narration fades up. This avoids the hard stop/start feeling of a
+    // single AudioPlayer.
     final generation = ++_generation;
-    _queue = _queue.then((_) => _run(generation, path)).catchError(_ignore);
-    return _queue;
-  }
 
-  Future<void> _run(int generation, String path) async {
+    final incomingIndex = 1 - _activeIndex;
+    final outgoingIndex = _activeIndex;
+    final incoming = _players[incomingIndex];
+    final outgoing = _players[outgoingIndex];
+
     try {
-      await _player.stop();
+      await incoming.stop();
+      await incoming.setVolume(0);
       if (generation != _generation) return;
 
-      await _player.setAsset(path);
+      await incoming.setAsset(path);
       if (generation != _generation) return;
 
-      await _player.play();
+      _activeIndex = incomingIndex;
+      // Start playback without awaiting completion. `play()` stays pending until
+      // the narration finishes; awaiting it here would prevent the crossfade
+      // from starting until the old narration had already ended.
+      unawaited(_startPlayback(incoming, path));
+      if (generation != _generation) return;
+
+      await _crossfade(
+        generation: generation,
+        incoming: incoming,
+        outgoing: outgoing,
+      );
     } catch (error) {
       if (generation == _generation) {
         debugPrint('Narration asset unavailable: $path ($error)');
       }
     }
   }
+
+  Future<void> _fadeOut(int generation) async {
+    const duration = Duration(milliseconds: 260);
+    const steps = 13;
+    const stepDuration = Duration(milliseconds: 20);
+    final player = _players[_activeIndex];
+    final startedAt = DateTime.now();
+
+    for (var step = 1; step <= steps; step++) {
+      await Future<void>.delayed(stepDuration);
+      if (generation != _generation) return;
+      final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
+      final t = (elapsed / duration.inMilliseconds).clamp(0.0, 1.0);
+      final eased = 1 - (t * t * (3 - 2 * t));
+      await player.setVolume(0.92 * eased);
+    }
+
+    if (generation != _generation) return;
+    for (final p in _players) {
+      try {
+        await p.stop();
+        await p.setVolume(0);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _crossfade({
+    required int generation,
+    required AudioPlayer incoming,
+    required AudioPlayer outgoing,
+  }) async {
+    const duration = Duration(milliseconds: 260);
+    const steps = 13;
+    const stepDuration = Duration(milliseconds: 20);
+
+    final startedAt = DateTime.now();
+    for (var step = 1; step <= steps; step++) {
+      await Future<void>.delayed(stepDuration);
+      if (generation != _generation) return;
+
+      final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
+      final t = (elapsed / duration.inMilliseconds).clamp(0.0, 1.0);
+      // Smoothstep gives the transition a softer, less mechanical curve.
+      final eased = t * t * (3 - 2 * t);
+      await incoming.setVolume(0.92 * eased);
+      await outgoing.setVolume(0.92 * (1 - eased));
+    }
+
+    if (generation != _generation) return;
+    await outgoing.stop();
+    await outgoing.setVolume(0);
+    await incoming.setVolume(0.92);
+  }
 }
 
-/// Stable asset naming convention for neural narration.
-///
-/// Planet: assets/audio/narration/planets/saturn.mp3
-/// Hotspot: assets/audio/narration/hotspots/icy_rings.mp3
 abstract final class NarrationAudioCatalog {
   static String planet(String planetId) =>
       'assets/audio/narration/planets/$planetId.mp3';
 
   static String hotspot(String title) =>
-      'assets/audio/narration/hotspots/${_slugify(title)}.mp3';
+      'assets/audio/narration/hotspots/' + _slugify(title) + '.mp3';
 
   static String _slugify(String value) {
     return value
@@ -88,3 +142,11 @@ abstract final class NarrationAudioCatalog {
         .replaceAll(RegExp(r'^_+|_+$'), '');
   }
 }
+
+  Future<void> _startPlayback(AudioPlayer player, String path) async {
+    try {
+      await player.play();
+    } catch (error) {
+      debugPrint('Narration playback failed: $path ($error)');
+    }
+  }

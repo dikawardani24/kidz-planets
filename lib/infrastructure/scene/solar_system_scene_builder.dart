@@ -163,20 +163,59 @@ class SolarSystemSceneBuilder {
       (id: 'a', inner: 2.03, outer: 2.28, opacity: 0.20),
     ];
 
-    for (final band in broad) {
+    void addRingLayer({
+      required String name,
+      required double inner,
+      required double outer,
+      required double opacity,
+      required vm.Quaternion rotation,
+    }) {
       final ring = Node(
         mesh: Mesh(
-          _geometries.saturnBand(
-            planet.radius * band.inner,
-            planet.radius * band.outer,
-          ),
-          _materials.saturnRing(opacity: band.opacity),
+          _geometries.saturnBand(inner, outer),
+          _materials.saturnRing(opacity: opacity),
         ),
       )
-        ..name = '${planet.id}:ring:base:${band.id}'
-        ..rotation = tilt;
+        ..name = name
+        ..rotation = rotation;
       ring.raycastable = false;
       state.spinNode.add(ring);
+    }
+
+    for (final band in broad) {
+      final inner = planet.radius * band.inner;
+      final outer = planet.radius * band.outer;
+
+      addRingLayer(
+        name: '${planet.id}:ring:base:${band.id}',
+        inner: inner,
+        outer: outer,
+        opacity: band.opacity,
+        rotation: tilt,
+      );
+
+      // RingGeometry is an infinitely thin plane. At an almost edge-on
+      // viewing angle its projected area can collapse to zero pixels and
+      // the ring appears to vanish. Two very subtle support layers keep a
+      // readable edge without changing the visible ring thickness at normal
+      // viewing angles.
+      const edgeAngle = 0.022;
+      addRingLayer(
+        name: '${planet.id}:ring:edge:+:${band.id}',
+        inner: inner,
+        outer: outer,
+        opacity: band.opacity * 0.18,
+        rotation: tilt *
+            vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), edgeAngle),
+      );
+      addRingLayer(
+        name: '${planet.id}:ring:edge:-:${band.id}',
+        inner: inner,
+        outer: outer,
+        opacity: band.opacity * 0.18,
+        rotation: tilt *
+            vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), -edgeAngle),
+      );
     }
 
     // Fine structure: irregular spacing and opacity makes the ring read as
@@ -211,20 +250,65 @@ class SolarSystemSceneBuilder {
 
     for (var i = 0; i < strands.length; i++) {
       final strand = strands[i];
+      final inner = planet.radius * (strand.radius - strand.width / 2);
+      final outer = planet.radius * (strand.radius + strand.width / 2);
+
+      addRingLayer(
+        name: '${planet.id}:ring:strand:$i',
+        inner: inner,
+        outer: outer,
+        opacity: strand.opacity,
+        rotation: tilt,
+      );
+
+      // Keep the finest ringlets visible at extreme angles too. These are
+      // intentionally much fainter than the real strand so they read as an
+      // optical edge rather than as a second set of rings.
+      const edgeAngle = 0.022;
+      addRingLayer(
+        name: '${planet.id}:ring:strand:edge:+:$i',
+        inner: inner,
+        outer: outer,
+        opacity: strand.opacity * 0.18,
+        rotation: tilt *
+            vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), edgeAngle),
+      );
+      addRingLayer(
+        name: '${planet.id}:ring:strand:edge:-:$i',
+        inner: inner,
+        outer: outer,
+        opacity: strand.opacity * 0.18,
+        rotation: tilt *
+            vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), -edgeAngle),
+      );
+    }
+
+    // Flat bands have zero projected area at an exact edge-on angle.
+    // Keep three very thin physical edge profiles so the ring system
+    // remains visible instead of snapping completely out of sight.
+    const edgeProfiles = <({double radius, double tube, double opacity})>[
+      (radius: 1.40, tube: 0.020, opacity: 0.34),
+      (radius: 1.78, tube: 0.022, opacity: 0.42),
+      (radius: 2.17, tube: 0.018, opacity: 0.34),
+    ];
+
+    for (var i = 0; i < edgeProfiles.length; i++) {
+      final edge = edgeProfiles[i];
       final ring = Node(
         mesh: Mesh(
-          _geometries.saturnBand(
-            planet.radius * (strand.radius - strand.width / 2),
-            planet.radius * (strand.radius + strand.width / 2),
+          _geometries.saturnEdgeRing(
+            planet.radius * edge.radius,
+            planet.radius * edge.tube,
           ),
-          _materials.saturnRing(opacity: strand.opacity),
+          _materials.saturnRing(opacity: edge.opacity),
         ),
       )
-        ..name = '${planet.id}:ring:strand:$i'
+        ..name = '${planet.id}:ring:edge:$i'
         ..rotation = tilt;
       ring.raycastable = false;
       state.spinNode.add(ring);
     }
+
   }
   void _buildOrbit(Scene scene, Planet planet) {
     final node = Node(
@@ -270,6 +354,20 @@ class SolarSystemSceneBuilder {
     // vertical dragging can continue past the poles indefinitely.
     state.spinNode.rotation = state.spinNode.rotation *
         vm.Quaternion.axisAngle(axis, angle);
+  }
+
+  void rotatePlanetAngularVelocity(String planetId, double angularX, double angularY, double deltaSeconds) {
+    final state = states[planetId];
+    if (state == null) return;
+    final dx = angularX * deltaSeconds / 0.009;
+    final dy = angularY * deltaSeconds / 0.009;
+    rotatePlanet(planetId, dx, dy);
+  }
+
+  void rotateSolarSystemAngularVelocity(double angularX, double angularY, double deltaSeconds) {
+    final dx = angularX * deltaSeconds / 0.009;
+    final dy = angularY * deltaSeconds / 0.009;
+    rotateSolarSystem(dx, dy);
   }
 
   void setOrbitsVisible(bool visible) {
