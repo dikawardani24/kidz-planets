@@ -4,18 +4,29 @@ import 'package:flutter_scene/scene.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../application/controllers/avatar_controller.dart';
+import '../../../application/state/avatar_reaction_policy.dart';
 import '../../../application/state/avatar_state.dart';
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../../infrastructure/scene/avatar_scene_controller.dart';
 import '../../../l10n/generated/app_localizations.dart';
+import '../../../l10n/localized_planet.dart';
+import 'avatar_face.dart';
 import 'avatar_speech.dart';
 
 const double kCompanionBoxWidth = 132;
 const double kCompanionBoxHeight = 148;
 const double kCompanionEdge = 8;
-const double kMoveHandleSize = 40;
-const Offset kMoveHandleOffset = Offset(118, 108);
+
+/// How much a two-finger twist turns the toy, per radian of twist.
+const double kCompanionTwistYaw = 18;
+
+/// How much a two-finger drag turns the toy: sideways turns it (yaw), up and
+/// down tips it (pitch). One finger is spoken for by moving the toy, so the
+/// second finger is what makes the companion behave like a 3D object rather
+/// than a sticker.
+const double kCompanionDragYaw = 0.8;
+const double kCompanionDragPitch = 0.5;
 
 /// The persistent 3D Chubby Cartoon Rocket Ship mission companion.
 class MissionCompanion extends ConsumerStatefulWidget {
@@ -52,13 +63,18 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
       if (!mounted) return;
       final ui = ref.read(explorerControllerProvider);
       final pose = ref.read(avatarControllerProvider);
-      if (!ui.hasSelection && pose.idleAction == AvatarIdleAction.flying) {
-        ref.read(avatarControllerProvider.notifier).updateFlight(
-              0.016,
-              _lastViewport,
-              _lastMaxPosition,
-            );
+      // Parked by a drag, or busy focussing a planet: the companion holds its
+      // place instead of flying. The pause lives in the state, so the widget
+      // never has to guess what the controller is up to.
+      if (ui.hasSelection || pose.isFlightPaused ||
+          pose.idleAction != AvatarIdleAction.flying) {
+        return;
       }
+      ref.read(avatarControllerProvider.notifier).updateFlight(
+            0.016,
+            _lastViewport,
+            _lastMaxPosition,
+          );
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -79,6 +95,24 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
   Widget build(BuildContext context) {
     final pose = ref.watch(avatarControllerProvider);
     final ui = ref.watch(explorerControllerProvider);
+
+    // Mission beats reach the body, not just the bubble: a wrong pick droops,
+    // a finished mission laughs. The reaction itself lives in the avatar state,
+    // so this only translates a mission mood into a reaction once per beat
+    // instead of animating from inside the widget.
+    ref.listen<AvatarMood>(
+      explorerControllerProvider.select((s) => s.avatarMood),
+      (previous, next) {
+        if (previous == next) return;
+        final beat = companionBeatFor(next);
+        final avatar = ref.read(avatarControllerProvider.notifier);
+        if (beat.reaction == AvatarReaction.none) {
+          avatar.clearReaction();
+        } else {
+          avatar.react(beat.reaction, duration: beat.duration);
+        }
+      },
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -121,6 +155,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
         );
 
         _controller.applyPose(pose);
+        _controller.applyReaction(pose.reaction);
 
         final mission = ui.activeMission;
         final targetColor = mission == null
@@ -163,6 +198,20 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
           companionText = t.companionThinking;
         }
 
+        // A mission beat owns the line, even over the lines above: the
+        // companion is what tells the child what to look for, that a pick was
+        // wrong, and that it was found - and it says it by the planet's own
+        // name, in the language the rest of the screen is in.
+        if (mission != null && ui.avatarMood != AvatarMood.searching) {
+          companionText = avatarLine(
+            ui.avatarMood,
+            localizedPlanetName(
+              mission.targetPlanetId,
+              Localizations.localeOf(context),
+            ),
+          );
+        }
+
         return Stack(
           clipBehavior: Clip.none,
           children: [
@@ -195,7 +244,8 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  if (!hasFocus && pose.idleAction == AvatarIdleAction.flying)
+                  if (!hasFocus && !pose.isFlightPaused &&
+                      pose.idleAction == AvatarIdleAction.flying)
                     AnimatedBuilder(
                       animation: _flightTicker,
                       builder: (context, _) =>
@@ -218,49 +268,87 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
                         },
                       ),
                     ),
-                  GestureDetector(
+                  Semantics(
+                    // The label the move handle used to carry: the toy itself
+                    // is the handle now, so a screen reader hears it there.
+                    label: t.companionMoveLabel,
+                    child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onPanUpdate: (details) => ref
-                        .read(avatarControllerProvider.notifier)
-                        .rotateBy(dx: details.delta.dx, dy: details.delta.dy),
+                    // One finger moves the toy, two fingers work it in 3D. A
+                    // child repositioning the companion should not have to find
+                    // a handle, and a child turning it should not lose its
+                    // place, so the two gestures are told apart by how many
+                    // fingers are down rather than by where they land.
+                    onScaleUpdate: (details) {
+                      final avatar = ref.read(avatarControllerProvider.notifier);
+                      if (details.pointerCount >= 2) {
+                        avatar.rotateBy(
+                          dx: details.rotation * kCompanionTwistYaw +
+                              details.focalPointDelta.dx * kCompanionDragYaw,
+                          dy: details.focalPointDelta.dy * kCompanionDragPitch,
+                        );
+                      } else {
+                        avatar.moveBy(
+                          delta: details.focalPointDelta,
+                          maxPosition: maxPosition,
+                        );
+                      }
+                    },
                     onTap: () {
+                      // Touching the companion is a greeting, and after a miss
+                      // it is also the child asking to be encouraged.
                       if (ui.avatarMood == AvatarMood.wrong) {
                         ref
                             .read(explorerControllerProvider.notifier)
                             .retryMission();
+                      } else {
+                        ref
+                            .read(avatarControllerProvider.notifier)
+                            .react(AvatarReaction.happy);
                       }
                     },
-                    child: _CompanionScene(
-                      ready: _ready,
-                      controller: _controller,
-                      mood: ui.avatarMood,
-                      idleAction: hasFocus ? AvatarIdleAction.sitting : pose.idleAction,
-                      selectedPlanetId: ui.selectedPlanetId,
+                    onDoubleTap: () => ref
+                        .read(avatarControllerProvider.notifier)
+                        .react(
+                          AvatarReaction.dizzy,
+                          duration: const Duration(milliseconds: 1300),
+                        ),
+                    onLongPress: () => ref
+                        .read(avatarControllerProvider.notifier)
+                        .react(
+                          AvatarReaction.sleepy,
+                          duration: const Duration(milliseconds: 1800),
+                        ),
+                    child: Stack(
+                      children: [
+                        _CompanionScene(
+                          ready: _ready,
+                          controller: _controller,
+                          mood: ui.avatarMood,
+                          idleAction: hasFocus ? AvatarIdleAction.sitting : pose.idleAction,
+                          selectedPlanetId: ui.selectedPlanetId,
+                        ),
+                        // The face is Flutter paint over the 3D render, so it
+                        // must not swallow drags meant for the toy.
+                        if (_ready)
+                          AnimatedBuilder(
+                            animation: _flightTicker,
+                            builder: (context, _) => IgnorePointer(
+                              child: AvatarFace(
+                                box: const Size(kCompanionBoxWidth, kCompanionBoxHeight),
+                                pose: pose,
+                                motion: _controller.bodyMotion,
+                                phase: _flightTicker.value,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
+                  ),
                   ),
                 ],
               ),
             ),
-            if (!hasFocus)
-              Positioned(
-                left: (position.dx + kMoveHandleOffset.dx).clamp(
-                  kCompanionEdge,
-                  (viewport.width - kMoveHandleSize - kCompanionEdge)
-                      .clamp(kCompanionEdge, double.infinity),
-                ),
-                top: (position.dy + kMoveHandleOffset.dy).clamp(
-                  kCompanionEdge,
-                  (viewport.height - kMoveHandleSize - kCompanionEdge)
-                      .clamp(kCompanionEdge, double.infinity),
-                ),
-                width: kMoveHandleSize,
-                height: kMoveHandleSize,
-                child: _MoveHandle(
-                  onMove: (delta) => ref
-                      .read(avatarControllerProvider.notifier)
-                      .moveBy(delta: delta, maxPosition: maxPosition),
-                ),
-              ),
           ],
         );
       },
@@ -334,38 +422,6 @@ class _CompanionScene extends StatelessWidget {
       controller.scene,
       camera: AvatarSceneControllerImpl.camera,
       onTick: (elapsed, _) => controller.tick(elapsed, mood, idleAction, selectedPlanetId),
-    );
-  }
-}
-
-class _MoveHandle extends StatelessWidget {
-  const _MoveHandle({required this.onMove});
-
-  final void Function(Offset delta) onMove;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: AppLocalizations.of(context).companionMoveLabel,
-      button: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onPanUpdate: (details) => onMove(details.delta),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: const Color(0xFF17234D).withValues(alpha: 0.92),
-            shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFFFBBF24), width: 2),
-          ),
-          child: const Center(
-            child: Icon(
-              Icons.open_with_rounded,
-              size: 20,
-              color: Color(0xFFFBBF24),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

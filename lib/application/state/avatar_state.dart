@@ -34,6 +34,7 @@ class AvatarState extends Equatable {
     this.pitch = 0.0,
     this.idleAction = AvatarIdleAction.none,
     this.isHeartVisible = false,
+    this.isFlightPaused = false,
     this.flightStyle = FlightStyle.circle,
     this.flightTime = 0.0,
     this.reaction = AvatarReaction.none,
@@ -47,12 +48,28 @@ class AvatarState extends Equatable {
   final double pitch;
   final AvatarIdleAction idleAction;
   final bool isHeartVisible;
+
+  /// True while the companion hovers exactly where the child let it go.
+  ///
+  /// A drag is a child choosing where the toy lives, so the automatic flight
+  /// loop stands down for a while instead of sliding the companion back into
+  /// its own path. The controller ends the pause on a timer and eases flight
+  /// back in from the parked spot.
+  final bool isFlightPaused;
+
   final FlightStyle flightStyle;
   final double flightTime;
   final AvatarReaction reaction;
   final int reactionUntil;
 
-  static const double pitchLimit = 0.55;
+  /// How far the rocket may be tipped forwards or backwards, in radians.
+  ///
+  /// Wide enough (about 86 degrees) that the nose points straight at the child
+  /// and the engine points straight away, so the top and the bottom of the
+  /// model are both reachable. It stops just short of a full flip because a
+  /// continuous 360 degree tumble has no "right way up" to come back to, which
+  /// matters when the child has parked it somewhere.
+  static const double pitchLimit = 1.5;
 
   double get pitchClamped => pitch.clamp(-pitchLimit, pitchLimit);
 
@@ -62,6 +79,7 @@ class AvatarState extends Equatable {
     double? pitch,
     AvatarIdleAction? idleAction,
     bool? isHeartVisible,
+    bool? isFlightPaused,
     FlightStyle? flightStyle,
     double? flightTime,
     AvatarReaction? reaction,
@@ -73,6 +91,7 @@ class AvatarState extends Equatable {
       pitch: pitch ?? this.pitch,
       idleAction: idleAction ?? this.idleAction,
       isHeartVisible: isHeartVisible ?? this.isHeartVisible,
+      isFlightPaused: isFlightPaused ?? this.isFlightPaused,
       flightStyle: flightStyle ?? this.flightStyle,
       flightTime: flightTime ?? this.flightTime,
       reaction: reaction ?? this.reaction,
@@ -87,6 +106,7 @@ class AvatarState extends Equatable {
         pitch,
         idleAction,
         isHeartVisible,
+        isFlightPaused,
         flightStyle,
         flightTime,
         reaction,

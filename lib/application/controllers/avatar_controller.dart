@@ -5,11 +5,12 @@ import 'dart:ui' show Offset, Size;
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../state/avatar_reaction_policy.dart';
 import '../state/avatar_state.dart';
 
 /// Owns the companion's pose, screen position, and continuous non-stop flying behaviors.
 class AvatarController extends StateNotifier<AvatarState> {
-  AvatarController()
+  AvatarController({this.flightHold = const Duration(seconds: 10)})
       : super(const AvatarState(
           idleAction: AvatarIdleAction.flying,
           flightStyle: FlightStyle.circle,
@@ -17,8 +18,38 @@ class AvatarController extends StateNotifier<AvatarState> {
     _startFlightStyleSwitcher();
   }
 
+  /// How long the companion hovers where the child dropped it before it eases
+  /// back into its flight circuit. Long enough that a child who has just parked
+  /// the toy sees it stay put, short enough that the companion is not dead.
+  final Duration flightHold;
+
   Timer? _styleTimer;
+  Timer? _reactionTimer;
+  Timer? _holdTimer;
+  bool _disposed = false;
   final math.Random _random = math.Random();
+
+  /// Distance between the canonical flight path and where the companion
+  /// actually is, because the child dragged it off the path.
+  ///
+  /// Flight resumes from the parked spot instead of snapping back onto the
+  /// path: this offset decays to zero, so the companion drifts into its next
+  /// circuit from wherever it was let go.
+  Offset _flightRebase = Offset.zero;
+
+  /// Path parameter, accumulated a frame at a time rather than derived from
+  /// [AvatarState.flightTime]. A reaction that changes the flight speed then
+  /// changes how fast this advances, instead of jumping along the path.
+  double _pathTime = 0;
+
+  /// Last bounds the widget computed, needed to place a resumed flight.
+  Offset _maxPosition = const Offset(350, 700);
+
+  /// Seconds for the rebase offset to fall by a factor of e.
+  static const double _rebaseTimeConstant = 1.6;
+
+  /// The flying speed before reactions: brisk and lively.
+  static const double _baseFlightRate = 1.8;
 
   void _startFlightStyleSwitcher() {
     // Switch flight patterns (circle -> zigzag -> edge) every 6 seconds for variety
@@ -32,12 +63,8 @@ class AvatarController extends StateNotifier<AvatarState> {
     });
   }
 
-  /// Updates continuous non-stop flight movement along chosen path (edge, zigzag, circle)
-  void updateFlight(double dt, Size viewport, Offset maxPosition) {
-    final newTime = state.flightTime + dt;
-    final t = newTime * 1.8; // brisk, lively flight speed
-
-    Offset pos;
+  /// The flight path's own position at path time [t], before any rebase.
+  Offset _flightPathAt(double t, Offset maxPosition) {
     final w = maxPosition.dx;
     final h = maxPosition.dy;
 
@@ -49,18 +76,17 @@ class AvatarController extends StateNotifier<AvatarState> {
         final ry = h * 0.35;
         final x = cx + rx * math.cos(t);
         final y = cy + ry * math.sin(t * 1.3);
-        pos = Offset(x.clamp(0.0, w), y.clamp(0.0, h));
-        break;
+        return _clampTo(Offset(x, y), maxPosition);
 
       case FlightStyle.zigzag:
         final progress = (t * 0.5) % 2.0;
         final x = progress <= 1.0 ? progress * w : (2.0 - progress) * w;
         final y = h * 0.5 + (math.sin(t * 5.0) * h * 0.4);
-        pos = Offset(x.clamp(0.0, w), y.clamp(0.0, h));
-        break;
+        return _clampTo(Offset(x, y), maxPosition);
 
       case FlightStyle.edge:
         final perimeter = 2 * (w + h);
+        if (perimeter <= 0) return Offset.zero;
         final dist = (t * 140.0) % perimeter;
         double x = 0, y = 0;
         if (dist < w) {
@@ -76,20 +102,44 @@ class AvatarController extends StateNotifier<AvatarState> {
           x = 0;
           y = h - (dist - (2 * w + h));
         }
-        pos = Offset(x.clamp(0.0, w), y.clamp(0.0, h));
-        break;
+        return _clampTo(Offset(x, y), maxPosition);
     }
+  }
+
+  Offset _clampTo(Offset position, Offset maxPosition) => Offset(
+        position.dx.clamp(0.0, math.max(0.0, maxPosition.dx)),
+        position.dy.clamp(0.0, math.max(0.0, maxPosition.dy)),
+      );
+
+  /// Updates continuous non-stop flight movement along the chosen path.
+  void updateFlight(double dt, Size viewport, Offset maxPosition) {
+    _maxPosition = maxPosition;
+    // While the companion is parked there is no flight to update: standing
+    // still is the whole point of the pause.
+    if (state.isFlightPaused) return;
+
+    _pathTime += dt * _baseFlightRate * reactionSpeedFactor(state.reaction);
+    _flightRebase *= math.exp(-dt / _rebaseTimeConstant);
+    if (_flightRebase.distanceSquared < 0.01) _flightRebase = Offset.zero;
+
+    final position = _clampTo(
+      _flightPathAt(_pathTime, maxPosition) + _flightRebase,
+      maxPosition,
+    );
 
     state = state.copyWith(
-      screenPosition: pos,
-      flightTime: newTime,
+      screenPosition: position,
+      flightTime: state.flightTime + dt,
       idleAction: AvatarIdleAction.flying, // Always flying non-stop!
     );
   }
 
   @override
   void dispose() {
+    _disposed = true;
     _styleTimer?.cancel();
+    _reactionTimer?.cancel();
+    _holdTimer?.cancel();
     super.dispose();
   }
 
@@ -104,6 +154,13 @@ class AvatarController extends StateNotifier<AvatarState> {
     AvatarReaction reaction, {
     Duration duration = const Duration(milliseconds: 900),
   }) {
+    _reactionTimer?.cancel();
+    // `none` is the resting state rather than a reaction, so reacting with it
+    // simply clears whatever is playing instead of starting a timer for it.
+    if (reaction == AvatarReaction.none) {
+      clearReaction();
+      return;
+    }
     state = state.copyWith(
       reaction: reaction,
       reactionUntil:
@@ -111,14 +168,26 @@ class AvatarController extends StateNotifier<AvatarState> {
       idleAction: reaction == AvatarReaction.dizzy
           ? AvatarIdleAction.thinking
           : state.idleAction,
+      isHeartVisible: reactionShowsHearts(reaction),
     );
+    // A plain timestamp cannot clear itself, so the controller owns a single
+    // cancellable timer per reaction. The disposed guard keeps a late timer
+    // from touching state after the provider is gone, and cancelling first
+    // keeps a newer reaction from being cleared early by an older timer.
+    _reactionTimer = Timer(duration, () {
+      if (_disposed || !mounted) return;
+      clearReaction();
+    });
   }
 
   void clearReaction() {
-    if (state.reaction == AvatarReaction.none) return;
+    _reactionTimer?.cancel();
+    _reactionTimer = null;
+    if (state.reaction == AvatarReaction.none && !state.isHeartVisible) return;
     state = state.copyWith(
       reaction: AvatarReaction.none,
       reactionUntil: 0,
+      isHeartVisible: false,
     );
   }
 
@@ -132,31 +201,59 @@ class AvatarController extends StateNotifier<AvatarState> {
     );
   }
 
+  /// Drags the companion to a new spot and parks it there for [flightHold].
+  ///
+  /// Moving never re-aims the model: the pose is the child's own 3D work and a
+  /// drag is only about where the toy sits.
   void moveBy({
     required Offset delta,
     required Offset maxPosition,
   }) {
     final current = state.screenPosition;
     if (current == null) return;
+    _maxPosition = maxPosition;
     state = state.copyWith(
-      screenPosition: Offset(
-        (current.dx + delta.dx).clamp(0.0, maxPosition.dx),
-        (current.dy + delta.dy).clamp(0.0, maxPosition.dy),
-      ),
+      screenPosition: _clampTo(current + delta, maxPosition),
+      isFlightPaused: true,
     );
+    _restartHold();
+  }
+
+  /// Ends a drag-induced pause and eases flight back in from the parked spot.
+  void resumeFlight() {
+    _holdTimer?.cancel();
+    _holdTimer = null;
+    if (!state.isFlightPaused) return;
+    final position = state.screenPosition;
+    // Rebasing here, rather than when the drag ended, uses the position the
+    // companion actually holds at the moment flight restarts.
+    if (position != null) _rebaseFlightFrom(position);
+    state = state.copyWith(isFlightPaused: false);
+  }
+
+  void _restartHold() {
+    _holdTimer?.cancel();
+    _holdTimer = Timer(flightHold, () {
+      if (_disposed || !mounted) return;
+      resumeFlight();
+    });
+  }
+
+  void _rebaseFlightFrom(Offset position) {
+    _flightRebase = position - _flightPathAt(_pathTime, _maxPosition);
   }
 
   void placeAt(Offset position, {Offset? maxPosition}) {
-    if (maxPosition != null) {
-      state = state.copyWith(
-        screenPosition: Offset(
-          position.dx.clamp(0.0, maxPosition.dx),
-          position.dy.clamp(0.0, maxPosition.dy),
-        ),
-      );
-    } else {
+    if (maxPosition == null) {
       state = state.copyWith(screenPosition: position);
+      return;
     }
+    _maxPosition = maxPosition;
+    final clamped = _clampTo(position, maxPosition);
+    // The opening placement is off the flight path too, so it rebases: the
+    // companion eases out of its home corner into its first circuit.
+    _rebaseFlightFrom(clamped);
+    state = state.copyWith(screenPosition: clamped);
   }
 
   void resetPositionTo(Offset position, {Offset? maxPosition}) =>

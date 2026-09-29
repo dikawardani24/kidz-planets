@@ -7,6 +7,7 @@ import 'package:vector_math/vector_math.dart' as vm;
 
 import '../../application/state/avatar_state.dart';
 import '../../application/state/explorer_state.dart';
+import 'avatar_face_projection.dart';
 import 'avatar_geometry.dart';
 import 'avatar_materials.dart';
 
@@ -30,6 +31,26 @@ class AvatarSceneBuilder {
 
   UnlitMaterial? _portholeMaterial;
   UnlitMaterial? _targetMaterial;
+
+  /// The reaction currently being played, and when it started.
+  ///
+  /// Reactions animate as transforms of the parts the rocket already has. New
+  /// meshes for eyes and a mouth are deliberately *not* added here: that is
+  /// what blanked the scene once already, and a missing face must never be able
+  /// to take the Explorer down with it. The readable cartoon face is drawn over
+  /// the window by the widget layer instead.
+  AvatarReaction _reaction = AvatarReaction.none;
+  double? _reactionStartedAt;
+
+  /// The body pose as of the last [tick], reported to the 2D face so it lands
+  /// on the window and not beside it.
+  double _hover = 0;
+  double _tilt = 0;
+  double _spin = 0;
+
+  /// Where the rocket body is on the current frame.
+  AvatarBodyMotion get bodyMotion =>
+      AvatarBodyMotion(hover: _hover, tilt: _tilt, spin: _spin);
 
   void build(Scene scene) {
     scene
@@ -77,7 +98,7 @@ class AvatarSceneBuilder {
     // Front porthole window
     bodyRoot.add(
       _mesh('porthole', geometries.porthole(), portholeMat)
-        ..position = vm.Vector3(0, 0.05, -0.12),
+        ..position = vm.Vector3(0, AvatarPorthole.height, AvatarPorthole.depth),
     );
 
     // Side fins / wings
@@ -132,8 +153,38 @@ class AvatarSceneBuilder {
     ) * vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), pose.pitchClamped);
   }
 
+  /// Starts (or ends) a reaction pose.
+  ///
+  /// The start time is cleared rather than set, so the next [tick] arms the
+  /// reaction clock at zero. Every reaction then begins from its neutral pose
+  /// and eases in: without that, starting a wobble mid-swing would snap the
+  /// rocket by up to the wobble's whole amplitude.
+  void setReaction(AvatarReaction reaction) {
+    if (reaction == _reaction) return;
+    _reaction = reaction;
+    _reactionStartedAt = null;
+  }
+
+  /// How long a reaction takes to fade in, in seconds.
+  static const double _reactionFadeIn = 0.32;
+
+  /// Smoothstep, so a reaction arrives and leaves without a visible corner.
+  static double _ease(double x) {
+    final c = x.clamp(0.0, 1.0);
+    return c * c * (3 - 2 * c);
+  }
+
   void tick(Duration elapsed, AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId) {
     final t = elapsed.inMicroseconds / 1e6;
+
+    // Reaction-local clock: zero on the first tick after setReaction, so every
+    // reaction animation starts from its neutral pose.
+    var reactionTime = 0.0;
+    if (_reaction != AvatarReaction.none) {
+      _reactionStartedAt ??= t;
+      reactionTime = t - _reactionStartedAt!;
+    }
+    final ramp = _ease(reactionTime / _reactionFadeIn);
 
     double hover = 0.0;
     double tilt = 0.0;
@@ -167,9 +218,58 @@ class AvatarSceneBuilder {
       hover = math.sin(t * 3.0) * 0.02;
     }
 
+    // Reaction motion, all of it transforms of existing parts and all of it
+    // scaled by `ramp`, so a reaction grows in instead of appearing.
+    var spin = 0.0;
+    switch (_reaction) {
+      case AvatarReaction.happy:
+        // Energetic bounce with a happy little body wiggle.
+        hover += ramp * math.sin(reactionTime * 14.0).abs() * 0.035;
+        tilt += ramp * math.sin(reactionTime * 10.0) * 0.12;
+      case AvatarReaction.surprised:
+        // A quick jump straight up and a lean back, as if startled.
+        hover += ramp * 0.045;
+        tilt -= ramp * 0.22;
+        spin += ramp * math.sin(reactionTime * 6.0) * 0.12;
+      case AvatarReaction.sad:
+        // Droops, tilts down and holds still: the reduced energy is in the
+        // flight speed, which the policy slows down for this reaction.
+        hover -= ramp * 0.055;
+        tilt -= ramp * 0.12;
+        spin += ramp * math.sin(reactionTime * 2.0) * 0.03;
+      case AvatarReaction.dizzy:
+        // Wobbles and pirouettes: the spin keeps accumulating, so a double tap
+        // reads as the companion being spun around rather than nudged.
+        tilt += ramp * math.sin(reactionTime * 18.0) * 0.35;
+        spin += ramp * reactionTime * 6.0;
+      case AvatarReaction.excited:
+        hover += ramp * math.sin(reactionTime * 16.0).abs() * 0.055;
+        tilt += ramp * math.sin(reactionTime * 12.0) * 0.18;
+        spin += ramp * math.sin(reactionTime * 8.0) * 0.25;
+      case AvatarReaction.sleepy:
+        // Slow, heavy float that barely moves.
+        hover -= ramp * 0.03 + ramp * math.sin(reactionTime * 1.2) * 0.008;
+        tilt -= ramp * 0.14;
+      case AvatarReaction.laughing:
+        // A run of small, fast bounces.
+        hover += ramp * math.sin(reactionTime * 22.0).abs() * 0.03;
+        tilt += ramp * math.sin(reactionTime * 16.0) * 0.08;
+      case AvatarReaction.talking:
+        // Head bobbing: subtle, because it plays under mission instructions.
+        hover += ramp * math.sin(reactionTime * 9.0) * 0.012;
+        tilt += ramp * math.sin(reactionTime * 7.0) * 0.05;
+      case AvatarReaction.none:
+        break;
+    }
+
     bodyRoot
       ..position = vm.Vector3(0, hover, 0)
-      ..rotation = vm.Quaternion.axisAngle(vm.Vector3(0, 0, 1), tilt);
+      ..rotation = vm.Quaternion.axisAngle(vm.Vector3(0, 0, 1), tilt) *
+          vm.Quaternion.axisAngle(vm.Vector3(0, 1, 0), spin);
+
+    _hover = hover;
+    _tilt = tilt;
+    _spin = spin;
 
     _setPortholeColor(mood, idleAction, selectedPlanetId);
   }
@@ -177,16 +277,27 @@ class AvatarSceneBuilder {
   void _setPortholeColor(AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId) {
     final material = _portholeMaterial;
     if (material == null) return;
-    final color = switch (selectedPlanetId) {
-      'neptune' || 'uranus' || 'pluto' => const Color(0xFF38BDF8),
-      'sun' || 'mercury' || 'venus' => const Color(0xFFFBBF24),
-      _ => switch (idleAction) {
-          AvatarIdleAction.dancing => const Color(0xFF10B981),
-          AvatarIdleAction.thinking => const Color(0xFF8B5CF6),
-          AvatarIdleAction.sitting => const Color(0xFF64748B),
-          AvatarIdleAction.flying => const Color(0xFF06B6D4),
-          AvatarIdleAction.sendingHeart => const Color(0xFFEC4899),
-          AvatarIdleAction.none => const Color(0xFF12B981),
+    final color = switch (_reaction) {
+      // A reaction overrides the ambient tint for as long as it plays, so the
+      // window reads as the companion's mood rather than as the planet's.
+      AvatarReaction.happy || AvatarReaction.laughing => const Color(0xFFFF7EB6),
+      AvatarReaction.excited => const Color(0xFFFFC93C),
+      AvatarReaction.surprised => const Color(0xFFEAF6FF),
+      AvatarReaction.sad => const Color(0xFF4C63C8),
+      AvatarReaction.dizzy => const Color(0xFFB388FF),
+      AvatarReaction.sleepy => const Color(0xFF3F4E92),
+      AvatarReaction.talking => const Color(0xFF7DD3FC),
+      AvatarReaction.none => switch (selectedPlanetId) {
+          'neptune' || 'uranus' || 'pluto' => const Color(0xFF38BDF8),
+          'sun' || 'mercury' || 'venus' => const Color(0xFFFBBF24),
+          _ => switch (idleAction) {
+              AvatarIdleAction.dancing => const Color(0xFF10B981),
+              AvatarIdleAction.thinking => const Color(0xFF8B5CF6),
+              AvatarIdleAction.sitting => const Color(0xFF64748B),
+              AvatarIdleAction.flying => const Color(0xFF06B6D4),
+              AvatarIdleAction.sendingHeart => const Color(0xFFEC4899),
+              AvatarIdleAction.none => const Color(0xFF12B981),
+            },
         },
     };
     if (_portholeColor == color) return;

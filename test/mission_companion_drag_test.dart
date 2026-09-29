@@ -6,7 +6,9 @@ import 'package:kidz_planets/application/controllers/avatar_controller.dart';
 import 'package:kidz_planets/application/state/avatar_state.dart';
 import 'package:kidz_planets/application/state/explorer_state.dart';
 import 'package:kidz_planets/application/state/providers.dart';
+import 'package:kidz_planets/infrastructure/scene/avatar_face_projection.dart';
 import 'package:kidz_planets/infrastructure/scene/avatar_scene_controller.dart';
+import 'package:kidz_planets/l10n/localized_planet.dart';
 import 'package:kidz_planets/presentation/widgets/panels/avatar_speech.dart';
 import 'helpers/localized_app.dart';
 import 'package:kidz_planets/presentation/widgets/panels/mission_companion.dart';
@@ -114,12 +116,23 @@ void main() {
       final container = ProviderScope.containerOf(
         tester.element(find.byType(MissionCompanion)),
       );
-      await tester.tap(find.byType(MissionCompanion));
-      await tester.pump();
+      await tester.tapAt(_avatarCentre(container));
+      // A single tap has to wait out the double-tap window before it is
+      // resolved as a tap rather than as the start of a double tap.
+      await tester.pump(const Duration(milliseconds: 400));
       expect(
         container.read(avatarControllerProvider).reaction,
         AvatarReaction.happy,
       );
+      await _runOutCompanionTimers(tester);
+    });
+
+    testWidgets('the whole toy is the move affordance, not a second handle',
+        (tester) async {
+      // The child drags the character itself. Nothing else on screen is
+      // labelled as a way to move it, which is what "no separate handle" means.
+      await _pumpCompanion(tester);
+      expect(find.bySemanticsLabel('Move the space buddy'), findsOneWidget);
     });
 
     testWidgets('starts inside a small viewport', (tester) async {
@@ -145,16 +158,61 @@ void main() {
       );
       final before = container.read(avatarControllerProvider);
 
-      await tester.drag(
-        find.byType(MissionCompanion),
-        const Offset(-60, -40),
-      );
+      await tester.dragFrom(_avatarCentre(container), const Offset(-60, -40));
       await tester.pump();
 
       final after = container.read(avatarControllerProvider);
       expect(after.screenPosition, isNot(before.screenPosition));
       expect(after.yaw, before.yaw);
       expect(after.pitch, before.pitch);
+      await _runOutCompanionTimers(tester);
+    });
+
+    testWidgets('a drag parks the companion where the child put it',
+        (tester) async {
+      await _pumpCompanion(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MissionCompanion)),
+      );
+
+      await tester.dragFrom(_avatarCentre(container), const Offset(-60, 40));
+      await tester.pump();
+      final parked = container.read(avatarControllerProvider).screenPosition;
+
+      // The flight loop must not slide it back to its own path: a toy the child
+      // has placed stays where it was placed.
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      final now = container.read(avatarControllerProvider);
+      expect(now.isFlightPaused, isTrue);
+      expect(now.screenPosition, parked);
+      await _runOutCompanionTimers(tester);
+    });
+
+    testWidgets('a two finger drag turns the toy in both axes', (tester) async {
+      await _pumpCompanion(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MissionCompanion)),
+      );
+      final before = container.read(avatarControllerProvider);
+      final centre = _avatarCentre(container);
+
+      // Two fingers, because one is how the child moves the toy.
+      final first = await tester.startGesture(centre);
+      final second = await tester.startGesture(centre + const Offset(40, 0));
+      await tester.pump();
+      await first.moveBy(const Offset(60, 70));
+      await second.moveBy(const Offset(60, 70));
+      await tester.pump();
+      await first.up();
+      await second.up();
+      await tester.pump();
+
+      final after = container.read(avatarControllerProvider);
+      expect(after.yaw, greaterThan(before.yaw), reason: 'sideways turns it');
+      expect(after.pitch, greaterThan(before.pitch), reason: 'upwards tips it');
+      await _runOutCompanionTimers(tester);
     });
   });
 
@@ -171,11 +229,7 @@ void main() {
       );
 
       // One-finger dragging moves the character directly.
-      final body = container.read(avatarControllerProvider).screenPosition!;
-      await tester.dragFrom(
-        body + const Offset(kCompanionBoxWidth / 2, kCompanionBoxHeight / 2),
-        const Offset(80, 40),
-      );
+      await tester.dragFrom(_avatarCentre(container), const Offset(80, 40));
       await tester.pump();
 
       final pose = container.read(avatarControllerProvider);
@@ -183,6 +237,7 @@ void main() {
       expect(fake.poses, isNotEmpty);
       expect(fake.poses.last.yaw, pose.yaw);
       expect(fake.poses.last.pitch, pose.pitch);
+      await _runOutCompanionTimers(tester);
     });
 
     testWidgets('moving updates the position without re-aiming', (tester) async {
@@ -192,16 +247,78 @@ void main() {
       );
       final before = container.read(avatarControllerProvider).screenPosition;
 
-      await tester.drag(
-        find.byType(MissionCompanion),
-        const Offset(-50, -30),
-      );
+      await tester.dragFrom(_avatarCentre(container), const Offset(-50, -30));
       await tester.pump();
 
       final pose = container.read(avatarControllerProvider);
       expect(pose.screenPosition, isNot(before), reason: 'the move took effect');
       expect(fake.poses.last.yaw, 0, reason: 'a move must not re-aim the model');
       expect(fake.poses.last.pitch, 0);
+      await _runOutCompanionTimers(tester);
+    });
+
+    testWidgets('a mood change reaches the 3D layer as a reaction',
+        (tester) async {
+      final fake = await _pumpCompanion(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MissionCompanion)),
+      );
+
+      // Miss the active mission on purpose: the mission is what changes the
+      // mood, and the mood is what the companion reacts to.
+      final target = container
+          .read(explorerControllerProvider)
+          .activeMission!
+          .targetPlanetId;
+      final wrong = container
+          .read(planetsProvider)
+          .firstWhere((p) => p.id != target);
+
+      container.read(explorerControllerProvider.notifier).selectPlanet(wrong.id);
+      // Let the reaction play out and the spin hint expire, so nothing is left
+      // pending when the test ends.
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(
+        container.read(avatarControllerProvider).reaction,
+        AvatarReaction.sad,
+        reason: 'a wrong pick droops',
+      );
+      expect(fake.reactions, contains(AvatarReaction.sad));
+
+      await tester.pump(const Duration(seconds: 5));
+      expect(
+        container.read(avatarControllerProvider).reaction,
+        AvatarReaction.none,
+        reason: 'the reaction expires on its own',
+      );
+    });
+
+    testWidgets('the companion says the mission line when the beat lands',
+        (tester) async {
+      await _pumpCompanion(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MissionCompanion)),
+      );
+      final mission = container.read(explorerControllerProvider).activeMission!;
+      final name = localizedPlanetName(
+        mission.targetPlanetId,
+        const Locale('en'),
+      );
+
+      // Before a beat, the companion is simply having fun.
+      expect(find.text(avatarLine(AvatarMood.instruction, name)), findsNothing);
+
+      container
+          .read(explorerControllerProvider.notifier)
+          .setAvatarMood(AvatarMood.instruction);
+      await tester.pump();
+
+      expect(
+        find.text(avatarLine(AvatarMood.instruction, name)),
+        findsOneWidget,
+        reason: 'the child is told what to find, by name',
+      );
+      await _runOutCompanionTimers(tester);
     });
 
     testWidgets('the target ring follows the active mission', (tester) async {
@@ -230,6 +347,28 @@ void main() {
   });
 }
 
+/// The centre of the companion's own box, in the same coordinates the gestures
+/// use. The overlay fills the whole screen, so a test that tapped the widget's
+/// centre would be poking at empty space next to the toy instead of the toy.
+Offset _avatarCentre(ProviderContainer container) {
+  final position = container.read(avatarControllerProvider).screenPosition;
+  expect(position, isNotNull, reason: 'the companion is placed before gestures');
+  return position! +
+      const Offset(kCompanionBoxWidth / 2, kCompanionBoxHeight / 2);
+}
+
+/// Runs out the companion's own timers before a test ends.
+///
+/// Touching or dragging the toy starts two of them: the double-tap countdown
+/// behind every gesture, and the park hold that keeps a dragged companion where
+/// the child left it. Both are real timers, and a test that ends with one
+/// pending fails on that rather than on anything it was checking. Fake time is
+/// free, so running them out costs nothing.
+Future<void> _runOutCompanionTimers(WidgetTester tester) async {
+  await tester.pump(const Duration(milliseconds: 400));
+  await tester.pump(const Duration(seconds: 11));
+}
+
 /// Pumps the companion over a stand-in controller and hands that controller
 /// back, so a test can inspect what the overlay asked the 3D layer to do.
 Future<_FakeController> _pumpCompanion(WidgetTester tester) async {
@@ -254,6 +393,7 @@ Future<_FakeController> _pumpCompanion(WidgetTester tester) async {
 class _FakeController implements AvatarSceneController {
   final List<({double yaw, double pitch})> poses = [];
   final List<({bool visible, Color color})> targets = [];
+  final List<AvatarReaction> reactions = [];
 
   // Recorded but never asserted on: `_CompanionScene` short-circuits to a plain
   // box while `isRealScene` is false, so the per-frame tick never reaches a
@@ -272,6 +412,11 @@ class _FakeController implements AvatarSceneController {
 
   @override
   bool get isRealScene => false;
+
+  /// No scene means no body animation, which is also what the 2D face falls
+  /// back to: it is drawn from the pose alone.
+  @override
+  AvatarBodyMotion get bodyMotion => AvatarBodyMotion.rest;
 
   @override
   void ensureBuilt() {}
@@ -294,7 +439,7 @@ class _FakeController implements AvatarSceneController {
       poses.add((yaw: pose.yaw, pitch: pose.pitch));
 
   @override
-  void applyReaction(AvatarReaction reaction) {}
+  void applyReaction(AvatarReaction reaction) => reactions.add(reaction);
 
   @override
   void showTarget({required bool visible, required Color color}) =>

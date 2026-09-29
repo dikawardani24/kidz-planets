@@ -4,6 +4,7 @@ import 'package:vector_math/vector_math.dart' as vm;
 
 import '../../application/state/avatar_state.dart';
 import '../../application/state/explorer_state.dart';
+import 'avatar_face_projection.dart';
 import 'avatar_geometry.dart';
 import 'avatar_materials.dart';
 import 'avatar_scene_builder.dart';
@@ -14,9 +15,22 @@ abstract class AvatarSceneController {
   bool get isReady;
   bool get isRealScene;
 
+  /// Where the rocket body sits on the current frame.
+  ///
+  /// The 2D face is painted by Flutter, so it needs the body's own animation
+  /// to land on the window. A stand-in with no scene reports [AvatarBodyMotion.rest].
+  AvatarBodyMotion get bodyMotion;
+
   void ensureBuilt();
   void tick(Duration elapsed, AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId);
   void applyPose(AvatarState pose);
+
+  /// Starts a reaction pose in the 3D layer.
+  ///
+  /// Reactions are transforms of the model the companion already has, so the
+  /// abstract surface stays the same whether or not a real scene is behind it:
+  /// a stand-in can record the call without a GPU.
+  void applyReaction(AvatarReaction reaction);
   void showTarget({required bool visible, required Color color});
   void dispose();
 }
@@ -49,6 +63,9 @@ class AvatarSceneControllerImpl implements AvatarSceneController {
   @override
   bool get isRealScene => true;
 
+  @override
+  AvatarBodyMotion get bodyMotion => _builder.bodyMotion;
+
   static final PerspectiveCamera camera = PerspectiveCamera(
     fovRadiansY: 0.62,
     position: vm.Vector3(0, 0.02, -1.75),
@@ -68,6 +85,9 @@ class AvatarSceneControllerImpl implements AvatarSceneController {
 
   @override
   void applyPose(AvatarState pose) => _builder.setRotation(pose);
+
+  @override
+  void applyReaction(AvatarReaction reaction) => _builder.setReaction(reaction);
 
   @override
   void showTarget({required bool visible, required Color color}) =>
