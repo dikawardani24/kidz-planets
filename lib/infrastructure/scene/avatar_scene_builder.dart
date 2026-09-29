@@ -27,9 +27,14 @@ class AvatarSceneBuilder {
   final Node avatarRoot = Node(name: 'avatar-root');
   final Node bodyRoot = Node(name: 'avatar-body');
   final Node targetPivot = Node(name: 'avatar-target');
+  final Node leftEye = Node(name: 'avatar-eye-left');
+  final Node rightEye = Node(name: 'avatar-eye-right');
+  final Node mouth = Node(name: 'avatar-mouth');
 
   UnlitMaterial? _portholeMaterial;
   UnlitMaterial? _targetMaterial;
+  UnlitMaterial? _eyeMaterial;
+  UnlitMaterial? _mouthMaterial;
 
   void build(Scene scene) {
     scene
@@ -90,6 +95,20 @@ class AvatarSceneBuilder {
         ..position = vm.Vector3(0.16, -0.10, 0),
     );
 
+    // Friendly face: expressive eyes and a tiny mouth make the 3D companion
+    // feel like a character instead of a static rocket.
+    _eyeMaterial = materials.avatarEye();
+    _mouthMaterial = materials.avatarMouth();
+    bodyRoot.add(leftEye
+      ..add(_mesh('eye-left', geometries.avatarEye(), _eyeMaterial!))
+      ..position = vm.Vector3(-0.055, 0.10, -0.135));
+    bodyRoot.add(rightEye
+      ..add(_mesh('eye-right', geometries.avatarEye(), _eyeMaterial!))
+      ..position = vm.Vector3(0.055, 0.10, -0.135));
+    bodyRoot.add(mouth
+      ..add(_mesh('mouth', geometries.avatarMouth(), _mouthMaterial!))
+      ..position = vm.Vector3(0, -0.005, -0.145));
+
     // Engine nozzle at base
     bodyRoot.add(
       _mesh('engine', geometries.engineNozzle(), whiteMat)
@@ -125,6 +144,10 @@ class AvatarSceneBuilder {
     return node;
   }
 
+  void setReaction(AvatarReaction reaction) {
+    _reaction = reaction;
+  }
+
   void setRotation(AvatarState pose) {
     avatarRoot.rotation = vm.Quaternion.axisAngle(
       vm.Vector3(0, 1, 0),
@@ -134,6 +157,7 @@ class AvatarSceneBuilder {
 
   void tick(Duration elapsed, AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId) {
     final t = elapsed.inMicroseconds / 1e6;
+    _reactionTime = t;
 
     double hover = 0.0;
     double tilt = 0.0;
@@ -167,9 +191,49 @@ class AvatarSceneBuilder {
       hover = math.sin(t * 3.0) * 0.02;
     }
 
+    var eyeLift = 0.0;
+    var mouthScale = 1.0;
+    var faceTilt = 0.0;
+    switch (_reaction) {
+      case AvatarReaction.happy:
+        mouthScale = 1.2 + math.sin(t * 12.0).abs() * 0.12;
+        eyeLift = 0.012;
+      case AvatarReaction.surprised:
+        eyeLift = 0.02;
+        mouthScale = 1.5;
+        faceTilt = math.sin(t * 8.0) * 0.06;
+      case AvatarReaction.sad:
+        eyeLift = -0.018;
+        mouthScale = 0.75;
+      case AvatarReaction.dizzy:
+        faceTilt = math.sin(t * 18.0) * 0.28;
+      case AvatarReaction.excited:
+        eyeLift = math.sin(t * 18.0).abs() * 0.025;
+        mouthScale = 1.35;
+      case AvatarReaction.sleepy:
+        eyeLift = -0.025;
+        mouthScale = 0.7;
+      case AvatarReaction.laughing:
+        eyeLift = math.sin(t * 14.0) * 0.012;
+        mouthScale = 1.4;
+      case AvatarReaction.talking:
+        mouthScale = 0.8 + math.sin(t * 18.0).abs() * 0.55;
+      case AvatarReaction.none:
+        break;
+    }
+
+    leftEye.position = vm.Vector3(-0.055, 0.10 + eyeLift, -0.135);
+    rightEye.position = vm.Vector3(0.055, 0.10 + eyeLift, -0.135);
+    mouth
+      ..position = vm.Vector3(0, -0.005, -0.145)
+      ..scale = vm.Vector3(mouthScale, mouthScale, mouthScale);
+
     bodyRoot
       ..position = vm.Vector3(0, hover, 0)
-      ..rotation = vm.Quaternion.axisAngle(vm.Vector3(0, 0, 1), tilt);
+      ..rotation = vm.Quaternion.axisAngle(
+        vm.Vector3(0, 0, 1),
+        tilt + faceTilt,
+      );
 
     _setPortholeColor(mood, idleAction, selectedPlanetId);
   }
@@ -200,6 +264,8 @@ class AvatarSceneBuilder {
   }
 
   Color? _portholeColor;
+  AvatarReaction _reaction = AvatarReaction.none;
+  double _reactionTime = 0.0;
 
   void showTarget({required bool visible, required Color color}) {
     targetPivot.visible = visible;
