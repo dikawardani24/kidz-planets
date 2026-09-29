@@ -10,6 +10,7 @@ import 'package:kidz_planets/infrastructure/scene/avatar_scene_controller.dart';
 import 'package:kidz_planets/presentation/widgets/panels/avatar_speech.dart';
 import 'helpers/localized_app.dart';
 import 'package:kidz_planets/presentation/widgets/panels/mission_companion.dart';
+import 'helpers/localized_app.dart';
 
 /// Bubble placement is pure geometry, so it is exercised directly: the point of
 /// these tests is the edge behaviour, not Flutter's layout. The widget tests
