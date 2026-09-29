@@ -35,16 +35,6 @@ class AvatarMaterialFactory {
       ..baseColorFactor = vm.Vector4(0.12, 0.75, 0.98, 1.0);
   }
 
-  UnlitMaterial avatarEye() {
-    return UnlitMaterial()
-      ..baseColorFactor = vm.Vector4(0.015, 0.025, 0.055, 1.0);
-  }
-
-  UnlitMaterial avatarMouth() {
-    return UnlitMaterial()
-      ..baseColorFactor = vm.Vector4(0.08, 0.01, 0.025, 1.0);
-  }
-
   /// Stand-in for the mission target.
   UnlitMaterial target() {
     return UnlitMaterial()
