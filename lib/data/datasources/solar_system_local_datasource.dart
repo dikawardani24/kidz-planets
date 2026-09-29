@@ -14,7 +14,11 @@ class SolarSystemLocalDataSource {
           targetPlanetId: 'earth',
           startPoint: 'the Sun',
           direction: 'Count outward from the Sun',
-          hint: 'Look for a blue world with bright oceans and visible land.',
+          hints: [
+            'Look for a blue world with bright oceans and visible land.',
+            'Count outward from the Sun: Mercury, Venus, then Earth. It is the third planet.',
+            'It is the shiny blue-and-green one, and the only world where we have people.',
+          ],
         ),
         Mission(
           id: 2,
@@ -23,7 +27,11 @@ class SolarSystemLocalDataSource {
           targetPlanetId: 'mars',
           startPoint: 'the Sun',
           direction: 'Count outward',
-          hint: 'Look for a small reddish rocky world.',
+          hints: [
+            'Look for a small reddish rocky world.',
+            'Count outward from the Sun and it comes right after Earth.',
+            'It is the dusty red planet, with a giant canyon and the tallest volcano we know.',
+          ],
         ),
         Mission(
           id: 3,
@@ -32,7 +40,11 @@ class SolarSystemLocalDataSource {
           targetPlanetId: 'saturn',
           startPoint: 'the Sun',
           direction: 'Count outward',
-          hint: 'Look for the planet with a spectacular ring system.',
+          hints: [
+            'Look for the planet with a spectacular ring system.',
+            'Count outward from the Sun and it is the sixth planet, just past Jupiter.',
+            'It is the golden planet, and those bright rings make it easy to spot from far away.',
+          ],
         ),
         Mission(
           id: 4,
@@ -41,7 +53,11 @@ class SolarSystemLocalDataSource {
           targetPlanetId: 'jupiter',
           startPoint: 'the Sun',
           direction: 'Count outward',
-          hint: 'Look for the largest planet with a giant storm.',
+          hints: [
+            'Look for the largest planet with a giant storm.',
+            'Count outward from the Sun and it is the fifth planet, just before Saturn.',
+            'It is the biggest planet, and its Great Red Spot is a storm wider than Earth.',
+          ],
         ),
       ];
 }

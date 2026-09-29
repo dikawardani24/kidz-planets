@@ -42,14 +42,15 @@ void main() {
       expect(c.state.avatarMood, AvatarMood.wrong);
     });
 
-    test('a wrong pick does not touch the mission guide', () {
-      // The mission dialog opens from a tap on the guide pill, not from state,
-      // and a miss must leave the guide exactly as it was: unchanged, so the
-      // guide cannot be what reopens the mission text over the companion.
+    test('a wrong pick does not move the mission along', () {
+      // The mission guide pill is the only way into the mission text, and it
+      // follows the active mission. A miss must leave the child on the same
+      // mission, so nothing reopens the text over the companion.
       final c = makeController();
-      final before = c.state.missionGuideVisible;
+      final activeBefore = c.state.activeMissionId;
       c.selectPlanet(aWrongPlanet(c));
-      expect(c.state.missionGuideVisible, before);
+      expect(c.state.activeMissionId, activeBefore);
+      expect(c.state.activeMission!.completed, isFalse);
     });
 
     test('no hint is escalated, so there is nothing new to read out', () {

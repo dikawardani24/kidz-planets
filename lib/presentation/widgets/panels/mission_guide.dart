@@ -15,7 +15,7 @@ void showMissionDialog(BuildContext context, WidgetRef ref) {
     barrierLabel: 'Mission details',
     barrierColor: Colors.black.withValues(alpha: .78),
     transitionDuration: const Duration(milliseconds: 280),
-    pageBuilder: (_, _, _) => _MissionDialog(mission: matches.first, hintLevel: ui.missionHintLevel),
+    pageBuilder: (_, _, _) => _MissionDialog(mission: matches.first),
     transitionBuilder: (_, animation, _, child) {
       final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
       return FadeTransition(opacity: curved, child: ScaleTransition(scale: Tween<double>(begin: .92, end: 1).animate(curved), child: child));
@@ -41,13 +41,17 @@ class MissionGuide extends ConsumerWidget {
 }
 
 class _MissionDialog extends ConsumerWidget {
-  const _MissionDialog({required this.mission, required this.hintLevel});
+  const _MissionDialog({required this.mission});
   final MissionState mission;
-  final int hintLevel;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final planet = ref.watch(planetByIdProvider(mission.targetPlanetId));
-    final clue = hintLevel == 0 ? (mission.hint ?? mission.description) : '${mission.hint ?? mission.description} ${mission.direction ?? 'Count outward from the Sun'}.';
+    final controller = ref.read(explorerControllerProvider.notifier);
+    // Read live rather than snapshotted at open time, so revealing a clue
+    // updates the text without having to reopen the dialog.
+    final level = ref.watch(explorerControllerProvider.select((s) => s.missionHintLevel));
+    final clue = mission.clueAt(level);
+    final hasMoreClues = level < mission.hints.length - 1;
     return Material(color: Colors.transparent, child: SafeArea(child: Center(child: Padding(padding: const EdgeInsets.all(20), child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 430, maxHeight: 620),
       child: AppTheme.glass(radius: BorderRadius.circular(28), padding: const EdgeInsets.all(18), child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -62,10 +66,27 @@ class _MissionDialog extends ConsumerWidget {
           const SizedBox(height: 7), Text('➡️  ${mission.direction ?? 'Count outward'}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFDDEAFE))),
         ])),
         const SizedBox(height: 12),
-        Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: AppTheme.accentSky.withValues(alpha: .25))), child: Row(children: [
-          ClipOval(child: SizedBox(width: 76, height: 76, child: Image.asset(planet.textureAsset, fit: BoxFit.cover, errorBuilder: (_, _, _) => Center(child: Text(planet.isSun ? '☀️' : '🪐', style: const TextStyle(fontSize: 34)))))),
-          const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('LOOK FOR THIS', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: AppTheme.accentAmber)), const SizedBox(height: 5), Text(clue, style: const TextStyle(fontSize: 11, height: 1.4, color: Color(0xFFE0E7FF)))])),
-          IconButton(onPressed: () => ref.read(planetNarrationServiceProvider).replay(planet), icon: const Icon(Icons.volume_up_rounded, color: AppTheme.accentSky)),
+        Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: AppTheme.accentSky.withValues(alpha: .25))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            ClipOval(child: SizedBox(width: 76, height: 76, child: Image.asset(planet.textureAsset, fit: BoxFit.cover, errorBuilder: (_, _, _) => Center(child: Text(planet.isSun ? '☀️' : '🪐', style: const TextStyle(fontSize: 34)))))),
+            const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('LOOK FOR THIS', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: AppTheme.accentAmber)), const SizedBox(height: 5), Text(clue, style: const TextStyle(fontSize: 11, height: 1.4, color: Color(0xFFE0E7FF)))])),
+            IconButton(onPressed: () => ref.read(planetNarrationServiceProvider).replay(planet), icon: const Icon(Icons.volume_up_rounded, color: AppTheme.accentSky)),
+          ]),
+          if (hasMoreClues) ...[
+            const SizedBox(height: 10),
+            // Asking is the only way to get a bigger clue, so the button is
+            // offered plainly rather than hidden behind a streak of misses.
+            SizedBox(width: double.infinity, child: OutlinedButton.icon(
+              onPressed: controller.revealNextHint,
+              icon: const Icon(Icons.lightbulb_outline_rounded, size: 17, color: AppTheme.accentAmber),
+              label: Text('Need a bigger clue?', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppTheme.accentSky.withValues(alpha: .95))),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: AppTheme.accentSky.withValues(alpha: .3)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            )),
+          ],
         ])),
         const SizedBox(height: 14), SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.explore_rounded), label: const Text('Got it — let’s explore!'))),
       ]))),

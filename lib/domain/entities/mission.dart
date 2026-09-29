@@ -9,7 +9,7 @@ class Mission extends Equatable {
     required this.targetPlanetId,
     this.startPoint,
     this.direction,
-    this.hint,
+    this.hints = const [],
     this.completed = false,
   });
 
@@ -19,7 +19,16 @@ class Mission extends Equatable {
   final String targetPlanetId;
   final String? startPoint;
   final String? direction;
-  final String? hint;
+
+  /// Clues in increasing order of bluntness, given away one at a time.
+  ///
+  /// The first entry is what the mission dialog shows on open. Each further
+  /// entry is a bigger nudge for a child who has already read the first one
+  /// and still has not spotted the target, so the dialog only reveals the next
+  /// clue when asked rather than unprompted. Never empty in practice, but an
+  /// empty list is handled rather than assumed away.
+  final List<String> hints;
+
   final bool completed;
 
   Mission copyWith({bool? completed}) => Mission(
@@ -29,7 +38,7 @@ class Mission extends Equatable {
         targetPlanetId: targetPlanetId,
         startPoint: startPoint,
         direction: direction,
-        hint: hint,
+        hints: hints,
         completed: completed ?? this.completed,
       );
 

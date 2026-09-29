@@ -51,7 +51,6 @@ class ExplorerState extends Equatable {
     this.celebrationTitle,
     this.celebrationDescription,
     this.activeMissionId = 1,
-    this.missionGuideVisible = true,
     this.missionHintLevel = 0,
     this.wrongSelectionKey = 0,
     this.avatarMood = AvatarMood.searching,
@@ -80,7 +79,9 @@ class ExplorerState extends Equatable {
   final String? celebrationTitle;
   final String? celebrationDescription;
   final int? activeMissionId;
-  final bool missionGuideVisible;
+
+  /// How many extra clues the child has asked for on [activeMissionId].
+  /// Reset to zero whenever the active mission moves on.
   final int missionHintLevel;
   final int wrongSelectionKey;
 
@@ -127,7 +128,6 @@ class ExplorerState extends Equatable {
     Object? celebrationTitle = _sentinel,
     Object? celebrationDescription = _sentinel,
     Object? activeMissionId = _sentinel,
-    bool? missionGuideVisible,
     int? missionHintLevel,
     int? wrongSelectionKey,
     AvatarMood? avatarMood,
@@ -156,7 +156,6 @@ class ExplorerState extends Equatable {
       celebrationTitle: identical(celebrationTitle, _sentinel) ? this.celebrationTitle : celebrationTitle as String?,
       celebrationDescription: identical(celebrationDescription, _sentinel) ? this.celebrationDescription : celebrationDescription as String?,
       activeMissionId: identical(activeMissionId, _sentinel) ? this.activeMissionId : activeMissionId as int?,
-      missionGuideVisible: missionGuideVisible ?? this.missionGuideVisible,
       missionHintLevel: missionHintLevel ?? this.missionHintLevel,
       wrongSelectionKey: wrongSelectionKey ?? this.wrongSelectionKey,
       avatarMood: avatarMood ?? this.avatarMood,
@@ -167,23 +166,33 @@ class ExplorerState extends Equatable {
   List<Object?> get props => [
         tab, running, speed, showOrbits, showLabels, selectedPlanetId, focusedPlanetId,
         detailZoom, detailTheta, detailPhi, detailTitleOverride, detailDescriptionOverride, detailCardVisible, spinHintVisible,
-        playModeBannerVisible, playgroundAlertIcon, playgroundAlertTitle, playgroundAlertDescription, missions, toasts, celebrationTitle, celebrationDescription, activeMissionId, missionGuideVisible, missionHintLevel, wrongSelectionKey, avatarMood,
+        playModeBannerVisible, playgroundAlertIcon, playgroundAlertTitle, playgroundAlertDescription, missions, toasts, celebrationTitle, celebrationDescription, activeMissionId, missionHintLevel, wrongSelectionKey, avatarMood,
       ];
 }
 
 const _sentinel = Object();
 
 class MissionState extends Equatable {
-  const MissionState({required this.id, required this.title, required this.description, required this.targetPlanetId, this.startPoint, this.direction, this.hint, this.completed = false});
+  const MissionState({required this.id, required this.title, required this.description, required this.targetPlanetId, this.startPoint, this.direction, this.hints = const [], this.completed = false});
   final int id;
   final String title;
   final String description;
   final String targetPlanetId;
   final String? startPoint;
   final String? direction;
-  final String? hint;
+
+  /// Escalating clues, revealed one at a time. See [Mission.hints].
+  final List<String> hints;
   final bool completed;
-  MissionState copyWith({bool? completed}) => MissionState(id: id, title: title, description: description, targetPlanetId: targetPlanetId, startPoint: startPoint, direction: direction, hint: hint, completed: completed ?? this.completed);
+  MissionState copyWith({bool? completed}) => MissionState(id: id, title: title, description: description, targetPlanetId: targetPlanetId, startPoint: startPoint, direction: direction, hints: hints, completed: completed ?? this.completed);
+
+  /// The clue at [level], clamped to the last one so asking for more clues
+  /// past the end repeats the final one rather than throwing.
+  String clueAt(int level) {
+    if (hints.isEmpty) return description;
+    return hints[level.clamp(0, hints.length - 1)];
+  }
+
   @override
   List<Object?> get props => [id, completed];
 }

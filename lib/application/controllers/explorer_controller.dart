@@ -9,7 +9,7 @@ import '../state/simulation_clock.dart';
 
 class ExplorerController extends StateNotifier<ExplorerState> {
   ExplorerController({required this._clock, required List<Mission> initialMissions})
-      : super(ExplorerState(missions: initialMissions.map((m) => MissionState(id: m.id, title: m.title, description: m.description, targetPlanetId: m.targetPlanetId, startPoint: m.startPoint, direction: m.direction, hint: m.hint)).toList()));
+      : super(ExplorerState(missions: initialMissions.map((m) => MissionState(id: m.id, title: m.title, description: m.description, targetPlanetId: m.targetPlanetId, startPoint: m.startPoint, direction: m.direction, hints: m.hints)).toList()));
 
   final SimulationClock _clock;
   final PlanetSoundService _missionSound = PlanetSoundService();
@@ -142,8 +142,17 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     showToast('Mission complete: ${mission.title}');
   }
 
-  void toggleMissionGuide() {
-    state = state.copyWith(missionGuideVisible: !state.missionGuideVisible);
+  /// Reveals the next, blunter clue for the active mission.
+  ///
+  /// Deliberately child-initiated. A wrong pick is answered by the companion
+  /// reacting in place, so a child who is stuck has to ask for another clue
+  /// rather than being handed one on every miss. Saturates at the last clue.
+  void revealNextHint() {
+    final mission = state.activeMission;
+    if (mission == null) return;
+    final last = mission.hints.length - 1;
+    if (state.missionHintLevel >= last) return;
+    state = state.copyWith(missionHintLevel: state.missionHintLevel + 1);
   }
 
   void showCelebration(String title, String description) {
@@ -229,6 +238,9 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     state = state.copyWith(
       missions: updated,
       activeMissionId: nextMissionId,
+      // Clues given away for the finished mission do not carry over: the next
+      // mission starts from its own first clue.
+      missionHintLevel: 0,
       // The companion celebrates in place rather than being replaced, and
       // drops back to calm when the celebration dialog is dismissed.
       avatarMood: AvatarMood.success,
