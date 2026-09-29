@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_scene/scene.dart';
@@ -84,8 +85,113 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
     });
   }
 
+  final Map<int, Offset> _activePointers = {};
+  Offset? _firstDownPos;
+  DateTime? _firstDownTime;
+  int _tapCount = 0;
+  Timer? _singleTapTimer;
+  Timer? _longPressTimer;
+  bool _isLongPress = false;
+  bool _hasMovedFar = false;
+
+  void _onPointerDown(PointerDownEvent event) {
+    _activePointers[event.pointer] = event.position;
+    if (_activePointers.length == 1) {
+      _firstDownPos = event.position;
+      _firstDownTime = DateTime.now();
+      _hasMovedFar = false;
+      _isLongPress = false;
+
+      _longPressTimer?.cancel();
+      _longPressTimer = Timer(const Duration(milliseconds: 500), () {
+        if (_activePointers.length == 1 && !_hasMovedFar && mounted) {
+          _isLongPress = true;
+          ref.read(avatarControllerProvider.notifier).react(
+                AvatarReaction.sleepy,
+                duration: const Duration(milliseconds: 1800),
+              );
+        }
+      });
+    } else if (_activePointers.length >= 2) {
+      _longPressTimer?.cancel();
+    }
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    _activePointers[event.pointer] = event.position;
+
+    if (_activePointers.length == 1) {
+      final start = _firstDownPos;
+      if (start != null && (event.position - start).distanceSquared > 36) {
+        _hasMovedFar = true;
+        _longPressTimer?.cancel();
+      }
+      ref.read(avatarControllerProvider.notifier).moveBy(
+            delta: event.delta,
+            maxPosition: _lastMaxPosition,
+          );
+    } else if (_activePointers.length >= 2) {
+      _longPressTimer?.cancel();
+      _hasMovedFar = true;
+      ref.read(avatarControllerProvider.notifier).rotateBy(
+            dx: event.delta.dx * kCompanionDragYaw,
+            dy: event.delta.dy * kCompanionDragPitch,
+          );
+    }
+  }
+
+  void _onPointerUp(PointerUpEvent event) {
+    _activePointers.remove(event.pointer);
+    _longPressTimer?.cancel();
+
+    if (_activePointers.isEmpty) {
+      final downTime = _firstDownTime;
+      final now = DateTime.now();
+      if (!_hasMovedFar &&
+          !_isLongPress &&
+          downTime != null &&
+          now.difference(downTime).inMilliseconds < 350) {
+        _tapCount++;
+        if (_tapCount == 1) {
+          _singleTapTimer?.cancel();
+          _singleTapTimer = Timer(const Duration(milliseconds: 250), () {
+            if (_tapCount == 1 && mounted) {
+              final ui = ref.read(explorerControllerProvider);
+              if (ui.avatarMood == AvatarMood.wrong) {
+                ref.read(explorerControllerProvider.notifier).retryMission();
+              } else {
+                ref
+                    .read(avatarControllerProvider.notifier)
+                    .react(AvatarReaction.happy);
+              }
+            }
+            _tapCount = 0;
+          });
+        } else if (_tapCount >= 2) {
+          _singleTapTimer?.cancel();
+          _tapCount = 0;
+          ref.read(avatarControllerProvider.notifier).react(
+                AvatarReaction.dizzy,
+                duration: const Duration(milliseconds: 1300),
+              );
+        }
+      } else {
+        _tapCount = 0;
+      }
+    }
+  }
+
+  void _onPointerCancel(PointerCancelEvent event) {
+    _activePointers.remove(event.pointer);
+    _longPressTimer?.cancel();
+    _singleTapTimer?.cancel();
+    _tapCount = 0;
+  }
+
   @override
   void dispose() {
+    _singleTapTimer?.cancel();
+    _longPressTimer?.cancel();
     _flightTicker.dispose();
     _controller.dispose();
     super.dispose();
@@ -272,79 +378,38 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
                     // The label the move handle used to carry: the toy itself
                     // is the handle now, so a screen reader hears it there.
                     label: t.companionMoveLabel,
-                    child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    // One finger moves the toy, two fingers work it in 3D. A
-                    // child repositioning the companion should not have to find
-                    // a handle, and a child turning it should not lose its
-                    // place, so the two gestures are told apart by how many
-                    // fingers are down rather than by where they land.
-                    onScaleUpdate: (details) {
-                      final avatar = ref.read(avatarControllerProvider.notifier);
-                      if (details.pointerCount >= 2) {
-                        avatar.rotateBy(
-                          dx: details.rotation * kCompanionTwistYaw +
-                              details.focalPointDelta.dx * kCompanionDragYaw,
-                          dy: details.focalPointDelta.dy * kCompanionDragPitch,
-                        );
-                      } else {
-                        avatar.moveBy(
-                          delta: details.focalPointDelta,
-                          maxPosition: maxPosition,
-                        );
-                      }
-                    },
-                    onTap: () {
-                      // Touching the companion is a greeting, and after a miss
-                      // it is also the child asking to be encouraged.
-                      if (ui.avatarMood == AvatarMood.wrong) {
-                        ref
-                            .read(explorerControllerProvider.notifier)
-                            .retryMission();
-                      } else {
-                        ref
-                            .read(avatarControllerProvider.notifier)
-                            .react(AvatarReaction.happy);
-                      }
-                    },
-                    onDoubleTap: () => ref
-                        .read(avatarControllerProvider.notifier)
-                        .react(
-                          AvatarReaction.dizzy,
-                          duration: const Duration(milliseconds: 1300),
-                        ),
-                    onLongPress: () => ref
-                        .read(avatarControllerProvider.notifier)
-                        .react(
-                          AvatarReaction.sleepy,
-                          duration: const Duration(milliseconds: 1800),
-                        ),
-                    child: Stack(
-                      children: [
-                        _CompanionScene(
-                          ready: _ready,
-                          controller: _controller,
-                          mood: ui.avatarMood,
-                          idleAction: hasFocus ? AvatarIdleAction.sitting : pose.idleAction,
-                          selectedPlanetId: ui.selectedPlanetId,
-                        ),
-                        // The face is Flutter paint over the 3D render, so it
-                        // must not swallow drags meant for the toy.
-                        if (_ready)
-                          AnimatedBuilder(
-                            animation: _flightTicker,
-                            builder: (context, _) => IgnorePointer(
-                              child: AvatarFace(
-                                box: const Size(kCompanionBoxWidth, kCompanionBoxHeight),
-                                pose: pose,
-                                motion: _controller.bodyMotion,
-                                phase: _flightTicker.value,
+                    child: Listener(
+                      behavior: HitTestBehavior.opaque,
+                      onPointerDown: _onPointerDown,
+                      onPointerMove: _onPointerMove,
+                      onPointerUp: _onPointerUp,
+                      onPointerCancel: _onPointerCancel,
+                      child: Stack(
+                        children: [
+                          _CompanionScene(
+                            ready: _ready,
+                            controller: _controller,
+                            mood: ui.avatarMood,
+                            idleAction: hasFocus ? AvatarIdleAction.sitting : pose.idleAction,
+                            selectedPlanetId: ui.selectedPlanetId,
+                          ),
+                          // The face is Flutter paint over the 3D render, so it
+                          // must not swallow drags meant for the toy.
+                          if (_ready)
+                            AnimatedBuilder(
+                              animation: _flightTicker,
+                              builder: (context, _) => IgnorePointer(
+                                child: AvatarFace(
+                                  box: const Size(kCompanionBoxWidth, kCompanionBoxHeight),
+                                  pose: pose,
+                                  motion: _controller.bodyMotion,
+                                  phase: _flightTicker.value,
+                                ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
                   ),
                 ],
               ),
