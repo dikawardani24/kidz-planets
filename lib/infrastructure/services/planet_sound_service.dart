@@ -9,12 +9,28 @@ class PlanetSoundService {
   PlanetSoundService({AudioPlayer? player})
       : _players = [player ?? AudioPlayer(), AudioPlayer()];
 
+  static const double _ambientVolume = 0.42;
+
   final List<AudioPlayer> _players;
   int _activeIndex = 0;
   int _generation = 0;
+  double _activeVolume = _ambientVolume;
 
   Future<void> playBody(Planet body) =>
       _play(PlanetSoundCatalog.body(body.id));
+
+  /// Loops the success cue until [stop] or [dispose] is called.
+  ///
+  /// A mission keeps its celebration dialog on screen for as long as the
+  /// player wants, and a single 0.44 s jingle is easy to miss in the middle of
+  /// a tap, so the cue repeats for as long as the celebration lasts. It runs
+  /// louder than the planetary beds because there is no voice competing with
+  /// it here.
+  Future<void> startMissionSuccess() =>
+      _play(PlanetSoundCatalog.missionSuccess, volume: 0.7);
+
+  Future<void> playMissionFailure() =>
+      _playOneShot(PlanetSoundCatalog.missionFailure);
 
   Future<void> stop() async {
     final generation = ++_generation;
@@ -44,7 +60,7 @@ class PlanetSoundService {
       final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
       final t = (elapsed / duration.inMilliseconds).clamp(0.0, 1.0);
       final eased = 1 - (t * t * (3 - 2 * t));
-      await player.setVolume(0.42 * eased);
+      await player.setVolume(_activeVolume * eased);
     }
 
     if (generation != _generation) return;
@@ -56,7 +72,18 @@ class PlanetSoundService {
     }
   }
 
-  Future<void> _play(String path) async {
+  Future<void> _playOneShot(String path) async {
+    try {
+      final player = AudioPlayer();
+      await player.setVolume(0.65);
+      await player.setAsset(path);
+      unawaited(player.play().whenComplete(player.dispose));
+    } catch (error) {
+      debugPrint('Mission sound unavailable: $path ($error)');
+    }
+  }
+
+  Future<void> _play(String path, {double volume = _ambientVolume}) async {
     final generation = ++_generation;
 
     final incomingIndex = 1 - _activeIndex;
@@ -87,14 +114,15 @@ class PlanetSoundService {
 
         final t = step / steps;
         final eased = t * t * (3 - 2 * t);
-        await incoming.setVolume(0.42 * eased);
-        await outgoing.setVolume(0.42 * (1 - eased));
+        await incoming.setVolume(volume * eased);
+        await outgoing.setVolume(_activeVolume * (1 - eased));
       }
 
       if (generation != _generation) return;
       await outgoing.stop();
       await outgoing.setVolume(0);
-      await incoming.setVolume(0.42);
+      await incoming.setVolume(volume);
+      _activeVolume = volume;
     } catch (error) {
       if (generation == _generation) {
         debugPrint('Planet sound unavailable: $path ($error)');
@@ -105,9 +133,17 @@ class PlanetSoundService {
 
 abstract final class PlanetSoundCatalog {
   static String body(String id) => 'assets/audio/sfx/planets/$id.wav';
+
+  /// MP3 rather than WAV, matching the narration in
+  /// `assets/audio/narration`, which is the only audio path confirmed to play
+  /// on every target. The cues were authored as 24 kHz mono PCM WAV and match
+  /// the narration's rate and channel count; the container was the only
+  /// difference, so WAV was the thing to rule out and it is now ruled out.
+  static const missionSuccess = 'assets/audio/sfx/missions/mission_success.mp3';
+  static const missionFailure = 'assets/audio/sfx/missions/mission_failure.mp3';
 }
 
-  Future<void> _startPlayback(AudioPlayer player, String path) async {
+Future<void> _startPlayback(AudioPlayer player, String path) async {
     try {
       await player.play();
     } catch (error) {

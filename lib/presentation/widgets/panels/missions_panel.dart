@@ -11,6 +11,7 @@ class MissionsPanel extends ConsumerWidget {
     final ui = ref.watch(explorerControllerProvider);
     final notifier = ref.read(explorerControllerProvider.notifier);
     final completed = ui.missions.where((m) => m.completed).length;
+    final activeId = ui.activeMissionId;
     final progress = ui.missions.isEmpty ? 0.0 : completed / ui.missions.length;
     return AppTheme.glass(radius: BorderRadius.circular(24), padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
       child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -27,7 +28,7 @@ class MissionsPanel extends ConsumerWidget {
         const SizedBox(height: 10),
         ...ui.missions.map((m) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Container(
           padding: const EdgeInsets.all(11),
-          decoration: BoxDecoration(color: m.completed ? const Color(0x1A22C55E) : AppTheme.space800.withValues(alpha: .82), borderRadius: BorderRadius.circular(15), border: Border.all(color: m.completed ? const Color(0x6622C55E) : Colors.white.withValues(alpha: .10))),
+          decoration: BoxDecoration(color: m.completed ? const Color(0x1A22C55E) : m.id == activeId ? const Color(0x223B82F6) : AppTheme.space800.withValues(alpha: .82), borderRadius: BorderRadius.circular(15), border: Border.all(color: m.completed ? const Color(0x6622C55E) : m.id == activeId ? AppTheme.accentSky.withValues(alpha: .65) : Colors.white.withValues(alpha: .10))),
           child: Row(children: [
             Container(width: 34, height: 34, alignment: Alignment.center, decoration: BoxDecoration(color: m.completed ? const Color(0x3322C55E) : const Color(0x334F46E5), borderRadius: BorderRadius.circular(11), border: Border.all(color: m.completed ? const Color(0x6622C55E) : const Color(0x664F46E5))),
               child: m.completed ? const Icon(Icons.check, size: 15, color: Color(0xFF86EFAC)) : Text(m.id.toString(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFC7D2FE)))),
@@ -36,9 +37,9 @@ class MissionsPanel extends ConsumerWidget {
               Text(m.title, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Colors.white)),
               const SizedBox(height: 2), Text(m.description, style: const TextStyle(fontSize: 9.5, color: Colors.white60)),
             ])),
-            GestureDetector(onTap: () { notifier.setTab(ExplorerTab.explore); notifier.selectPlanet(m.targetPlanetId); },
+            GestureDetector(onTap: m.completed || m.id != activeId ? null : () { notifier.setTab(ExplorerTab.explore); notifier.selectPlanet(m.targetPlanetId); },
               child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: m.completed ? const Color(0x3322C55E) : AppTheme.accentIndigo, borderRadius: BorderRadius.circular(999)),
-                child: Text(m.completed ? 'Done' : 'Find →', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: m.completed ? const Color(0xFF86EFAC) : Colors.white)))),
+                child: Text(m.completed ? 'Done' : m.id == activeId ? 'Find →' : 'Locked', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: m.completed ? const Color(0xFF86EFAC) : Colors.white)))),
           ]),
         ))),
       ])));

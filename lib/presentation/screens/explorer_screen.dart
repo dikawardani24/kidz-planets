@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/state/explorer_state.dart';
@@ -9,10 +11,29 @@ import '../theme/app_theme.dart';
 import '../widgets/overlays/bottom_nav.dart';
 import '../widgets/overlays/toast_overlay.dart';
 import '../widgets/overlays/top_bar.dart';
+import '../widgets/panels/mission_companion.dart';
 import '../widgets/panels/missions_panel.dart';
 import '../widgets/panels/planet_detail_sheet.dart';
 import '../widgets/panels/playground_panel.dart';
 import '../widgets/scene/solar_system_scene_view.dart';
+
+/// Decides whether a body's ambience and voice description may start now.
+///
+/// A completed mission plays its own success cue and then raises a
+/// celebration dialog, so narration is held until that dialog is dismissed:
+/// the voice runs at 0.92 and would otherwise talk over the 0.65 cue and read
+/// the dialog out loud.
+///
+/// Note what this deliberately does *not* gate. A planet the child taps is
+/// always described and always plays its own ambience, wrong pick or not: that
+/// is the whole point of tapping a body, and it is how the app teaches the
+/// planets. What a wrong pick suppresses is the *mission* feedback, which the
+/// companion now owns: no mission replay, no mission dialog, and no failure
+/// cue. Those live in the branch above, not behind this gate.
+bool canStartPlanetAudio({required ExplorerState current}) {
+  if (current.celebrationVisible) return false;
+  return true;
+}
 
 class ExplorerScreen extends ConsumerWidget {
   const ExplorerScreen({super.key});
@@ -22,16 +43,67 @@ class ExplorerScreen extends ConsumerWidget {
     final ui = ref.watch(explorerControllerProvider);
 
     ref.listen<ExplorerState>(explorerControllerProvider, (prev, next) {
+      void speakSelected(String? id) {
+        if (id == null) return;
+        final planet = ref.read(planetByIdProvider(id));
+        ref.read(planetNarrationServiceProvider).speakPlanet(planet);
+        ref.read(planetSoundServiceProvider).playBody(planet);
+      }
+
+      // A wrong pick deliberately has no *mission* branch here. This used to
+      // replay the active mission out loud and reopen the mission dialog 550ms
+      // later; the companion handles a miss on its own now, so neither happens.
+      //
+      // The planet that was tapped is still described and still plays its own
+      // ambience further down, because tapping a body is how the child explores
+      // and the mission being wrong does not make the body uninteresting.
+
+      // Dismissing the celebration is the cue to describe the body that was
+      // just found. The mission success sound plays alone while the modal is
+      // up: narration runs at 0.92 and would otherwise talk over the 0.65 cue
+      // and read the dialog out loud.
+      if (prev?.celebrationVisible == true && !next.celebrationVisible) {
+        speakSelected(next.selectedPlanetId);
+      }
+
+      if (prev?.activeMissionId != next.activeMissionId && next.activeMissionId != null) {
+        final missionId = next.activeMissionId;
+        // _checkMission() raises the celebration in a later state assignment
+        // than the one that advances activeMissionId, so the same microtask
+        // deferral is needed here to see it.
+        scheduleMicrotask(() {
+          if (!context.mounted) return;
+          final current = ref.read(explorerControllerProvider);
+          if (current.activeMissionId != missionId) return;
+          final matches = current.missions.where((m) => m.id == missionId);
+          if (matches.isEmpty) return;
+          if (!canStartPlanetAudio(current: current)) return;
+          final planet = ref.read(planetByIdProvider(matches.first.targetPlanetId));
+          ref.read(planetNarrationServiceProvider).replay(planet);
+        });
+      }
+
       if (prev?.selectedPlanetId != next.selectedPlanetId) {
-        final narration = ref.read(planetNarrationServiceProvider);
-        final sound = ref.read(planetSoundServiceProvider);
-        if (next.selectedPlanetId == null) {
-          narration.stop();
-          sound.stop();
+        final selectedId = next.selectedPlanetId;
+        if (selectedId == null) {
+          ref.read(planetNarrationServiceProvider).stop();
+          ref.read(planetSoundServiceProvider).stop();
         } else {
-          final planet = ref.read(planetByIdProvider(next.selectedPlanetId!));
-          narration.speakPlanet(planet);
-          sound.playBody(planet);
+          // selectPlanet() checks the mission in the same synchronous turn, so
+          // a celebration raised by this tap is not set yet on this pass.
+          // Re-reading the state on a microtask lets it be seen; when one is up
+          // the celebration-dismissed branch above does the narration instead.
+          //
+          // The body that was tapped is described and sounds either way,
+          // including when it was the wrong mission target: the companion owns
+          // the *mission* reaction, not the body's own voice.
+          scheduleMicrotask(() {
+            if (!context.mounted) return;
+            final current = ref.read(explorerControllerProvider);
+            if (current.selectedPlanetId != selectedId) return;
+            if (!canStartPlanetAudio(current: current)) return;
+            speakSelected(selectedId);
+          });
         }
       }
 
@@ -114,6 +186,12 @@ class ExplorerScreen extends ConsumerWidget {
                     description: ui.celebrationDescription!,
                   ),
                 ),
+
+              // Last in the stack, so the companion is the topmost thing on
+              // screen: above the scene, the panels, the nav, and the
+              // celebration dialog. It is a permanent part of the mission UI,
+              // never hidden and never promoted into a dialog of its own.
+              const MissionCompanion(),
                 ],
               );
             },

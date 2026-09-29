@@ -30,3 +30,4 @@ flutter:
     - assets/audio/narration/planets/
     - assets/audio/narration/hotspots/
     - assets/audio/sfx/planets/
+    - assets/audio/sfx/missions/

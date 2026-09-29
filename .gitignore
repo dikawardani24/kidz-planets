@@ -53,6 +53,9 @@ __pycache__/
 *.pyo
 *.wav
 !assets/audio/sfx/**/*.wav
+# SFX may be committed as MP3; the narration below is tracked as-is, so only
+# the SFX tree gets a whitelist entry.
+!assets/audio/sfx/**/*.mp3
 .kokoro/
 *.pth
 *.pt
