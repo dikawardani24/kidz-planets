@@ -125,8 +125,6 @@ class AvatarSceneBuilder {
     return node;
   }
 
-  void setReaction(AvatarReaction reaction) => _reaction = reaction;
-
   void setRotation(AvatarState pose) {
     avatarRoot.rotation = vm.Quaternion.axisAngle(
       vm.Vector3(0, 1, 0),
@@ -169,33 +167,9 @@ class AvatarSceneBuilder {
       hover = math.sin(t * 3.0) * 0.02;
     }
 
-    var reactionScale = 1.0;
-    var reactionTilt = 0.0;
-    switch (_reaction) {
-      case AvatarReaction.happy:
-      case AvatarReaction.excited:
-        reactionScale = 1.0 + math.sin(t * 14.0).abs() * 0.08;
-      case AvatarReaction.surprised:
-        reactionScale = 1.08;
-        reactionTilt = math.sin(t * 8.0) * 0.08;
-      case AvatarReaction.sad:
-      case AvatarReaction.sleepy:
-        reactionScale = 0.94;
-        reactionTilt = -0.10;
-      case AvatarReaction.dizzy:
-        reactionTilt = math.sin(t * 18.0) * 0.35;
-      case AvatarReaction.laughing:
-        reactionScale = 1.04 + math.sin(t * 16.0).abs() * 0.06;
-      case AvatarReaction.talking:
-        reactionScale = 1.0 + math.sin(t * 18.0).abs() * 0.025;
-      case AvatarReaction.none:
-        break;
-    }
-
     bodyRoot
       ..position = vm.Vector3(0, hover, 0)
-      ..scale = vm.Vector3(reactionScale, reactionScale, reactionScale)
-      ..rotation = vm.Quaternion.axisAngle(vm.Vector3(0, 0, 1), tilt + reactionTilt);
+      ..rotation = vm.Quaternion.axisAngle(vm.Vector3(0, 0, 1), tilt);
 
     _setPortholeColor(mood, idleAction, selectedPlanetId);
   }
@@ -226,7 +200,6 @@ class AvatarSceneBuilder {
   }
 
   Color? _portholeColor;
-  AvatarReaction _reaction = AvatarReaction.none;
 
   void showTarget({required bool visible, required Color color}) {
     targetPivot.visible = visible;
