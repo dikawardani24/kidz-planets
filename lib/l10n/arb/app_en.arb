@@ -1,0 +1,181 @@
+{
+  "@@locale": "en",
+  "appTitle": "Space Explorer - Kidz Planets",
+  "@appTitle": {
+    "description": "Application title shown in the task switcher."
+  },
+  "languageTitle": "Language",
+  "@languageTitle": {
+    "description": "Heading of the language picker."
+  },
+  "languageEnglish": "English",
+  "languageIndonesian": "Bahasa Indonesia",
+  "tooltipLanguage": "Change language",
+  "topBarTitle": "NASA Space Explorer",
+  "tooltipShowLabels": "Show object labels",
+  "tooltipHideLabels": "Hide object labels",
+  "tooltipShowOrbits": "Show orbit paths",
+  "tooltipHideOrbits": "Hide orbit paths",
+  "speedLabel": "{speed}x",
+  "@speedLabel": {
+    "placeholders": {
+      "speed": {
+        "type": "String",
+        "example": "1.0"
+      }
+    }
+  },
+  "bannerSwipeToSpin": "👆 Swipe to spin",
+  "bannerZoom": "🤏 Pinch or +/- to zoom",
+  "bannerPlayMode": "Play Mode Active: Spin & explore freely!",
+  "bannerMission": "Mission {id}: {title}",
+  "@bannerMission": {
+    "placeholders": {
+      "id": {
+        "type": "int",
+        "example": "1"
+      },
+      "title": {
+        "type": "String",
+        "example": "Find Earth"
+      }
+    }
+  },
+  "bannerAllExplored": "✨ Solar system fully explored!",
+  "navExplore": "Explore",
+  "navPlayground": "Playground",
+  "navMissions": "Missions",
+  "playgroundTitle": "Space Playground",
+  "playgroundSubtitle": "Physics & orbital experiments in real 3D!",
+  "reset": "Reset",
+  "orbitSpeed": "Orbit Speed",
+  "toggleOn": "On",
+  "toggleOff": "Off",
+  "toggleOrbits": "Orbits",
+  "toggleLabels": "Labels",
+  "experimentsTitle": "Real NASA 3D Experiments",
+  "experimentSunTitle": "Inspect Blazing Sun",
+  "experimentSunSubtitle": "Examine solar flares & dynamic corona",
+  "experimentEarthTitle": "Move Earth Closer",
+  "experimentEarthSubtitle": "See extreme thermal radiation",
+  "experimentSaturnTitle": "Inspect Saturn Rings",
+  "experimentSaturnSubtitle": "Cassini Division & 26.7° axial tilt",
+  "experimentJupiterTitle": "Visit King Jupiter",
+  "experimentJupiterSubtitle": "Great Red Spot & atmospheric bands",
+  "alertSandboxTitle": "Sandbox Ready!",
+  "alertSandboxDescription": "Run interactive NASA 3D experiments below.",
+  "alertEarthTitle": "🔥 Earth Moved Closer!",
+  "alertEarthDescription": "Intense solar radiation evaporates oceans instantly!",
+  "alertSaturnTitle": "🪐 Saturn Rings Focused!",
+  "alertSaturnDescription": "Rings consist of billions of icy space boulders with Cassini gap!",
+  "alertJupiterTitle": "🌪️ Jupiter Storm Focused!",
+  "alertJupiterDescription": "The Great Red Spot is a monster storm wider than planet Earth!",
+  "alertSunTitle": "☀️ Blazing Sun Focused!",
+  "alertSunDescription": "Nuclear fusion heats the core to 15,000,000°C with dynamic solar flares!",
+  "exploreWorlds": "Explore Worlds",
+  "close": "Close",
+  "sectionPlanets": "PLANETS",
+  "sectionMoons": "MOONS",
+  "spaceMissions": "Space Missions",
+  "spaceMissionsSubtitle": "Explore and verify NASA worlds!",
+  "missionCount": "{completed} / {total}",
+  "@missionCount": {
+    "placeholders": {
+      "completed": {
+        "type": "int",
+        "example": "1"
+      },
+      "total": {
+        "type": "int",
+        "example": "4"
+      }
+    }
+  },
+  "missionPill": "🚀 Mission {id} · {title}  ⓘ",
+  "@missionPill": {
+    "placeholders": {
+      "id": {
+        "type": "int",
+        "example": "1"
+      },
+      "title": {
+        "type": "String",
+        "example": "Find Earth"
+      }
+    }
+  },
+  "missionHeading": "MISSION {id}",
+  "@missionHeading": {
+    "placeholders": {
+      "id": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "missionStartHere": "START HERE",
+  "missionStartAt": "☀️  Start at {point}",
+  "@missionStartAt": {
+    "placeholders": {
+      "point": {
+        "type": "String",
+        "example": "the Sun"
+      }
+    }
+  },
+  "missionStartAtDefault": "the Sun",
+  "missionDirectionDefault": "Count outward",
+  "missionLookForThis": "LOOK FOR THIS",
+  "missionNeedBiggerClue": "Need a bigger clue?",
+  "missionGotIt": "Got it — let’s explore!",
+  "missionDetailsBarrierLabel": "Mission details",
+  "celebrationTitle": "Mission {id} Complete!",
+  "@celebrationTitle": {
+    "placeholders": {
+      "id": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "celebrationBody": "You discovered {target}. Ready for the next mission?",
+  "@celebrationBody": {
+    "placeholders": {
+      "target": {
+        "type": "String",
+        "example": "Earth"
+      }
+    }
+  },
+  "toastMissionComplete": "Mission complete: {title}",
+  "@toastMissionComplete": {
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Find Earth"
+      }
+    }
+  },
+  "toastMissionVerified": "Fantastic! Mission successfully verified: {title}!",
+  "@toastMissionVerified": {
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Find Earth"
+      }
+    }
+  },
+  "companionMoveLabel": "Move the space buddy",
+  "companionInspecting": "Inspecting NASA 3D details! ✨",
+  "companionSpaceLove": "Sending space love! ❤️",
+  "companionBoogie": "Boogie time! 🎶",
+  "statDiameter": "Diameter",
+  "statAvgTemp": "Avg Temp",
+  "missionStatusDone": "Done",
+  "missionStatusActive": "Find →",
+  "missionStatusLocked": "Locked",
+  "companionFlying": "Wheee! Flying all over space! 🚀",
+  "companionCold": "Brrrr! So freezing cold here! 🥶",
+  "companionHot": "Phew! It is scorching hot! ☀️",
+  "companionThinking": "Hmm... exploring ideas!"
+}

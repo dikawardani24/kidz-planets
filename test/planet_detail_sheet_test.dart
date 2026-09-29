@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kidz_planets/application/state/providers.dart';
 import 'package:kidz_planets/data/datasources/planet_catalog.dart';
+import 'helpers/localized_app.dart';
 import 'package:kidz_planets/presentation/widgets/panels/planet_detail_sheet.dart';
 
 /// Mirrors the explorer's production placement: a 16px inset on both sides,
@@ -15,22 +16,20 @@ Future<void> pumpSheet(WidgetTester tester, String planetId,
   final planet =
       PlanetCatalog.planets.firstWhere((p) => p.id == planetId);
 
-  await tester.pumpWidget(ProviderScope(
-    child: MaterialApp(
-      home: Scaffold(
-        backgroundColor: Colors.black,
-        body: Stack(children: [
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 88,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 290),
-              child: PlanetDetailSheet(planet: planet),
-            ),
+  await tester.pumpWidget(localizedApp(
+    Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(children: [
+        Positioned(
+          left: 16,
+          right: 16,
+          bottom: 88,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 290),
+            child: PlanetDetailSheet(planet: planet),
           ),
-        ]),
-      ),
+        ),
+      ]),
     ),
   ));
   // Let the AnimatedSize settle on its final size.

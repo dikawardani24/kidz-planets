@@ -5,6 +5,7 @@ import '../../../application/state/providers.dart';
 import '../../../domain/entities/planet.dart';
 import '../../../infrastructure/services/planet_narration_provider.dart';
 import '../../../infrastructure/services/planet_sound_provider.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../theme/app_theme.dart';
 import '../overlays/top_bar.dart';
 
@@ -333,7 +334,7 @@ class _DetailContent extends StatelessWidget {
                 Expanded(
                   child: _Stat(
                     icon: Icons.straighten,
-                    title: 'Diameter',
+                    title: AppLocalizations.of(context).statDiameter,
                     value: planet.diameter,
                   ),
                 ),
@@ -341,7 +342,7 @@ class _DetailContent extends StatelessWidget {
                 Expanded(
                   child: _Stat(
                     icon: Icons.thermostat,
-                    title: 'Avg Temp',
+                    title: AppLocalizations.of(context).statAvgTemp,
                     value: planet.temperature,
                   ),
                 ),

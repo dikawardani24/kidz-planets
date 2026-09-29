@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../../domain/entities/planet.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../theme/app_theme.dart';
 
 class PlanetsGridPanel extends ConsumerWidget {
@@ -14,6 +15,7 @@ class PlanetsGridPanel extends ConsumerWidget {
     final notifier = ref.read(explorerControllerProvider.notifier);
     final others = planets.where((p) => !p.isSun && !p.isMoon).toList();
     final moons = planets.where((p) => p.isMoon).toList();
+    final t = AppLocalizations.of(context);
     return Container(
       decoration: BoxDecoration(color: AppTheme.space900.withValues(alpha: 0.96), borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.14)))),
@@ -21,18 +23,18 @@ class PlanetsGridPanel extends ConsumerWidget {
         const SizedBox(height: 10),
         Container(width: 44, height: 5, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(99))),
         Padding(padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-          child: Row(children: [const Expanded(child: Text('Explore Worlds', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Colors.white))),
+          child: Row(children: [Expanded(child: Text(t.exploreWorlds, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Colors.white))),
             GestureDetector(onTap: () => notifier.setTab(ExplorerTab.explore),
               child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(999)),
-                child: const Text('Close', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white70))))])),
+                child: Text(t.close, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white70))))])),
         Flexible(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
             children: [
-              const Padding(
-                padding: EdgeInsets.only(left: 4, bottom: 10),
-                child: Text('PLANETS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white54, letterSpacing: 1.2)),
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 10),
+                child: Text(t.sectionPlanets, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white54, letterSpacing: 1.2)),
               ),
               GridView.builder(
                 shrinkWrap: true,
@@ -42,9 +44,9 @@ class PlanetsGridPanel extends ConsumerWidget {
                 itemBuilder: (context, i) => _PlanetCard(planet: others[i], selected: ui.selectedPlanetId == others[i].id),
               ),
               const SizedBox(height: 22),
-              const Padding(
-                padding: EdgeInsets.only(left: 4, bottom: 10),
-                child: Text('MOONS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white54, letterSpacing: 1.2)),
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 10),
+                child: Text(t.sectionMoons, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white54, letterSpacing: 1.2)),
               ),
               GridView.builder(
                 shrinkWrap: true,

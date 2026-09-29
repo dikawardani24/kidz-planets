@@ -6,6 +6,8 @@ import 'package:kidz_planets/infrastructure/services/planet_narration_provider.d
 import 'package:kidz_planets/infrastructure/services/planet_narration_service.dart';
 import 'package:kidz_planets/presentation/widgets/panels/mission_guide.dart';
 
+import 'helpers/localized_app.dart';
+
 /// Keeps the dialog's replay button from reaching the real audio plugin.
 class _SilentPlayer extends AudioPlayer {
   @override
@@ -40,17 +42,16 @@ class _Launcher extends ConsumerWidget {
 }
 
 void main() {
-  Future<void> openMissionDialog(WidgetTester tester) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          planetNarrationServiceProvider.overrideWithValue(
-            PlanetNarrationService(playerFactory: _SilentPlayer.new),
-          ),
-        ],
-        child: const MaterialApp(home: _Launcher()),
-      ),
-    );
+  Future<void> openMissionDialog(WidgetTester tester, {Locale locale = const Locale('en')}) async {
+    await tester.pumpWidget(localizedApp(
+      const _Launcher(),
+      locale: locale,
+      overrides: [
+        planetNarrationServiceProvider.overrideWithValue(
+          PlanetNarrationService(playerFactory: _SilentPlayer.new),
+        ),
+      ],
+    ));
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kidz_planets/application/state/explorer_state.dart';
 import 'package:kidz_planets/application/state/providers.dart';
+import 'helpers/localized_app.dart';
 import 'package:kidz_planets/presentation/widgets/overlays/top_bar.dart';
 
 /// The idle banner names the active mission, which the real provider always
@@ -20,21 +21,17 @@ Future<void> pumpOverlays(
   tester.view.padding = FakeViewPadding(top: topInset);
   addTearDown(tester.view.reset);
 
-  await tester.pumpWidget(
-    ProviderScope(
-      child: MaterialApp(
-        home: Scaffold(
-          body: Stack(
-            fit: StackFit.expand,
-            children: const [
-              Positioned(top: 0, left: 0, right: 0, child: ExplorerTopBar()),
-              ExplorerInteractionOverlays(),
-            ],
-          ),
-        ),
+  await tester.pumpWidget(localizedApp(
+    Scaffold(
+      body: Stack(
+        fit: StackFit.expand,
+        children: const [
+          Positioned(top: 0, left: 0, right: 0, child: ExplorerTopBar()),
+          ExplorerInteractionOverlays(),
+        ],
       ),
     ),
-  );
+  ));
 }
 
 double topOf(WidgetTester tester, String text) =>

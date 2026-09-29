@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/state/providers.dart';
 import '../../../infrastructure/services/scene_providers.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../theme/app_theme.dart';
 
 class PlaygroundPanel extends ConsumerWidget {
@@ -12,6 +13,7 @@ class PlaygroundPanel extends ConsumerWidget {
     final ui = ref.watch(explorerControllerProvider);
     final notifier = ref.read(explorerControllerProvider.notifier);
     final scene = ref.read(solarSystemSceneControllerProvider);
+    final t = AppLocalizations.of(context);
 
     void experiment(String id) {
       if (id == 'earth') scene.setPlanetOrbitRadius('earth', 8.0);
@@ -24,13 +26,13 @@ class PlaygroundPanel extends ConsumerWidget {
       child: SingleChildScrollView(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [Icon(Icons.science, color: AppTheme.accentAmber, size: 18), SizedBox(width: 7), Text('Space Playground', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white))]),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [const Icon(Icons.science, color: AppTheme.accentAmber, size: 18), SizedBox(width: 7), Flexible(child: Text(t.playgroundTitle, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white)))]),
               SizedBox(height: 3),
-              Text('Physics & orbital experiments in real 3D!', style: TextStyle(fontSize: 10.5, color: Color(0xFF9CA9D8))),
+              Text(t.playgroundSubtitle, style: TextStyle(fontSize: 10.5, color: Color(0xFF9CA9D8))),
             ])),
             GestureDetector(onTap: () { scene.setPlanetOrbitRadius('earth', 14.2); notifier.resetPlayground(); }, child: AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-              child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.refresh, size: 12, color: Colors.white70), SizedBox(width: 4), Text('Reset', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white70))]))),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.refresh, size: 12, color: Colors.white70), SizedBox(width: 4), Text(t.reset, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white70))]))),
           ]),
           const SizedBox(height: 12),
           Container(padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: AppTheme.accentAmber.withValues(alpha: .10), borderRadius: BorderRadius.circular(16), border: Border.all(color: AppTheme.accentAmber.withValues(alpha: .35))),
@@ -45,22 +47,22 @@ class PlaygroundPanel extends ConsumerWidget {
           AppTheme.glass(radius: BorderRadius.circular(17), padding: const EdgeInsets.all(11), child: Column(children: [
             Row(children: [
               const Icon(Icons.speed, color: AppTheme.accentSky, size: 15), const SizedBox(width: 5),
-              const Text('Orbit Speed', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white70)),
-              const Spacer(), Text('${ui.speed.toStringAsFixed(1)}x', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppTheme.accentAmber)),
+              Text(t.orbitSpeed, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white70)),
+              const Spacer(), Text(t.speedLabel(ui.speed.toStringAsFixed(1)), style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppTheme.accentAmber)),
             ]),
             Slider(value: ui.speed.clamp(0, 4), min: 0, max: 4, divisions: 8, activeColor: AppTheme.accentAmber, inactiveColor: Colors.white24, onChanged: notifier.setSpeed),
             Row(children: [
-              Expanded(child: _Toggle(label: 'Orbits', active: ui.showOrbits, onTap: notifier.toggleOrbits)),
-              const SizedBox(width: 7), Expanded(child: _Toggle(label: 'Labels', active: ui.showLabels, onTap: notifier.toggleLabels)),
+              Expanded(child: _Toggle(label: t.toggleOrbits, active: ui.showOrbits, onTap: notifier.toggleOrbits)),
+              const SizedBox(width: 7), Expanded(child: _Toggle(label: t.toggleLabels, active: ui.showLabels, onTap: notifier.toggleLabels)),
             ]),
           ])),
           const SizedBox(height: 12),
-          const Row(children: [Icon(Icons.auto_awesome, color: Color(0xFFA78BFA), size: 14), SizedBox(width: 6), Text('Real NASA 3D Experiments', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Colors.white70))]),
+          Row(children: [const Icon(Icons.auto_awesome, color: Color(0xFFA78BFA), size: 14), SizedBox(width: 6), Flexible(child: Text(t.experimentsTitle, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Colors.white70)))]),
           const SizedBox(height: 7),
-          _Experiment(icon: '☀️', title: 'Inspect Blazing Sun', subtitle: 'Examine solar flares & dynamic corona', onTap: () => experiment('sun')),
-          _Experiment(icon: '🔥', title: 'Move Earth Closer', subtitle: 'See extreme thermal radiation', onTap: () => experiment('earth')),
-          _Experiment(icon: '🪐', title: 'Inspect Saturn Rings', subtitle: 'Cassini Division & 26.7° axial tilt', onTap: () => experiment('saturn')),
-          _Experiment(icon: '🌪️', title: 'Visit King Jupiter', subtitle: 'Great Red Spot & atmospheric bands', onTap: () => experiment('jupiter')),
+          _Experiment(icon: '☀️', title: t.experimentSunTitle, subtitle: t.experimentSunSubtitle, onTap: () => experiment('sun')),
+          _Experiment(icon: '🔥', title: t.experimentEarthTitle, subtitle: t.experimentEarthSubtitle, onTap: () => experiment('earth')),
+          _Experiment(icon: '🪐', title: t.experimentSaturnTitle, subtitle: t.experimentSaturnSubtitle, onTap: () => experiment('saturn')),
+          _Experiment(icon: '🌪️', title: t.experimentJupiterTitle, subtitle: t.experimentJupiterSubtitle, onTap: () => experiment('jupiter')),
         ]),
       ),
     );
@@ -71,14 +73,17 @@ class _Toggle extends StatelessWidget {
   const _Toggle({required this.label, required this.active, required this.onTap});
   final String label; final bool active; final VoidCallback onTap;
   @override
-  Widget build(BuildContext context) => GestureDetector(onTap: onTap, child: Container(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    decoration: BoxDecoration(color: active ? AppTheme.accentViolet.withValues(alpha: .5) : Colors.white.withValues(alpha: .05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withValues(alpha: .1))),
-    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Icon(active ? Icons.check_circle : Icons.circle_outlined, size: 12, color: active ? AppTheme.accentAmber : Colors.white38),
-      const SizedBox(width: 5), Text('$label: ${active ? 'On' : 'Off'}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
-    ]),
-  ));
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
+    return GestureDetector(onTap: onTap, child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(color: active ? AppTheme.accentViolet.withValues(alpha: .5) : Colors.white.withValues(alpha: .05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withValues(alpha: .1))),
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(active ? Icons.check_circle : Icons.circle_outlined, size: 12, color: active ? AppTheme.accentAmber : Colors.white38),
+        const SizedBox(width: 5), Flexible(child: Text('$label: ${active ? t.toggleOn : t.toggleOff}', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white))),
+      ]),
+    ));
+  }
 }
 
 class _Experiment extends StatelessWidget {
