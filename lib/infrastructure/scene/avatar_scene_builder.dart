@@ -58,8 +58,6 @@ class AvatarSceneBuilder {
   /// frame to measure from.
   double? _lastTickSeconds;
 
-  UnlitMaterial? _portholeMaterial;
-
   /// The reaction currently being played, and when it started.
   ///
   /// Reactions animate as transforms of the parts the rocket already has. New
@@ -106,7 +104,6 @@ class AvatarSceneBuilder {
     // The bundled GLB is now the avatar's primary and only body model.
     // Keep the face window and exhaust as lightweight scene overlays so the
     // existing reactions, physics, and 2D expressions continue to work.
-    _buildPorthole();
     exhaustGroupNode.position = vm.Vector3(0, -0.20, 0);
     bodyRoot.add(exhaustGroupNode);
     unawaited(_attachImportedRocket());
@@ -144,19 +141,6 @@ class AvatarSceneBuilder {
     } finally {
       _rocketLoadPending = false;
     }
-  }
-
-  void _buildPorthole() {
-    _portholeMaterial = materials.porthole();
-    bodyRoot.add(
-      _mesh('glb-porthole', geometries.porthole(), _portholeMaterial!)
-        ..position = vm.Vector3(
-          0,
-          AvatarPorthole.height,
-          AvatarPorthole.depth * 2.7,
-        )
-        ..scale = vm.Vector3.all(1.35),
-    );
   }
 
   /// Builds the particle plume once the renderer can supply its materials.
@@ -378,47 +362,6 @@ class AvatarSceneBuilder {
     _tilt = tilt;
     _spin = spin;
 
-    _setPortholeColor(mood, idleAction, selectedPlanetId);
-  }
-
-  void _setPortholeColor(
-    AvatarMood mood,
-    AvatarIdleAction idleAction,
-    String? selectedPlanetId,
-  ) {
-    final material = _portholeMaterial;
-    if (material == null) return;
-    final color = switch (_reaction) {
-      // A reaction overrides the ambient tint for as long as it plays, so the
-      // window reads as the companion's mood rather than as the planet's.
-      AvatarReaction.happy ||
-      AvatarReaction.laughing => const Color(0xFFFF7EB6),
-      AvatarReaction.excited => const Color(0xFFFFC93C),
-      AvatarReaction.surprised => const Color(0xFFEAF6FF),
-      AvatarReaction.sad => const Color(0xFF4C63C8),
-      AvatarReaction.dizzy => const Color(0xFFB388FF),
-      AvatarReaction.sleepy => const Color(0xFF3F4E92),
-      AvatarReaction.talking => const Color(0xFF7DD3FC),
-      AvatarReaction.confused => const Color(0xFFA5B4FC),
-      AvatarReaction.none => switch (selectedPlanetId) {
-        'neptune' || 'uranus' || 'pluto' => const Color(0xFF38BDF8),
-        'sun' || 'mercury' || 'venus' => const Color(0xFFFBBF24),
-        _ => switch (idleAction) {
-          AvatarIdleAction.dancing => const Color(0xFF38BDF8),
-          AvatarIdleAction.thinking => const Color(0xFF8B5CF6),
-          AvatarIdleAction.sitting => const Color(0xFF64748B),
-          AvatarIdleAction.flying => const Color(0xFF06B6D4),
-          AvatarIdleAction.sendingHeart => const Color(0xFFEC4899),
-          AvatarIdleAction.none => const Color(0xFF06B6D4),
-        },
-      },
-    };
-    material.baseColorFactor = vm.Vector4(
-      color.r.toDouble(),
-      color.g.toDouble(),
-      color.b.toDouble(),
-      1.0,
-    );
   }
 
   void showTarget({required bool visible, required Color color}) {
