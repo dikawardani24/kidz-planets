@@ -36,6 +36,19 @@ abstract final class AvatarPhysicsConfig {
   /// in about a third of a second, which is already a hard throw.
   static const double maxThrowVelocity = 3000.0;
 
+  /// The impact speed a full-strength reaction is designed around.
+  ///
+  /// This is the speed a hard fling actually carries into a wall, measured from
+  /// a throw released at [maxThrowVelocity] across a phone-sized viewport:
+  /// friction takes a few hundred pixels per second off it before the first
+  /// contact. It is deliberately lower than [maxThrowVelocity], because
+  /// normalising impact feedback against the cap means almost nothing ever
+  /// reaches full strength. A wall hit at the cap needs a throw no child
+  /// produces, so an impact measured against it comes out at a fraction of the
+  /// level it was designed for, which for the sound is the difference between
+  /// an audible thud and something the speaker never reproduces.
+  static const double impactReferenceSpeed = 1800.0;
+
   /// The largest frame delta the simulation will integrate, in seconds.
   ///
   /// A frame this long is about two missed frames at 30 fps. Clamping here is
@@ -111,12 +124,33 @@ abstract final class AvatarPhysicsConfig {
   /// into a rattle.
   static const double impactVelocity = 90.0;
 
-  /// The loudest an impact plays, matching the mission cues' level.
-  static const double impactVolume = 0.7;
+  /// The loudest an impact plays.
+  ///
+  /// Full scale, unlike the beds and the narration. A bounce is a percussive
+  /// transient rather than something to listen to, and it has to be heard over
+  /// the mission bed it lands on; the sample itself peaks below full scale, so
+  /// playing it at one still leaves headroom rather than clipping.
+  static const double impactVolume = 1.0;
 
-  /// The quietest an impact plays. A graze is nearly silent rather than
-  /// completely muted, so a soft throw still has some feedback.
-  static const double impactMinVolume = 0.12;
+  /// The quietest an impact plays, as a fraction of [impactVolume].
+  ///
+  /// Well above zero, and the reason the gentle end has to be this high: a
+  /// graze the child cannot hear is indistinguishable from the toy silently
+  /// failing to bounce, which is the exact failure this sound exists to fix.
+  ///
+  /// This is a floor rather than a curve shape, and it is what the range is
+  /// spent on. The whole useful span of impact speeds is roughly 200 to 2000,
+  /// and the level a phone speaker is known to reproduce is about 0.65, so
+  /// every real bounce has to sit above that: any contrast taken below it is
+  /// contrast the child never hears, at the cost of the feedback itself.
+  static const double impactMinVolume = 0.55;
+
+  /// How much of a wall hit an impact squashes the toy, as a fraction of its
+  /// size, at [impactReferenceSpeed].
+  ///
+  /// Deep enough to read at a glance on a small screen, and short-lived enough
+  /// that it does not become the new shape of the toy.
+  static const double impactSquashDepth = 0.14;
 
   /// How long an impact squash takes to relax back to a round toy.
   ///

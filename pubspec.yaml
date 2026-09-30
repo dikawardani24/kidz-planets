@@ -18,6 +18,10 @@ dependencies:
   equatable: ^2.0.7
   collection: ^1.19.1
   just_audio: ^0.10.6
+  # Declared rather than relied on through just_audio: the companion's bounce is
+  # given its own Android audio attributes, so it mixes with the planetary bed
+  # and the narration instead of competing with them for the session.
+  audio_session: ^0.2.4
   # Required by the generated AppLocalizations, and by the ARB date/number
   # formatters the planet facts use for locale-correct digit grouping.
   intl: ^0.20.2

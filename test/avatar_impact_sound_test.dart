@@ -1,3 +1,4 @@
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:kidz_planets/application/state/avatar_physics_config.dart';
@@ -11,6 +12,7 @@ import 'package:kidz_planets/infrastructure/services/avatar_impact_sound.dart';
 class _FakePlayer extends AudioPlayer {
   final List<String> assets = [];
   final List<double> volumes = [];
+  final List<AndroidAudioAttributes> attributes = [];
   int plays = 0;
   int stops = 0;
   bool disposed = false;
@@ -29,6 +31,13 @@ class _FakePlayer extends AudioPlayer {
 
   @override
   Future<void> setVolume(double volume) async => volumes.add(volume);
+
+  @override
+  Future<void> setAndroidAudioAttributes(
+    AndroidAudioAttributes attributes,
+  ) async {
+    this.attributes.add(attributes);
+  }
 
   @override
   Future<void> play() async {
@@ -88,15 +97,51 @@ void main() {
       }
     });
 
-    test('keeps the quiet end quiet', () {
-      // A linear ramp would play a gentle nudge at most of the volume, which
-      // reads as the toy being broken rather than lightly touched.
-      final justAboveThreshold = AvatarImpactSound.volumeForImpact(
+    test('an ordinary bounce is loud enough to actually hear', () {
+      // The regression this file exists for: the play path can be entirely
+      // correct and the result still inaudible. A volume curve normalised
+      // against the throw cap asked for 0.09 at a real bounce speed, which no
+      // phone speaker reproduces, and nothing in the play path noticed.
+      //
+      // 0.65 is the level the mission one-shots play at and are known to be
+      // audible at, so an ordinary impact is held to that, with room above it
+      // for a hard fling.
+      // From a bounce worth hearing upwards. The bare threshold is excluded on
+      // purpose: a toy that has barely left the wall is the quietest impact
+      // there is, and it is the one the floor exists for.
+      for (final speed in [200.0, 300.0, 600.0, 1000.0]) {
+        expect(
+          AvatarImpactSound.volumeForImpact(speed),
+          greaterThanOrEqualTo(0.65),
+          reason: 'a bounce at $speed px/s plays too quietly to hear',
+        );
+      }
+    });
+
+    test('a hard fling is audibly heavier than a nudge', () {
+      // The range has to mean something, or every impact is the same click and
+      // the child cannot tell a nudge from a fling. It is deliberately narrow,
+      // because widening it would put the gentle end back below the level a
+      // speaker reproduces; see the constant's own note on that trade.
+      final gentle = AvatarImpactSound.volumeForImpact(200.0);
+      final hard = AvatarImpactSound.volumeForImpact(2000.0);
+
+      expect(hard / gentle, greaterThan(1.4));
+    });
+
+    test('keeps the quiet end quiet, and not silent', () {
+      // The gentlest impact that is still an impact: quiet enough to read as a
+      // graze, loud enough to be heard. Both halves matter, and the earlier
+      // curve that this replaced satisfied only the first.
+      final graze = AvatarImpactSound.volumeForImpact(
         AvatarPhysicsConfig.impactVelocity + 1,
       );
+
+      expect(graze, greaterThan(0));
       expect(
-        justAboveThreshold,
-        lessThan(AvatarPhysicsConfig.impactVolume * 0.3),
+        graze,
+        lessThan(AvatarPhysicsConfig.impactVolume * 0.65),
+        reason: 'a graze should be clearly softer than a slam',
       );
     });
   });
@@ -172,6 +217,41 @@ void main() {
       expect(await sound.playBounce(impactSpeed: 2000.0), isTrue);
 
       expect(players.every((p) => p.plays == 1), isTrue);
+    });
+
+    test('the players are set up to be heard alongside other audio', () async {
+      // The app plays a looping planetary bed and a narration voice at the same
+      // time as this. A player with no attributes of its own inherits the
+      // session's, so a bounce can end up configured as whatever the last sound
+      // to play asked for, and be ducked out of the mix or dropped entirely.
+      // Caught here because nothing else fails when that happens: the play path
+      // reports success and the device makes no sound.
+      final players = <_FakePlayer>[];
+      final sound = AvatarImpactSound(
+        playerFactory: () {
+          final player = _FakePlayer();
+          players.add(player);
+          return player;
+        },
+      );
+      addTearDown(sound.dispose);
+
+      expect(players, isNotEmpty, reason: 'the pool is empty');
+
+      for (final player in players) {
+        expect(
+          player.attributes,
+          isNotEmpty,
+          reason: 'this player would inherit the session\'s attributes',
+        );
+        final attributes = player.attributes.single;
+        expect(
+          attributes.contentType,
+          AndroidAudioContentType.sonification,
+          reason: 'an impact is a UI sound, not a music stream',
+        );
+        expect(attributes.usage, AndroidAudioUsage.assistanceSonification);
+      }
     });
 
     test('a disposed sound plays nothing rather than throwing', () async {

@@ -238,15 +238,16 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
     }
     _lastImpactAt = now;
 
-    // Normalised against a hard throw rather than against the cap, so an
-    // ordinary throw squashes clearly and only an extreme one saturates.
-    final strength = (hardest / AvatarPhysicsConfig.maxThrowVelocity).clamp(
-      0.0,
-      1.0,
+    // Normalised against the speed a hard fling really reaches a wall at, then
+    // square-rooted for the same reason the sound's volume is: against the
+    // throw cap, an ordinary bounce lands at a few percent, which is not a
+    // reaction the child can see.
+    final strength = math.sqrt(
+      (hardest / AvatarPhysicsConfig.impactReferenceSpeed).clamp(0.0, 1.0),
     );
     _impactFrom =
         1 -
-        0.14 *
+        AvatarPhysicsConfig.impactSquashDepth *
             strength *
             (_reducedMotion
                 ? AvatarPhysicsConfig.reducedMotionImpactScale

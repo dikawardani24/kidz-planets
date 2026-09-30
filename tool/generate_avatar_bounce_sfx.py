@@ -148,6 +148,14 @@ def _encode_mp3(wav_path: Path, mp3_path: Path) -> None:
             # 24 kHz is an MPEG-2 rate, so the header has to say MPEG-2 for a
             # player to read the sample rate back correctly.
             "-write_xing", "0",
+            # No ID3 tag, matching the mission cues. Left to itself, ffmpeg
+            # writes a TSSE encoder tag whose declared size does not match the
+            # bytes actually written, which leaves a tag that claims to run ten
+            # bytes past the first MPEG frame. A player that honours the
+            # declared size finds its stream misaligned, and the app's own
+            # asset test cannot walk the frames at all.
+            "-id3v2_version", "0",
+            "-map_metadata", "-1",
             str(mp3_path),
         ],
         check=True,
