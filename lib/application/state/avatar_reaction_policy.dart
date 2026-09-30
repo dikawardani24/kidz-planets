@@ -65,6 +65,7 @@ double reactionSpeedFactor(AvatarReaction reaction) {
     AvatarReaction.happy => 1.1,
     AvatarReaction.none ||
     AvatarReaction.surprised ||
+    AvatarReaction.confused ||
     AvatarReaction.talking =>
       1.0,
   };
@@ -85,6 +86,7 @@ bool reactionShowsHearts(AvatarReaction reaction) {
     AvatarReaction.sad ||
     AvatarReaction.dizzy ||
     AvatarReaction.sleepy ||
+    AvatarReaction.confused ||
     AvatarReaction.talking =>
       false,
   };

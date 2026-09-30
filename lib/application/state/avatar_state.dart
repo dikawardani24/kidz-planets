@@ -24,6 +24,7 @@ enum AvatarReaction {
   sleepy,
   laughing,
   talking,
+  confused,
 }
 
 /// Where the mission companion sits on screen and which way it faces.

@@ -145,6 +145,12 @@ AvatarExpression avatarExpression(AvatarReaction reaction, double phase) {
       eyes: AvatarEye.sparkle,
       mouth: AvatarMouth.grin,
     ),
+    // Confused is the asking wobble: one eye wide, one narrowed. The face
+    // reads as a question rather than as a second kind of surprise.
+    AvatarReaction.confused => const AvatarExpression(
+      eyes: AvatarEye.wide,
+      mouth: AvatarMouth.wavy,
+    ),
     // Talking *is* the mouth animation: it opens and shuts about three times a
     // second, which is what makes a silent companion look like it is speaking.
     AvatarReaction.talking => AvatarExpression(

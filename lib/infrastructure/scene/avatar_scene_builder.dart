@@ -319,6 +319,11 @@ class AvatarSceneBuilder {
         // Head bobbing: subtle, because it plays under mission instructions.
         hover += ramp * math.sin(reactionTime * 9.0) * 0.012;
         tilt += ramp * math.sin(reactionTime * 7.0) * 0.05;
+      case AvatarReaction.confused:
+        // The asking wobble: a small side-to-side tilt that stalls and
+        // settles, so it reads as a question rather than a spin.
+        tilt += ramp * math.sin(reactionTime * 7.0) * 0.14;
+        spin += ramp * math.sin(reactionTime * 3.5) * 0.10;
       case AvatarReaction.none:
         break;
     }
@@ -375,6 +380,7 @@ class AvatarSceneBuilder {
       AvatarReaction.dizzy => const Color(0xFFB388FF),
       AvatarReaction.sleepy => const Color(0xFF3F4E92),
       AvatarReaction.talking => const Color(0xFF7DD3FC),
+      AvatarReaction.confused => const Color(0xFFA5B4FC),
       AvatarReaction.none => switch (selectedPlanetId) {
         'neptune' || 'uranus' || 'pluto' => const Color(0xFF38BDF8),
         'sun' || 'mercury' || 'venus' => const Color(0xFFFBBF24),

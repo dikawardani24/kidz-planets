@@ -8,6 +8,7 @@ import '../../../application/state/providers.dart';
 import '../../../infrastructure/services/scene_providers.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../../l10n/resolve_message.dart';
+import '../../../infrastructure/services/avatar_impact_sound_provider.dart';
 import '../../../infrastructure/services/planet_narration_provider.dart';
 import '../../../infrastructure/services/planet_sound_provider.dart';
 import '../theme/app_theme.dart';
@@ -46,6 +47,18 @@ class ExplorerScreen extends ConsumerWidget {
     final ui = ref.watch(explorerControllerProvider);
 
     ref.listen<ExplorerState>(explorerControllerProvider, (prev, next) {
+      // Expression SFX duck under narration instead of competing with it.
+      // Speech starts in the branches below; stopping (deselect, celebration
+      // shown) restores full volume. The flag lives on the shared sound so it
+      // survives companion rebuilds.
+      final narrationActive = next.selectedPlanetId != null;
+      if ((prev?.selectedPlanetId != null) != narrationActive) {
+        try {
+          ref.read(avatarExpressionSoundProvider).voiceActive =
+              narrationActive;
+        } catch (_) {}
+      }
+
       void speakSelected(String? id) {
         if (id == null) return;
         final planet = ref.read(planetByIdProvider(id));

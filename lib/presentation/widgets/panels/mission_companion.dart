@@ -15,6 +15,7 @@ import '../../../application/state/avatar_state.dart';
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../../infrastructure/scene/avatar_scene_controller.dart';
+import '../../../infrastructure/services/avatar_expression_sound.dart';
 import '../../../infrastructure/services/avatar_impact_sound_provider.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../../l10n/localized_planet.dart';
@@ -434,6 +435,14 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
                     : velocity,
                 maxPosition: _safeArea.max,
               );
+          // The whoosh marks the launch, not the flight: one cue per flick,
+          // fired here rather than from the frame loop so it cannot retrigger
+          // every frame the toy is moving.
+          if (velocity.distance >= AvatarPhysicsConfig.minThrowVelocity) {
+            unawaited(
+              ref.read(avatarExpressionSoundProvider).playThrowWhoosh(),
+            );
+          }
         }
         _velocityTracker = null;
         _dragSamples.clear();
@@ -499,10 +508,34 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
     final pose = ref.watch(avatarControllerProvider);
     final ui = ref.watch(explorerControllerProvider);
 
-    // Mission beats reach the body, not just the bubble: a wrong pick droops,
-    // a finished mission laughs. The reaction itself lives in the avatar state,
-    // so this only translates a mission mood into a reaction once per beat
-    // instead of animating from inside the widget.
+    // One centralized SFX trigger for the whole expressive state. Both
+    // listeners resolve through the same `avatarCueFor`, which picks exactly
+    // one cue for the combined (mood, reaction, idle, heart) state — so a
+    // mission beat can never double-play (mission cue + reaction cue), and
+    // rebuilds re-resolve the same cue which the sound's dedupe key drops.
+    // Animation and SFX start together because both read the same state
+    // change in the same frame the controller publishes it.
+    //
+    // Two listeners (not one) because Riverpod has no multi-provider select:
+    // each one re-resolves the full state when its half changes. Whichever
+    // fires second for a single beat re-resolves the same cue and is dropped
+    // by the dedupe key — that is the guard doing its job, not a bug.
+    void playResolvedCue() {
+      final mood = ref.read(
+        explorerControllerProvider.select((s) => s.avatarMood),
+      );
+      final pose = ref.read(avatarControllerProvider);
+      final cue = avatarCueFor(
+        mood: mood,
+        reaction: pose.reaction,
+        idle: pose.idleAction,
+        heartVisible: pose.isHeartVisible,
+      );
+      if (cue == null) return;
+      final sound = ref.read(avatarExpressionSoundProvider);
+      unawaited(sound.playCue(cue, volume: _volumeForCue(cue)));
+    }
+
     ref.listen<AvatarMood>(
       explorerControllerProvider.select((s) => s.avatarMood),
       (previous, next) {
@@ -514,6 +547,15 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
         } else {
           avatar.react(beat.reaction, duration: beat.duration);
         }
+        playResolvedCue();
+      },
+    );
+
+    ref.listen<AvatarState>(
+      avatarControllerProvider,
+      (previous, next) {
+        if (previous == next) return;
+        playResolvedCue();
       },
     );
 

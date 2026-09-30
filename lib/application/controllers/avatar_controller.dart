@@ -304,9 +304,16 @@ class AvatarController extends StateNotifier<AvatarState> {
       reaction: reaction,
       reactionUntil:
           DateTime.now().millisecondsSinceEpoch + duration.inMilliseconds,
-      idleAction: reaction == AvatarReaction.dizzy
-          ? AvatarIdleAction.thinking
-          : state.idleAction,
+      // Cheerful reactions carry the heart pose with them (`sendingHeart`),
+      // so the idle layer agrees with the face: the bubble text, the porthole
+      // tint and the SFX all read the same celebration rather than three
+      // different ones. Non-cheerful reactions leave the idle alone — except
+      // dizzy, which borrows the thinking tilt for its wobble.
+      idleAction: reactionShowsHearts(reaction)
+          ? AvatarIdleAction.sendingHeart
+          : reaction == AvatarReaction.dizzy
+              ? AvatarIdleAction.thinking
+              : state.idleAction,
       isHeartVisible: reactionShowsHearts(reaction),
     );
     // A plain timestamp cannot clear itself, so the controller owns a single
