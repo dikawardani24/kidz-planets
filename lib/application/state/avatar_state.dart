@@ -13,6 +13,19 @@ enum AvatarIdleAction {
 
 enum FlightStyle { edge, zigzag, circle }
 
+/// The companion's short-lived mission sound mood.
+///
+/// This is deliberately separate from [AvatarReaction]: reactions describe
+/// the avatar's visible expression, while these values describe what the
+/// mission is asking the companion to communicate.
+enum AvatarMood {
+  success,
+  wrong,
+  instruction,
+  searching,
+  retry,
+}
+
 /// Short-lived reactions triggered by direct touch or exploration events.
 enum AvatarReaction {
   none,
