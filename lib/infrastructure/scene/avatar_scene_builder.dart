@@ -37,6 +37,11 @@ class AvatarSceneBuilder {
   /// can supply the sprite materials it needs.
   AvatarExhaust? _exhaust;
 
+  /// Imported GLB rocket. The procedural model remains as a safe fallback if
+  /// the bundled asset cannot be loaded on a device/build.
+  Node? _importedRocket;
+  bool _rocketLoadPending = false;
+
   /// Set while that attach is in flight, so a burst of rebuilds cannot queue
   /// several plumes onto the same node.
   bool _exhaustPending = false;
@@ -98,6 +103,49 @@ class AvatarSceneBuilder {
   }
 
   void _buildBody() {
+    // Build the existing procedural rocket first so the companion remains
+    // renderable even if the external GLB asset is missing/corrupt.
+    _buildFallbackBody();
+    unawaited(_attachImportedRocket());
+  }
+
+  /// Loads the real low-poly rocket model used by the companion.
+  ///
+  /// The model is kept as a normal Scene Node so all existing avatar
+  /// transforms/reactions continue to work on [avatarRoot]. The procedural
+  /// rocket is hidden only after the GLB has successfully loaded.
+  Future<void> _attachImportedRocket() async {
+    if (_rocketLoadPending || _importedRocket != null) return;
+    _rocketLoadPending = true;
+    try {
+      await Scene.initializeStaticResources();
+      final rocket = await Node.fromGlbAsset('assets/models/avatar/rocket.glb');
+      if (avatarRoot.parent == null) return;
+
+      rocket.name = 'avatar-imported-rocket';
+      rocket.raycastable = false;
+      rocket.scale = vm.Vector3.all(1.0);
+      bodyRoot.add(rocket);
+      _importedRocket = rocket;
+
+      // The imported model replaces the old capsule-like procedural body.
+      // Keep the existing exhaust and porthole overlay independent from the
+      // model so reactions and the Flutter face continue to work.
+      for (final child in bodyRoot.children.toList()) {
+        if (child == rocket || child == exhaustGroupNode) continue;
+        child.visible = false;
+      }
+    } catch (error, stackTrace) {
+      debugPrint(
+        'AvatarSceneBuilder: imported rocket unavailable; using procedural '
+        'fallback: $error\\n$stackTrace',
+      );
+    } finally {
+      _rocketLoadPending = false;
+    }
+  }
+
+  void _buildFallbackBody() {
     final bodyMat = materials.rocketBody();
     final whiteMat = materials.whiteAccent();
     final finMat = materials.fins();
