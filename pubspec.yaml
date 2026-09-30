@@ -49,3 +49,4 @@ flutter:
     - assets/audio/sfx/planets/
     - assets/audio/sfx/missions/
     - assets/audio/sfx/avatar/
+    - assets/models/avatar/
