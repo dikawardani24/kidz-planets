@@ -32,6 +32,10 @@ class AvatarController extends StateNotifier<AvatarState> {
   bool _disposed = false;
   final math.Random _random = math.Random();
 
+  // Smoothly return the rocket to its friendly upright pose after a throw.
+  bool _recoverOrientation = false;
+  static const double _orientationRecoverySpeed = 9.0;
+
   /// Distance between the canonical flight path and where the companion
   /// actually is, because the child dragged it off the path.
   ///
@@ -178,6 +182,7 @@ class AvatarController extends StateNotifier<AvatarState> {
 
     // The throw continues the roll the child may have set up with two fingers,
     // rather than snapping the toy level the moment it is let go.
+    _recoverOrientation = false;
     _physics.setRotation(yaw: state.yaw, pitch: state.pitch);
     _physics.launch(velocity);
 
@@ -215,8 +220,25 @@ class AvatarController extends StateNotifier<AvatarState> {
     // companion parks exactly where it settled rather than snapping anywhere.
     if (!_physics.isThrowing) {
       _lastBounces = const [];
+      _recoverOrientation = true;
       _restartHold();
     }
+  }
+
+  void _recoverRocketOrientation(double dt) {
+    final blend = 1 - math.exp(-_orientationRecoverySpeed * dt);
+    final yaw = state.yaw * (1 - blend);
+    final pitch = state.pitch * (1 - blend);
+
+    if (yaw.abs() < 0.005 && pitch.abs() < 0.005) {
+      _recoverOrientation = false;
+      _physics.setRotation(yaw: 0, pitch: 0);
+      state = state.copyWith(yaw: 0, pitch: 0);
+      return;
+    }
+
+    _physics.setRotation(yaw: yaw, pitch: pitch);
+    state = state.copyWith(yaw: yaw, pitch: pitch);
   }
 
   /// Updates continuous non-stop flight movement along the chosen path.
@@ -243,6 +265,10 @@ class AvatarController extends StateNotifier<AvatarState> {
 
     // While the companion is parked there is no flight to update: standing
     // still is the whole point of the pause.
+    if (_recoverOrientation) {
+      _recoverRocketOrientation(dt);
+    }
+
     if (state.isFlightPaused) return;
 
     _pathTime += dt * _baseFlightRate * reactionSpeedFactor(state.reaction);
