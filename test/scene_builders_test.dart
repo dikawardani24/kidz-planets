@@ -293,38 +293,9 @@ void main() {
           materials: AvatarMaterialFactory(),
         ));
 
-    test('the target starts in its default pose until told otherwise', () {
-      // _buildTarget hides it, but that needs a Scene, so a bare builder has
-      // never run it.
-      expect(avatar.targetPivot.visible, isTrue);
-    });
-
-    test('shows the target off to one side', () {
+    test('the target remains hidden', () {
       avatar.showTarget(visible: true, color: const Color(0xFFFFFFFF));
-
-      expect(avatar.targetPivot.visible, isTrue);
-      expect(avatar.targetPivot.position.x, closeTo(-0.62, 1e-6));
-      expect(avatar.targetPivot.position.y, closeTo(0.10, 1e-6));
-    });
-
-    test('hiding it does not move the target', () {
-      avatar.showTarget(visible: true, color: const Color(0xFFFFFFFF));
-      final shown = avatar.targetPivot.position.clone();
-
-      avatar.showTarget(visible: false, color: const Color(0xFFFFFFFF));
-
       expect(avatar.targetPivot.visible, isFalse);
-      expect(avatar.targetPivot.position, shown);
-    });
-
-    test('a different colour does not move the target', () {
-      avatar.showTarget(visible: true, color: const Color(0xFFFFFFFF));
-      final shown = avatar.targetPivot.position.clone();
-
-      avatar.showTarget(visible: true, color: const Color(0xFFFF0000));
-
-      expect(avatar.targetPivot.position, shown);
-      expect(avatar.targetPivot.visible, isTrue);
     });
   });
 

@@ -28,9 +28,9 @@ class AvatarSceneBuilder {
   final Node avatarRoot = Node(name: 'avatar-root');
   final Node bodyRoot = Node(name: 'avatar-body');
   final Node targetPivot = Node(name: 'avatar-target');
+  final Node exhaustGroupNode = Node(name: 'avatar-exhaust');
 
   UnlitMaterial? _portholeMaterial;
-  UnlitMaterial? _targetMaterial;
 
   /// The reaction currently being played, and when it started.
   ///
@@ -79,9 +79,6 @@ class AvatarSceneBuilder {
     final bodyMat = materials.rocketBody();
     final whiteMat = materials.whiteAccent();
     final finMat = materials.fins();
-    final portholeMat = materials.porthole();
-
-    _portholeMaterial = portholeMat;
 
     // Rocket fuselage body
     bodyRoot.add(
@@ -93,12 +90,6 @@ class AvatarSceneBuilder {
     bodyRoot.add(
       _mesh('nosecone', geometries.noseCone(), whiteMat)
         ..position = vm.Vector3(0, 0.22, 0),
-    );
-
-    // Front porthole window
-    bodyRoot.add(
-      _mesh('porthole', geometries.porthole(), portholeMat)
-        ..position = vm.Vector3(0, AvatarPorthole.height, AvatarPorthole.depth),
     );
 
     // Side fins / wings
@@ -116,28 +107,26 @@ class AvatarSceneBuilder {
       _mesh('engine', geometries.engineNozzle(), whiteMat)
         ..position = vm.Vector3(0, -0.22, 0),
     );
+
+    // 3D Thruster exhaust plume attached directly to engine base
+    final exhaustOuterMat = materials.exhaustOuter();
+    final exhaustInnerMat = materials.exhaustInner();
+
+    final outerMesh = _mesh('exhaust-outer', geometries.exhaustOuter(), exhaustOuterMat)
+      ..position = vm.Vector3(0, -0.38, 0)
+      ..rotation = vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), math.pi);
+
+    final innerMesh = _mesh('exhaust-inner', geometries.exhaustInner(), exhaustInnerMat)
+      ..position = vm.Vector3(0, -0.32, 0)
+      ..rotation = vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), math.pi);
+
+    exhaustGroupNode.add(outerMesh);
+    exhaustGroupNode.add(innerMesh);
+    bodyRoot.add(exhaustGroupNode);
   }
 
   void _buildTarget() {
-    _targetMaterial = materials.target();
-    targetPivot.add(
-      _mesh('target-body', geometries.target(), _targetMaterial!),
-    );
-    targetPivot.add(
-      Node(name: 'target-ring')
-        ..addComponent(
-          DirectionalLightComponent.aimed(
-            DirectionalLight(
-              color: vm.Vector3(0.35, 0.75, 1.0),
-              intensity: 1.6,
-            ),
-            vm.Vector3(0, -1.0, 0),
-          ),
-        )
-        ..position = vm.Vector3(0, 0, -0.9),
-    );
     targetPivot.visible = false;
-    avatarRoot.add(targetPivot);
   }
 
   Node _mesh(String name, MeshGeometry geometry, Material material) {
@@ -267,6 +256,9 @@ class AvatarSceneBuilder {
       ..rotation = vm.Quaternion.axisAngle(vm.Vector3(0, 0, 1), tilt) *
           vm.Quaternion.axisAngle(vm.Vector3(0, 1, 0), spin);
 
+    final flamePulse = 1.0 + math.sin(t * 32.0) * 0.08 + math.cos(t * 20.0) * 0.05;
+    exhaustGroupNode.scale = vm.Vector3(flamePulse, flamePulse * 1.15, flamePulse);
+
     _hover = hover;
     _tilt = tilt;
     _spin = spin;
@@ -291,17 +283,15 @@ class AvatarSceneBuilder {
           'neptune' || 'uranus' || 'pluto' => const Color(0xFF38BDF8),
           'sun' || 'mercury' || 'venus' => const Color(0xFFFBBF24),
           _ => switch (idleAction) {
-              AvatarIdleAction.dancing => const Color(0xFF10B981),
+              AvatarIdleAction.dancing => const Color(0xFF38BDF8),
               AvatarIdleAction.thinking => const Color(0xFF8B5CF6),
               AvatarIdleAction.sitting => const Color(0xFF64748B),
               AvatarIdleAction.flying => const Color(0xFF06B6D4),
               AvatarIdleAction.sendingHeart => const Color(0xFFEC4899),
-              AvatarIdleAction.none => const Color(0xFF12B981),
+              AvatarIdleAction.none => const Color(0xFF06B6D4),
             },
         },
     };
-    if (_portholeColor == color) return;
-    _portholeColor = color;
     material.baseColorFactor = vm.Vector4(
       color.r.toDouble(),
       color.g.toDouble(),
@@ -309,25 +299,10 @@ class AvatarSceneBuilder {
       1.0,
     );
   }
-
-  Color? _portholeColor;
 
   void showTarget({required bool visible, required Color color}) {
-    targetPivot.visible = visible;
-    if (!visible) return;
-    targetPivot.position = vm.Vector3(-0.62, 0.10, 0);
-    final material = _targetMaterial;
-    if (material == null || _targetColor == color) return;
-    _targetColor = color;
-    material.baseColorFactor = vm.Vector4(
-      color.r.toDouble(),
-      color.g.toDouble(),
-      color.b.toDouble(),
-      1.0,
-    );
+    targetPivot.visible = false;
   }
-
-  Color? _targetColor;
 
   void detachFrom(Scene scene) {
     scene.remove(avatarRoot);

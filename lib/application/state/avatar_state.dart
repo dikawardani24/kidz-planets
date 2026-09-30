@@ -30,6 +30,7 @@ enum AvatarReaction {
 class AvatarState extends Equatable {
   const AvatarState({
     this.screenPosition,
+    this.velocity = Offset.zero,
     this.yaw = 0.0,
     this.pitch = 0.0,
     this.idleAction = AvatarIdleAction.none,
@@ -43,6 +44,9 @@ class AvatarState extends Equatable {
 
   /// Top-left corner of the companion box, in logical pixels.
   final Offset? screenPosition;
+
+  /// Current throw / momentum velocity in logical pixels per second.
+  final Offset velocity;
 
   final double yaw;
   final double pitch;
@@ -62,6 +66,9 @@ class AvatarState extends Equatable {
   final AvatarReaction reaction;
   final int reactionUntil;
 
+  /// True while the toy is carrying momentum from a throw.
+  bool get isThrowing => velocity.distanceSquared > 100.0;
+
   /// How far the rocket may be tipped forwards or backwards, in radians.
   ///
   /// Wide enough (about 86 degrees) that the nose points straight at the child
@@ -75,6 +82,7 @@ class AvatarState extends Equatable {
 
   AvatarState copyWith({
     Offset? screenPosition,
+    Offset? velocity,
     double? yaw,
     double? pitch,
     AvatarIdleAction? idleAction,
@@ -87,6 +95,7 @@ class AvatarState extends Equatable {
   }) {
     return AvatarState(
       screenPosition: screenPosition ?? this.screenPosition,
+      velocity: velocity ?? this.velocity,
       yaw: yaw ?? this.yaw,
       pitch: pitch ?? this.pitch,
       idleAction: idleAction ?? this.idleAction,
@@ -102,6 +111,7 @@ class AvatarState extends Equatable {
   @override
   List<Object?> get props => [
         screenPosition,
+        velocity,
         yaw,
         pitch,
         idleAction,

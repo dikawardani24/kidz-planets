@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:math' as math;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -86,6 +86,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
   }
 
   final Map<int, Offset> _activePointers = {};
+  VelocityTracker? _velocityTracker;
   Offset? _firstDownPos;
   DateTime? _firstDownTime;
   int _tapCount = 0;
@@ -102,6 +103,10 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
       _hasMovedFar = false;
       _isLongPress = false;
 
+      _velocityTracker = VelocityTracker.withKind(event.kind);
+      _velocityTracker?.addPosition(event.timeStamp, event.position);
+      ref.read(avatarControllerProvider.notifier).stopMomentum();
+
       _longPressTimer?.cancel();
       _longPressTimer = Timer(const Duration(milliseconds: 500), () {
         if (_activePointers.length == 1 && !_hasMovedFar && mounted) {
@@ -113,6 +118,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
         }
       });
     } else if (_activePointers.length >= 2) {
+      _velocityTracker = null;
       _longPressTimer?.cancel();
     }
   }
@@ -126,11 +132,13 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
         _hasMovedFar = true;
         _longPressTimer?.cancel();
       }
+      _velocityTracker?.addPosition(event.timeStamp, event.position);
       ref.read(avatarControllerProvider.notifier).moveBy(
             delta: event.delta,
             maxPosition: _lastMaxPosition,
           );
     } else if (_activePointers.length >= 2) {
+      _velocityTracker = null;
       _longPressTimer?.cancel();
       _hasMovedFar = true;
       ref.read(avatarControllerProvider.notifier).rotateBy(
@@ -145,6 +153,21 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
     _longPressTimer?.cancel();
 
     if (_activePointers.isEmpty) {
+      if (_hasMovedFar && _velocityTracker != null) {
+        _velocityTracker?.addPosition(event.timeStamp, event.position);
+        final estimate = _velocityTracker?.getVelocity();
+        if (estimate != null) {
+          ref.read(avatarControllerProvider.notifier).launchWithVelocity(
+                velocity: Offset(
+                  estimate.pixelsPerSecond.dx,
+                  estimate.pixelsPerSecond.dy,
+                ),
+                maxPosition: _lastMaxPosition,
+              );
+        }
+        _velocityTracker = null;
+      }
+
       final downTime = _firstDownTime;
       final now = DateTime.now();
       if (!_hasMovedFar &&
@@ -269,7 +292,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
             : Color(
                 ref.read(planetByIdProvider(mission.targetPlanetId)).colorValue,
               );
-        _controller.showTarget(visible: mission != null, color: targetColor);
+        _controller.showTarget(visible: false, color: targetColor);
 
         final placement = bubblePlacement(
           avatarTop: position.dy,
@@ -350,13 +373,6 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  if (!hasFocus && !pose.isFlightPaused &&
-                      pose.idleAction == AvatarIdleAction.flying)
-                    AnimatedBuilder(
-                      animation: _flightTicker,
-                      builder: (context, _) =>
-                          _RocketExhaustFlame(progress: _flightTicker.value),
-                    ),
                   if (pose.isHeartVisible)
                     Positioned(
                       top: -30,
@@ -417,49 +433,6 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
           ],
         );
       },
-    );
-  }
-}
-
-/// Compact, tightly-coupled rocket exhaust flame right at the rocket base.
-class _RocketExhaustFlame extends StatelessWidget {
-  const _RocketExhaustFlame({required this.progress});
-  final double progress;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: List.generate(5, (i) {
-        final factor = (progress + i * 0.2) % 1.0;
-        final size = 48.0 * (1.0 - factor * 0.4);
-        final opacity = (1.0 - factor).clamp(0.0, 1.0);
-        return Positioned(
-          left: kCompanionBoxWidth / 2 -
-              size / 2 +
-              (math.sin(i + progress * math.pi * 4) * 8),
-          top: kCompanionBoxHeight - 68 + (factor * 40), // Starts right at the engine nozzle
-          child: Opacity(
-            opacity: opacity * 0.95,
-            child: Container(
-              width: size,
-              height: size * 1.4,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFFFFFFFF).withValues(alpha: 0.98),
-                    const Color(0xFF38BDF8).withValues(alpha: 0.92),
-                    const Color(0xFF0284C7).withValues(alpha: 0.50),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.3, 0.7, 1.0],
-                ),
-              ),
-            ),
-          ),
-        );
-      }),
     );
   }
 }

@@ -321,28 +321,65 @@ void main() {
       await _runOutCompanionTimers(tester);
     });
 
-    testWidgets('the target ring follows the active mission', (tester) async {
+    testWidgets('the target ring is hidden on the companion', (tester) async {
       final fake = await _pumpCompanion(tester);
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(MissionCompanion)),
-      );
-
-      final mission = container.read(explorerControllerProvider).activeMission!;
-      final target =
-          container.read(planetByIdProvider(mission.targetPlanetId));
-
       expect(fake.targets, isNotEmpty);
-      expect(fake.targets.last.visible, isTrue);
-      // The colour has to be the mission target's own, not a hardcoded one, so
-      // a mission change repoints the ring without touching the widget.
-      expect(fake.targets.last.color, Color(target.colorValue));
+      expect(fake.targets.last.visible, isFalse);
     });
   });
 
-  group('pitch limits', () {
+  group('pitch limits and throw physics', () {
     test('the exposed pitch never exceeds the readable range', () {
       const state = AvatarState(pitch: 99);
       expect(state.pitchClamped.abs(), AvatarState.pitchLimit);
+    });
+
+    test('launchWithVelocity applies momentum and decelerates over time', () {
+      final controller = AvatarController();
+      const maxPos = Offset(300, 600);
+      controller.placeAt(const Offset(100, 100), maxPosition: maxPos);
+
+      // Fast flick to the right
+      controller.launchWithVelocity(
+        velocity: const Offset(1000, 0),
+        maxPosition: maxPos,
+      );
+
+      expect(controller.state.isThrowing, isTrue);
+      expect(controller.state.velocity.dx, greaterThan(0));
+
+      // Advance physics by 0.1 second
+      controller.updateFlight(0.1, viewport, maxPos);
+      expect(controller.state.screenPosition!.dx, greaterThan(100.0));
+      // Friction decelerates the velocity
+      expect(controller.state.velocity.dx, lessThan(1000.0));
+
+      // Advance time until momentum stops
+      for (var i = 0; i < 30; i++) {
+        controller.updateFlight(0.1, viewport, maxPos);
+      }
+
+      expect(controller.state.isThrowing, isFalse);
+      expect(controller.state.velocity, Offset.zero);
+    });
+
+    test('bounces off screen edges when thrown with high velocity', () {
+      final controller = AvatarController();
+      const maxPos = Offset(300, 600);
+      controller.placeAt(const Offset(290, 100), maxPosition: maxPos);
+
+      // Throw hard right towards the right edge
+      controller.launchWithVelocity(
+        velocity: const Offset(1000, 0),
+        maxPosition: maxPos,
+      );
+
+      // Update frame -> hits right edge -> bounces back left
+      controller.updateFlight(0.05, viewport, maxPos);
+
+      // Velocity inverts (negative dx) due to bounce factor
+      expect(controller.state.velocity.dx, lessThan(0));
+      expect(controller.state.screenPosition!.dx, lessThanOrEqualTo(maxPos.dx));
     });
   });
 }

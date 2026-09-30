@@ -61,6 +61,18 @@ class AvatarGeometryFactory {
         () => CapsuleGeometry(radius: 0.08, height: 0.06, radialSegments: 16, capRings: 3),
       );
 
+  /// Outer glowing thruster plume.
+  MeshGeometry exhaustOuter() => _cache.putIfAbsent(
+        'exhaust-outer',
+        () => CapsuleGeometry(radius: 0.11, height: 0.36, radialSegments: 18, capRings: 4),
+      );
+
+  /// Inner white-hot thruster core.
+  MeshGeometry exhaustInner() => _cache.putIfAbsent(
+        'exhaust-inner',
+        () => CapsuleGeometry(radius: 0.06, height: 0.24, radialSegments: 14, capRings: 3),
+      );
+
   /// Stand-in for the mission target.
   MeshGeometry target() => _cache.putIfAbsent(
         'target',

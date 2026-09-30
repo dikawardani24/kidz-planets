@@ -111,9 +111,125 @@ class AvatarController extends StateNotifier<AvatarState> {
         position.dy.clamp(0.0, math.max(0.0, maxPosition.dy)),
       );
 
+  /// Current throw momentum velocity in pixels per second.
+  Offset _throwVelocity = Offset.zero;
+
+  /// Bounce coefficient for screen edge collisions (0.5 - 0.75).
+  static const double _bounceFactor = 0.65;
+
+  /// Exponential friction coefficient for decelerating after a throw.
+  static const double _throwFrictionCoeff = 3.0;
+
+  /// Launches the companion with initial [velocity] (pixels/sec) after a flick.
+  void launchWithVelocity({
+    required Offset velocity,
+    required Offset maxPosition,
+  }) {
+    _maxPosition = maxPosition;
+    // Cap maximum throw speed so a super-fast flick stays playful and controllable
+    const double maxSpeed = 3200.0;
+    final speed = velocity.distance;
+
+    if (speed < 50.0) {
+      stopMomentum();
+      _restartHold();
+      return;
+    }
+
+    final clampedVelocity = speed > maxSpeed ? velocity * (maxSpeed / speed) : velocity;
+    _throwVelocity = clampedVelocity;
+
+    state = state.copyWith(
+      velocity: _throwVelocity,
+      isFlightPaused: true,
+    );
+    _restartHold();
+  }
+
+  /// Cancels any active throw momentum.
+  void stopMomentum() {
+    _throwVelocity = Offset.zero;
+    if (state.velocity != Offset.zero) {
+      state = state.copyWith(velocity: Offset.zero);
+    }
+  }
+
+  void _updateMomentumPhysics(double dt, Offset maxPosition) {
+    if (_throwVelocity.distanceSquared < 100.0) { // < 10 px/s
+      stopMomentum();
+      _restartHold();
+      return;
+    }
+
+    // Apply smooth deceleration
+    _throwVelocity *= math.exp(-_throwFrictionCoeff * dt);
+
+    final currentPos = state.screenPosition ?? Offset.zero;
+    var nextX = currentPos.dx + _throwVelocity.dx * dt;
+    var nextY = currentPos.dy + _throwVelocity.dy * dt;
+
+    var vx = _throwVelocity.dx;
+    var vy = _throwVelocity.dy;
+
+    // Bounce off left/right edges
+    if (nextX <= 0.0) {
+      nextX = 0.0;
+      vx = -vx * _bounceFactor;
+    } else if (nextX >= maxPosition.dx) {
+      nextX = maxPosition.dx;
+      vx = -vx * _bounceFactor;
+    }
+
+    // Bounce off top/bottom edges
+    if (nextY <= 0.0) {
+      nextY = 0.0;
+      vy = -vy * _bounceFactor;
+    } else if (nextY >= maxPosition.dy) {
+      nextY = maxPosition.dy;
+      vy = -vy * _bounceFactor;
+    }
+
+    _throwVelocity = Offset(vx, vy);
+    final clampedPos = _clampTo(Offset(nextX, nextY), maxPosition);
+
+    // Subtle 3D spin and tilt proportional to velocity
+    final spinDx = vx * dt * 0.006;
+    final spinDy = vy * dt * 0.004;
+    final newYaw = state.yaw + spinDx;
+    final newPitch = (state.pitch + spinDy)
+        .clamp(-AvatarState.pitchLimit, AvatarState.pitchLimit);
+
+    if (_throwVelocity.distance < 15.0) {
+      _throwVelocity = Offset.zero;
+      state = state.copyWith(
+        screenPosition: clampedPos,
+        velocity: Offset.zero,
+        yaw: newYaw,
+        pitch: newPitch,
+        isFlightPaused: true,
+      );
+      _restartHold();
+    } else {
+      state = state.copyWith(
+        screenPosition: clampedPos,
+        velocity: _throwVelocity,
+        yaw: newYaw,
+        pitch: newPitch,
+        isFlightPaused: true,
+      );
+    }
+  }
+
   /// Updates continuous non-stop flight movement along the chosen path.
   void updateFlight(double dt, Size viewport, Offset maxPosition) {
     _maxPosition = maxPosition;
+
+    // Active throw momentum physics takes precedence while decelerating
+    if (_throwVelocity.distanceSquared > 100.0) {
+      _updateMomentumPhysics(dt, maxPosition);
+      return;
+    }
+
     // While the companion is parked there is no flight to update: standing
     // still is the whole point of the pause.
     if (state.isFlightPaused) return;
@@ -130,7 +246,7 @@ class AvatarController extends StateNotifier<AvatarState> {
     state = state.copyWith(
       screenPosition: position,
       flightTime: state.flightTime + dt,
-      idleAction: AvatarIdleAction.flying, // Always flying non-stop!
+      idleAction: AvatarIdleAction.flying,
     );
   }
 
@@ -209,6 +325,7 @@ class AvatarController extends StateNotifier<AvatarState> {
     required Offset delta,
     required Offset maxPosition,
   }) {
+    stopMomentum();
     final current = state.screenPosition;
     if (current == null) return;
     _maxPosition = maxPosition;

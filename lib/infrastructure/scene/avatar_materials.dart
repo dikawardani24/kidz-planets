@@ -40,4 +40,16 @@ class AvatarMaterialFactory {
     return UnlitMaterial()
       ..baseColorFactor = vm.Vector4(0.22, 0.74, 1.0, 1.0);
   }
+
+  /// Glowing cyan/blue outer thruster plume.
+  UnlitMaterial exhaustOuter() {
+    return UnlitMaterial()
+      ..baseColorFactor = vm.Vector4(0.22, 0.75, 1.0, 0.85);
+  }
+
+  /// White hot inner thruster core.
+  UnlitMaterial exhaustInner() {
+    return UnlitMaterial()
+      ..baseColorFactor = vm.Vector4(1.0, 1.0, 1.0, 0.98);
+  }
 }
