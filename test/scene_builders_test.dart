@@ -3,7 +3,7 @@ import 'dart:ui' show Color;
 
 import 'package:flutter_scene/scene.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kidz_planets/application/state/avatar_state.dart';
+import 'package:kidz_planets/application/state/avatar_state.dart' hide AvatarMood;
 import 'package:kidz_planets/application/state/explorer_state.dart';
 import 'package:kidz_planets/infrastructure/scene/avatar_geometry.dart';
 import 'package:kidz_planets/infrastructure/scene/avatar_materials.dart';
@@ -293,40 +293,132 @@ void main() {
           materials: AvatarMaterialFactory(),
         ));
 
-    test('the target starts in its default pose until told otherwise', () {
-      // _buildTarget hides it, but that needs a Scene, so a bare builder has
-      // never run it.
-      expect(avatar.targetPivot.visible, isTrue);
-    });
-
-    test('shows the target off to one side', () {
+    test('the target remains hidden', () {
       avatar.showTarget(visible: true, color: const Color(0xFFFFFFFF));
-
-      expect(avatar.targetPivot.visible, isTrue);
-      expect(avatar.targetPivot.position.x, closeTo(-0.62, 1e-6));
-      expect(avatar.targetPivot.position.y, closeTo(0.10, 1e-6));
-    });
-
-    test('hiding it does not move the target', () {
-      avatar.showTarget(visible: true, color: const Color(0xFFFFFFFF));
-      final shown = avatar.targetPivot.position.clone();
-
-      avatar.showTarget(visible: false, color: const Color(0xFFFFFFFF));
-
       expect(avatar.targetPivot.visible, isFalse);
-      expect(avatar.targetPivot.position, shown);
-    });
-
-    test('a different colour does not move the target', () {
-      avatar.showTarget(visible: true, color: const Color(0xFFFFFFFF));
-      final shown = avatar.targetPivot.position.clone();
-
-      avatar.showTarget(visible: true, color: const Color(0xFFFF0000));
-
-      expect(avatar.targetPivot.position, shown);
-      expect(avatar.targetPivot.visible, isTrue);
     });
   });
+
+  group('AvatarSceneBuilder reactions', () {
+    late AvatarSceneBuilder avatar;
+
+    setUp(() => avatar = AvatarSceneBuilder(
+          geometries: AvatarGeometryFactory(),
+          materials: AvatarMaterialFactory(),
+        ));
+
+    /// Ticks the rocket at [seconds] with a settled idle. Sitting holds a
+    /// constant pose, so anything that changes next can only be the reaction.
+    void tickAt(double seconds) => avatar.tick(
+          Duration(milliseconds: (seconds * 1000).round()),
+          AvatarMood.searching,
+          AvatarIdleAction.sitting,
+          null,
+        );
+
+    double hover() => avatar.bodyRoot.position.y;
+    double bank() => avatar.bodyRoot.rotation.z;
+    double spin() => avatar.bodyRoot.rotation.y;
+
+    /// The settled sitting pose: how far down and how far round the body sits.
+    const double settledHover = -0.12;
+
+    test('a reaction starts from the settled pose, not mid-wobble', () {
+      tickAt(3);
+      avatar.setReaction(AvatarReaction.sad);
+      tickAt(3); // the reaction clock starts at zero on this very tick
+
+      expect(hover(), closeTo(settledHover, 1e-6), reason: 'nothing has arrived');
+      expect(bank(), closeTo(0, 1e-6));
+    });
+
+    test('a reaction eases in instead of snapping', () {
+      avatar.setReaction(AvatarReaction.sad);
+      tickAt(3);
+      final atStart = hover();
+
+      tickAt(3.16); // 160ms in, halfway through the 320ms fade
+      final halfway = hover();
+
+      tickAt(4); // long settled
+      final full = hover();
+
+      expect(atStart, closeTo(settledHover, 1e-6));
+      // The fade is a smoothstep, and smoothstep(0.5) is exactly 0.5, so the
+      // halfway pose is exactly halfway between the two.
+      expect(halfway, closeTo(settledHover - 0.5 * 0.055, 1e-6));
+      expect(full, closeTo(settledHover - 0.055, 1e-6));
+      expect(full, lessThan(halfway));
+      expect(halfway, lessThan(atStart));
+    });
+
+    test('sad droops downwards', () {
+      avatar.setReaction(AvatarReaction.sad);
+      tickAt(3);
+      tickAt(4);
+
+      expect(hover(), lessThan(settledHover));
+      expect(bank(), lessThan(0));
+    });
+
+    test('happy bounces above the settled hover', () {
+      avatar.setReaction(AvatarReaction.happy);
+      tickAt(3);
+      tickAt(4); // one second in, sin(14) is near its peak
+
+      expect(hover(), greaterThan(settledHover));
+    });
+
+    test('dizzy spins the rocket about its own axis', () {
+      avatar.setReaction(AvatarReaction.dizzy);
+      tickAt(3);
+      tickAt(4);
+
+      expect(spin(), isNot(closeTo(0, 1e-6)), reason: 'a pirouette, not a nudge');
+      expect(bank(), isNot(closeTo(0, 1e-6)), reason: 'and a wobble with it');
+    });
+
+    test('clearing the reaction settles the rocket back down', () {
+      avatar.setReaction(AvatarReaction.sad);
+      tickAt(3);
+      tickAt(4);
+      avatar.setReaction(AvatarReaction.none);
+      tickAt(5);
+
+      expect(hover(), closeTo(settledHover, 1e-6));
+      expect(bank(), closeTo(0, 1e-6));
+      expect(spin(), closeTo(0, 1e-6));
+    });
+
+    test('a reaction never touches the pose the child chose', () {
+      const pose = AvatarState(yaw: 1.1, pitch: -0.4);
+      avatar.setRotation(pose);
+      final aimed = avatar.avatarRoot.rotation.clone();
+
+      avatar.setReaction(AvatarReaction.excited);
+      tickAt(3);
+      tickAt(4);
+
+      expect(avatar.avatarRoot.rotation, closeToQuaternion(aimed));
+    });
+
+    test('the same reaction twice starts its clock again', () {
+      avatar.setReaction(AvatarReaction.sad);
+      tickAt(3);
+      tickAt(4);
+      final settled = hover();
+
+      avatar.setReaction(AvatarReaction.none);
+      tickAt(5);
+      avatar.setReaction(AvatarReaction.sad);
+      tickAt(6);
+
+      expect(hover(), closeTo(settledHover, 1e-6),
+          reason: 'the second sad starts from zero again');
+      expect(settled, lessThan(settledHover));
+    });
+  });
+
 }
 
 /// Unsigned rotation magnitude in radians, independent of the axis.

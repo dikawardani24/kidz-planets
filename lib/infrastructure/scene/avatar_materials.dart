@@ -40,4 +40,5 @@ class AvatarMaterialFactory {
     return UnlitMaterial()
       ..baseColorFactor = vm.Vector4(0.22, 0.74, 1.0, 1.0);
   }
+
 }

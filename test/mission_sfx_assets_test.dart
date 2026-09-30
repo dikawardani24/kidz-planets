@@ -2,6 +2,10 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kidz_planets/application/state/avatar_state.dart' hide AvatarMood;
+import 'package:kidz_planets/application/state/explorer_state.dart';
+import 'package:kidz_planets/infrastructure/services/avatar_expression_sound.dart';
+import 'package:kidz_planets/infrastructure/services/avatar_impact_sound.dart';
 import 'package:kidz_planets/infrastructure/services/planet_sound_service.dart';
 
 /// Sample rates MPEG-2 defines, indexed by the header's 2-bit rate field.
@@ -26,7 +30,8 @@ int _id3TagLength(Uint8List bytes) {
       bytes[2] == 0x33;
   if (!hasId3) return 0;
 
-  final tagSize = (bytes[6] & 0x7f) |
+  final tagSize =
+      (bytes[6] & 0x7f) |
       ((bytes[7] & 0x7f) << 7) |
       ((bytes[8] & 0x7f) << 14) |
       ((bytes[9] & 0x7f) << 21);
@@ -142,12 +147,19 @@ _Mp3Stream _readMp3(Uint8List bytes) {
 /// a swapped or re-encoded asset, so each carries its own expectations.
 class _Cue {
   const _Cue({
+    required this.label,
     required this.path,
     required this.channels,
     required this.bitrateKbps,
     required this.minDuration,
     required this.maxDuration,
   });
+
+  /// How the asset is described in test names.
+  ///
+  /// Named per cue rather than after the folder, so a failure says which sound
+  /// is wrong instead of which directory it came from.
+  final String label;
 
   final String path;
   final int channels;
@@ -171,8 +183,122 @@ void main() {
     );
   });
 
+  test('the companion catalog points at the companion sfx directory', () {
+    // A path that is off by a directory or a filename fails as a thrown
+    // exception inside the sound service, which catches and logs it, and the
+    // result on the device is silence with nothing visible unless the log is
+    // being read. The catalog is the only cheap place to catch it.
+    expect(
+      AvatarImpactSoundCatalog.bounce,
+      'assets/audio/sfx/avatar/avatar_bounce.mp3',
+    );
+    // The catalog is derived rather than listed, so spot-check the newest
+    // entries: a rename that misses the generator leaves a dangling asset.
+    expect(
+      AvatarExpressionSoundCatalog.throwWhoosh.asset,
+      'assets/audio/sfx/avatar/avatar_throw_whoosh.mp3',
+    );
+  });
+
+  group('avatar expression coverage', () {
+    test('every reaction has a cue (none stays silent)', () {
+      for (final reaction in AvatarReaction.values) {
+        final cue = AvatarExpressionSoundCatalog.cueFor(reaction);
+        if (reaction == AvatarReaction.none) {
+          expect(cue, isNull, reason: 'resting must stay silent');
+        } else {
+          expect(cue, isNotNull, reason: '$reaction has no SFX');
+          expect(
+            cue!.asset,
+            endsWith('.mp3'),
+            reason: '$reaction cue must be MP3',
+          );
+          expect(
+            cue.asset,
+            startsWith('assets/audio/sfx/avatar/'),
+            reason: '$reaction cue lives under the avatar SFX folder',
+          );
+        }
+      }
+    });
+
+    test('every mission mood that moves the body has a cue', () {
+      for (final mood in AvatarMood.values) {
+        final cue = AvatarExpressionSoundCatalog.missionCueFor(mood);
+        if (mood == AvatarMood.searching || mood == AvatarMood.retry) {
+          expect(cue, isNull, reason: '$mood is silent by design');
+        } else {
+          expect(cue, isNotNull, reason: '$mood has no companion cue');
+        }
+      }
+    });
+
+    test('every expressive idle pose has a cue', () {
+      for (final idle in AvatarIdleAction.values) {
+        final cue = AvatarExpressionSoundCatalog.idleCueFor(idle);
+        final expressive = idle == AvatarIdleAction.thinking ||
+            idle == AvatarIdleAction.sendingHeart ||
+            idle == AvatarIdleAction.dancing;
+        expect(cue != null, expressive, reason: '$idle');
+        if (cue != null) {
+          expect(cue.asset, startsWith('assets/audio/sfx/avatar/'));
+        }
+      }
+    });
+
+    test('every catalogued asset exists on disk and is MP3', () {
+      final seen = <String>{};
+      for (final asset in AvatarExpressionSoundCatalog.allAssets) {
+        expect(seen.add(asset), isTrue, reason: '$asset listed twice');
+        expect(asset, endsWith('.mp3'));
+        final file = File(asset);
+        expect(
+          file.existsSync(),
+          isTrue,
+          reason: '$asset is missing; run tool/generate_avatar_expression_sfx.py',
+        );
+        expect(file.lengthSync(), greaterThan(1024));
+      }
+      // Plus the bounce, which lives in the impact catalog.
+      expect(File(AvatarImpactSoundCatalog.bounce).existsSync(), isTrue);
+    });
+
+    test('every expression asset is bundled and decodable', () async {
+      final assets = {
+        ...AvatarExpressionSoundCatalog.allAssets,
+        AvatarImpactSoundCatalog.bounce,
+      };
+      for (final path in assets) {
+        final data = await rootBundle.load(path);
+        final bytes = data.buffer.asUint8List(
+          data.offsetInBytes,
+          data.lengthInBytes,
+        );
+        final firstFrame =
+            _id3TagLength(bytes) == 0 ? 0 : _id3TagLength(bytes);
+        expect(bytes[firstFrame], 0xff, reason: 'no frame sync in $path');
+        final stream = _readMp3(bytes);
+        expect(stream.sampleRate, 24000, reason: path);
+        expect(stream.bitrateKbps, 96, reason: path);
+        // Expression cues are 0.3-2 s by design; the whoosh is the
+        // shortest (0.14 s + encoder padding) and dizzy the longest.
+        expect(
+          stream.duration,
+          greaterThanOrEqualTo(const Duration(milliseconds: 100)),
+          reason: path,
+        );
+        expect(
+          stream.duration,
+          lessThanOrEqualTo(const Duration(seconds: 2)),
+          reason: path,
+        );
+      }
+    });
+  });
+
   final sounds = {
     'success': _Cue(
+      label: 'mission success',
       path: PlanetSoundCatalog.missionSuccess,
       channels: 2,
       bitrateKbps: 160,
@@ -180,16 +306,28 @@ void main() {
       maxDuration: const Duration(seconds: 5),
     ),
     'failure': _Cue(
+      label: 'mission failure',
       path: PlanetSoundCatalog.missionFailure,
       channels: 1,
       bitrateKbps: 96,
       minDuration: const Duration(milliseconds: 300),
       maxDuration: const Duration(milliseconds: 800),
     ),
+    // A throw can produce several of these in a second, so the upper bound is
+    // well under a second: a longer tail would overlap the next bounce and read
+    // as a rattle rather than a series of taps.
+    'bounce': _Cue(
+      label: 'companion bounce',
+      path: AvatarImpactSoundCatalog.bounce,
+      channels: 1,
+      bitrateKbps: 96,
+      minDuration: const Duration(milliseconds: 100),
+      maxDuration: const Duration(milliseconds: 400),
+    ),
   };
 
   for (final sound in sounds.entries) {
-    test('mission ${sound.key} asset is present in the source tree', () {
+    test('${sound.value.label} asset is present in the source tree', () {
       // Checked on disk rather than through RootBundle: `flutter test` serves
       // RootBundle from the generated build/unit_test_assets/ bundle, which
       // keeps serving files that have since been deleted from the tree.
@@ -203,7 +341,7 @@ void main() {
       expect(file.lengthSync(), greaterThan(1024));
     });
 
-    test('mission ${sound.key} asset is bundled and decodable', () async {
+    test('${sound.value.label} asset is bundled and decodable', () async {
       // RootBundle is exactly what AudioPlayer.setAsset reads from, so a
       // missing pubspec asset entry or a wrong filename fails here.
       final data = await rootBundle.load(sound.value.path);
@@ -227,9 +365,13 @@ void main() {
       );
 
       final stream = _readMp3(bytes);
-      expect(stream.channels, sound.value.channels,
-          reason: 'the shipped ${sound.key} cue is '
-              '${sound.value.channels == 1 ? 'mono' : 'stereo'}');
+      expect(
+        stream.channels,
+        sound.value.channels,
+        reason:
+            'the shipped ${sound.key} cue is '
+            '${sound.value.channels == 1 ? 'mono' : 'stereo'}',
+      );
       // Matches the 24 kHz used by the narration and by
       // tool/generate_planet_sfx.py, so the cue needs no resampling.
       expect(stream.sampleRate, 24000);
@@ -244,4 +386,3 @@ void main() {
     });
   }
 }
-

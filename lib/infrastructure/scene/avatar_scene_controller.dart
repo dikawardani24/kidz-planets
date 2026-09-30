@@ -2,8 +2,9 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
-import '../../application/state/avatar_state.dart';
+import '../../application/state/avatar_state.dart' hide AvatarMood;
 import '../../application/state/explorer_state.dart';
+import 'avatar_face_projection.dart';
 import 'avatar_geometry.dart';
 import 'avatar_materials.dart';
 import 'avatar_scene_builder.dart';
@@ -14,9 +15,31 @@ abstract class AvatarSceneController {
   bool get isReady;
   bool get isRealScene;
 
+  /// Where the rocket body sits on the current frame.
+  ///
+  /// The 2D face is painted by Flutter, so it needs the body's own animation
+  /// to land on the window. A stand-in with no scene reports [AvatarBodyMotion.rest].
+  AvatarBodyMotion get bodyMotion;
+
   void ensureBuilt();
-  void tick(Duration elapsed, AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId);
+  void tick(
+    Duration elapsed,
+    AvatarMood mood,
+    AvatarIdleAction idleAction,
+    String? selectedPlanetId,
+  );
   void applyPose(AvatarState pose);
+
+  /// Deforms the body for the moment after an impact. See
+  /// [AvatarSceneBuilder.setImpactSquash].
+  void setImpactSquash(double scale);
+
+  /// Starts a reaction pose in the 3D layer.
+  ///
+  /// Reactions are transforms of the model the companion already has, so the
+  /// abstract surface stays the same whether or not a real scene is behind it:
+  /// a stand-in can record the call without a GPU.
+  void applyReaction(AvatarReaction reaction);
   void showTarget({required bool visible, required Color color});
   void dispose();
 }
@@ -24,9 +47,9 @@ abstract class AvatarSceneController {
 /// Owns the companion's own [Scene] and drives it from the avatar state.
 class AvatarSceneControllerImpl implements AvatarSceneController {
   AvatarSceneControllerImpl()
-      : _scene = Scene(),
-        _geometries = AvatarGeometryFactory(),
-        _materials = AvatarMaterialFactory() {
+    : _scene = Scene(),
+      _geometries = AvatarGeometryFactory(),
+      _materials = AvatarMaterialFactory() {
     _builder = AvatarSceneBuilder(
       geometries: _geometries,
       materials: _materials,
@@ -49,6 +72,9 @@ class AvatarSceneControllerImpl implements AvatarSceneController {
   @override
   bool get isRealScene => true;
 
+  @override
+  AvatarBodyMotion get bodyMotion => _builder.bodyMotion;
+
   static final PerspectiveCamera camera = PerspectiveCamera(
     fovRadiansY: 0.62,
     position: vm.Vector3(0, 0.02, -1.75),
@@ -63,11 +89,21 @@ class AvatarSceneControllerImpl implements AvatarSceneController {
   }
 
   @override
-  void tick(Duration elapsed, AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId) =>
-      _builder.tick(elapsed, mood, idleAction, selectedPlanetId);
+  void tick(
+    Duration elapsed,
+    AvatarMood mood,
+    AvatarIdleAction idleAction,
+    String? selectedPlanetId,
+  ) => _builder.tick(elapsed, mood, idleAction, selectedPlanetId);
 
   @override
   void applyPose(AvatarState pose) => _builder.setRotation(pose);
+
+  @override
+  void setImpactSquash(double scale) => _builder.setImpactSquash(scale);
+
+  @override
+  void applyReaction(AvatarReaction reaction) => _builder.setReaction(reaction);
 
   @override
   void showTarget({required bool visible, required Color color}) =>

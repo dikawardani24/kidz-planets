@@ -15,18 +15,20 @@ class ExplorerTopBar extends ConsumerWidget {
     final notifier = ref.read(explorerControllerProvider.notifier);
     final t = AppLocalizations.of(context);
     return SafeArea(bottom: false, child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
       child: Row(children: [
-        AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Container(width: 28, height: 28, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFFF97316), Color(0xFF4F46E5)])),
-              alignment: Alignment.center, child: const Icon(Icons.wb_sunny, size: 14, color: Colors.white)),
-            const SizedBox(width: 10),
-            Flexible(child: Text(t.topBarTitle, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: .2, color: Colors.white))),
-          ])),
-        const Spacer(),
-        LanguageButton(),
+        Flexible(
+          child: AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Container(width: 28, height: 28, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFFF97316), Color(0xFF4F46E5)])),
+                alignment: Alignment.center, child: const Icon(Icons.wb_sunny, size: 14, color: Colors.white)),
+              const SizedBox(width: 8),
+              Flexible(child: Text(t.topBarTitle, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: .2, color: Colors.white))),
+            ])),
+        ),
         const SizedBox(width: 8),
+        LanguageButton(),
+        const SizedBox(width: 6),
         Tooltip(
           message: ui.showLabels ? t.tooltipHideLabels : t.tooltipShowLabels,
           child: _CircleButton(
@@ -35,13 +37,13 @@ class ExplorerTopBar extends ConsumerWidget {
             onTap: notifier.toggleLabels,
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         _CircleButton(
           icon: ui.running ? Icons.pause : Icons.play_arrow,
           color: AppTheme.accentSky,
           onTap: notifier.toggleRunning,
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         Tooltip(
           message: ui.showOrbits ? t.tooltipHideOrbits : t.tooltipShowOrbits,
           child: _CircleButton(
