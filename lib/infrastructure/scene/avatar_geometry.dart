@@ -15,7 +15,7 @@ class AvatarPorthole {
 
   /// How far the window sits in front of the body's centre line. Negative is
   /// towards the camera, which is where the front of the rocket is.
-  static const double depth = -0.12;
+  static const double depth = -0.324;
 }
 
 /// Geometry for the Chubby Cartoon Rocket Ship Mascot.
