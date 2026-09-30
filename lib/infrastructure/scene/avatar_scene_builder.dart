@@ -1,12 +1,17 @@
+import 'dart:async' show unawaited;
 import 'dart:math' as math;
 
 import 'dart:ui' show Color;
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
 import '../../application/state/avatar_state.dart';
 import '../../application/state/explorer_state.dart';
+import 'avatar_exhaust.dart';
+import 'avatar_exhaust_plume.dart';
+import 'avatar_exhaust_texture.dart';
 import 'avatar_face_projection.dart';
 import 'avatar_geometry.dart';
 import 'avatar_materials.dart';
@@ -29,6 +34,26 @@ class AvatarSceneBuilder {
   final Node bodyRoot = Node(name: 'avatar-body');
   final Node targetPivot = Node(name: 'avatar-target');
   final Node exhaustGroupNode = Node(name: 'avatar-exhaust');
+
+  /// The layered particle plume, attached once the engine's shader library
+  /// can supply the sprite materials it needs.
+  AvatarExhaust? _exhaust;
+
+  /// Set while that attach is in flight, so a burst of rebuilds cannot queue
+  /// several plumes onto the same node.
+  bool _exhaustPending = false;
+
+  /// The plume's current throttle, `0` to `1`.
+  ///
+  /// Latched from [setRotation] (which knows the flight speed) and consumed by
+  /// [tick] (which is what actually steps the particles), because the two are
+  /// called from different places in the frame.
+  double _requestedThrottle = ExhaustPlume.idleThrottle;
+
+  /// Elapsed seconds as of the previous [tick], used to derive the frame delta
+  /// the plume steps by. Null before the first tick, when there is no previous
+  /// frame to measure from.
+  double? _lastTickSeconds;
 
   UnlitMaterial? _portholeMaterial;
 
@@ -102,27 +127,53 @@ class AvatarSceneBuilder {
         ..position = vm.Vector3(0.16, -0.10, 0),
     );
 
-    // Engine nozzle at base
+    // Engine bell at the base.
     bodyRoot.add(
       _mesh('engine', geometries.engineNozzle(), whiteMat)
         ..position = vm.Vector3(0, -0.22, 0),
     );
 
-    // 3D Thruster exhaust plume attached directly to engine base
-    final exhaustOuterMat = materials.exhaustOuter();
-    final exhaustInnerMat = materials.exhaustInner();
-
-    final outerMesh = _mesh('exhaust-outer', geometries.exhaustOuter(), exhaustOuterMat)
-      ..position = vm.Vector3(0, -0.38, 0)
-      ..rotation = vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), math.pi);
-
-    final innerMesh = _mesh('exhaust-inner', geometries.exhaustInner(), exhaustInnerMat)
-      ..position = vm.Vector3(0, -0.32, 0)
-      ..rotation = vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), math.pi);
-
-    exhaustGroupNode.add(outerMesh);
-    exhaustGroupNode.add(innerMesh);
+    // The plume hangs off the bell. It is attached asynchronously, because
+    // the sprite materials it needs cannot be constructed until the engine's
+    // shader library has finished loading, so the group node is parented
+    // immediately and filled in as soon as that is safe.
+    exhaustGroupNode.position = vm.Vector3(0, AvatarExhaust.nozzleHeight, 0);
     bodyRoot.add(exhaustGroupNode);
+
+    unawaited(_attachExhaust());
+  }
+
+  /// Builds the particle plume once the renderer can supply its materials.
+  ///
+  /// [SpriteMaterial] pulls its shader out of the engine's base shader bundle
+  /// in its constructor, unlike every other material in the scene, which
+  /// resolves its shader by name on first draw. That makes the plume the one
+  /// part of the rocket that cannot be built in the same breath as the body:
+  /// `Scene()` starts loading the bundle without waiting for it, so a plume
+  /// built on the first frame throws and takes the companion down with it.
+  ///
+  /// Waiting on the same memoized load the renderer is already doing costs
+  /// nothing and removes the ordering trap. A pending build is remembered so a
+  /// burst of rebuilds cannot queue several plumes onto the same node, and a
+  /// failure is reported rather than thrown, because a missing plume is a
+  /// cosmetic loss and must not be able to blank the whole scene.
+  Future<void> _attachExhaust() async {
+    if (_exhaust != null || _exhaustPending) return;
+    _exhaustPending = true;
+    try {
+      await Scene.initializeStaticResources();
+      if (exhaustGroupNode.parent == null) return;
+
+      final sprite = ExhaustSpriteFactory.build();
+      final exhaust = AvatarExhaust(sprite: sprite);
+      exhaustGroupNode.add(exhaust.pivot);
+      _exhaust = exhaust;
+    } catch (error, stackTrace) {
+      debugPrint('AvatarSceneBuilder: exhaust unavailable, continuing without '
+          'it: $error\n$stackTrace');
+    } finally {
+      _exhaustPending = false;
+    }
   }
 
   void _buildTarget() {
@@ -140,6 +191,8 @@ class AvatarSceneBuilder {
       vm.Vector3(0, 1, 0),
       pose.yaw,
     ) * vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), pose.pitchClamped);
+
+    _requestedThrottle = ExhaustPlume.throttleForSpeed(pose.velocity.distance);
   }
 
   /// Starts (or ends) a reaction pose.
@@ -256,8 +309,24 @@ class AvatarSceneBuilder {
       ..rotation = vm.Quaternion.axisAngle(vm.Vector3(0, 0, 1), tilt) *
           vm.Quaternion.axisAngle(vm.Vector3(0, 1, 0), spin);
 
-    final flamePulse = 1.0 + math.sin(t * 32.0) * 0.08 + math.cos(t * 20.0) * 0.05;
-    exhaustGroupNode.scale = vm.Vector3(flamePulse, flamePulse * 1.15, flamePulse);
+    // The plume steps on its own delta, derived from the elapsed time rather
+    // than read from a frame callback, so a rebuild that skips a frame does
+    // not hand the particles a zero-length step.
+    final dt = _lastTickSeconds == null
+        ? 0.0
+        : (t - _lastTickSeconds!).clamp(0.0, 0.1).toDouble();
+    _lastTickSeconds = t;
+
+    // A sleeping rocket is not under power; every other reaction keeps the
+    // engine running, because a startle is not a shutdown.
+    final target = _reaction == AvatarReaction.sleepy ? 0.12 : _requestedThrottle;
+    final exhaust = _exhaust;
+    if (exhaust != null) {
+      exhaust.plume
+        ..setThrottle(target)
+        ..tick(dt, flickerPhase: t);
+      exhaust.applyThrottle();
+    }
 
     _hover = hover;
     _tilt = tilt;
