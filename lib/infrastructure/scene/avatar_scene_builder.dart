@@ -123,7 +123,7 @@ class AvatarSceneBuilder {
     _rocketLoadPending = true;
     try {
       await Scene.initializeStaticResources();
-      final rocket = await Node.fromGlbAsset('assets/models/avatar/rocket.glb');
+      final rocket = await loadScene('assets/models/avatar/rocket.glb');
       if (avatarRoot.parent == null) return;
 
       rocket
