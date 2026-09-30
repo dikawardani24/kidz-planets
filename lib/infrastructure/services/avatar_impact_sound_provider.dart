@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../application/state/avatar_state.dart';
+import '../../application/state/avatar_state.dart' hide AvatarMood;
 import '../../application/state/explorer_state.dart';
 import 'avatar_expression_sound.dart';
 import 'avatar_impact_sound.dart';

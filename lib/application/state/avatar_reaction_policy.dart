@@ -1,4 +1,4 @@
-import 'avatar_state.dart';
+import 'avatar_state.dart' hide AvatarMood;
 import 'explorer_state.dart';
 
 /// The companion's answer to a mission beat: what it does and for how long.

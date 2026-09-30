@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kidz_planets/application/state/avatar_reaction_policy.dart';
-import 'package:kidz_planets/application/state/avatar_state.dart';
+import 'package:kidz_planets/application/state/avatar_state.dart' hide AvatarMood;
 import 'package:kidz_planets/application/state/explorer_state.dart';
 
 /// The mission state and the companion state speak different languages: a

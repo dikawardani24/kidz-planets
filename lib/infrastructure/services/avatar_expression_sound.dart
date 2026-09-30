@@ -4,7 +4,7 @@ import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
-import '../../application/state/avatar_state.dart';
+import '../../application/state/avatar_state.dart' hide AvatarMood;
 import '../../application/state/explorer_state.dart';
 import 'avatar_impact_sound.dart';
 

@@ -8,7 +8,7 @@ import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
 import '../../application/state/avatar_squash.dart';
-import '../../application/state/avatar_state.dart';
+import '../../application/state/avatar_state.dart' hide AvatarMood;
 import '../../application/state/explorer_state.dart';
 import 'avatar_exhaust.dart';
 import 'avatar_exhaust_plume.dart';
