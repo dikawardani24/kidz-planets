@@ -136,15 +136,21 @@ class OrbitCameraRig {
     double tz = _state.targetZ;
 
     if (ui.hasSelection) {
-      // During the initial focus flight, use the animated radius from
-      // [focusOn]. Previously this was replaced immediately with the final
-      // detail radius, making selection appear to teleport/zoom instantly.
+      // Pinch zoom remains user-controlled even while the automatic focus
+      // flight is still running. Previously the focus animation overwrote the
+      // zoom until _focusProgress reached 1.0, making zoom-out appear locked
+      // until focus finished.
+      _displayDetailZoom += (ui.detailZoom - _displayDetailZoom) * 0.18;
+      final userRadius = _detailRadius(_displayDetailZoom);
+
       if (_focusProgress >= 1.0) {
-        // Once focused, smooth pinch zoom independently.
-        _displayDetailZoom += (ui.detailZoom - _displayDetailZoom) * 0.18;
-        radius = _detailRadius(_displayDetailZoom);
+        radius = userRadius;
       } else {
-        radius = _state.radius;
+        // Keep the cinematic focus flight, but blend toward the user's current
+        // zoom target. This means the child can pinch in/out at any point
+        // without waiting for the focus animation to finish.
+        radius = _state.radius +
+            (userRadius - _state.radius) * _focusProgress;
       }
 
       // Detail mode keeps the camera centered on the selected body.
