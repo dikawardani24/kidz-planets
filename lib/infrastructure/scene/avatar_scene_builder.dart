@@ -103,17 +103,21 @@ class AvatarSceneBuilder {
   }
 
   void _buildBody() {
-    // Build the existing procedural rocket first so the companion remains
-    // renderable even if the external GLB asset is missing/corrupt.
-    _buildFallbackBody();
+    // The bundled GLB is now the avatar's primary and only body model.
+    // Keep the face window and exhaust as lightweight scene overlays so the
+    // existing reactions, physics, and 2D expressions continue to work.
+    _buildPorthole();
+    exhaustGroupNode.position = vm.Vector3(0, -0.20, 0);
+    bodyRoot.add(exhaustGroupNode);
     unawaited(_attachImportedRocket());
+    unawaited(_attachExhaust());
   }
 
-  /// Loads the real low-poly rocket model used by the companion.
+  /// Loads and normalizes the bundled low-poly rocket used by the companion.
   ///
-  /// The model is kept as a normal Scene Node so all existing avatar
-  /// transforms/reactions continue to work on [avatarRoot]. The procedural
-  /// rocket is hidden only after the GLB has successfully loaded.
+  /// Kenney's source asset is authored inside a kit coordinate space, so its
+  /// scene root is translated back to the avatar origin and scaled to match
+  /// the existing companion viewport.
   Future<void> _attachImportedRocket() async {
     if (_rocketLoadPending || _importedRocket != null) return;
     _rocketLoadPending = true;
@@ -122,19 +126,16 @@ class AvatarSceneBuilder {
       final rocket = await Node.fromGlbAsset('assets/models/avatar/rocket.glb');
       if (avatarRoot.parent == null) return;
 
-      rocket.name = 'avatar-imported-rocket';
-      rocket.raycastable = false;
-      rocket.scale = vm.Vector3.all(1.0);
+      rocket
+        ..name = 'avatar-glb-rocket'
+        ..raycastable = false
+        // rocket_baseA.glb is authored at (2, 0, 1.5) in the Kenney kit.
+        // Center it around the same origin used by the old avatar and scale
+        // its 1.6-unit body to roughly the previous 0.56-unit height.
+        ..position = vm.Vector3(-2.0, -0.28, -1.5)
+        ..scale = vm.Vector3.all(0.35);
       bodyRoot.add(rocket);
       _importedRocket = rocket;
-
-      // The imported model replaces the old capsule-like procedural body.
-      // Keep the existing exhaust and porthole overlay independent from the
-      // model so reactions and the Flutter face continue to work.
-      for (final child in bodyRoot.children.toList()) {
-        if (child == rocket || child == exhaustGroupNode) continue;
-        child.visible = false;
-      }
     } catch (error, stackTrace) {
       debugPrint(
         'AvatarSceneBuilder: imported rocket unavailable; using procedural '
@@ -145,47 +146,17 @@ class AvatarSceneBuilder {
     }
   }
 
-  void _buildFallbackBody() {
-    final bodyMat = materials.rocketBody();
-    final whiteMat = materials.whiteAccent();
-    final finMat = materials.fins();
-
-    // Rocket fuselage body
+  void _buildPorthole() {
+    _portholeMaterial = materials.porthole();
     bodyRoot.add(
-      _mesh('fuselage', geometries.rocketBody(), bodyMat)
-        ..position = vm.Vector3(0, 0, 0),
+      _mesh('glb-porthole', geometries.porthole(), _portholeMaterial!)
+        ..position = vm.Vector3(
+          0,
+          AvatarPorthole.height,
+          AvatarPorthole.depth * 2.7,
+        )
+        ..scale = vm.Vector3.all(1.35),
     );
-
-    // Rounded nosecone
-    bodyRoot.add(
-      _mesh('nosecone', geometries.noseCone(), whiteMat)
-        ..position = vm.Vector3(0, 0.22, 0),
-    );
-
-    // Side fins / wings
-    bodyRoot.add(
-      _mesh('fin-left', geometries.fin(), finMat)
-        ..position = vm.Vector3(-0.16, -0.10, 0),
-    );
-    bodyRoot.add(
-      _mesh('fin-right', geometries.fin(), finMat)
-        ..position = vm.Vector3(0.16, -0.10, 0),
-    );
-
-    // Engine bell at the base.
-    bodyRoot.add(
-      _mesh('engine', geometries.engineNozzle(), whiteMat)
-        ..position = vm.Vector3(0, -0.22, 0),
-    );
-
-    // The plume hangs off the bell. It is attached asynchronously, because
-    // the sprite materials it needs cannot be constructed until the engine's
-    // shader library has finished loading, so the group node is parented
-    // immediately and filled in as soon as that is safe.
-    exhaustGroupNode.position = vm.Vector3(0, AvatarExhaust.nozzleHeight, 0);
-    bodyRoot.add(exhaustGroupNode);
-
-    unawaited(_attachExhaust());
   }
 
   /// Builds the particle plume once the renderer can supply its materials.
