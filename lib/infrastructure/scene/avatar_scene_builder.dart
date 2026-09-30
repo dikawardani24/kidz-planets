@@ -132,8 +132,8 @@ class AvatarSceneBuilder {
         // rocket_baseA.glb is authored at (2, 0, 1.5) in the Kenney kit.
         // Center it around the same origin used by the old avatar and scale
         // its 1.6-unit body to roughly the previous 0.56-unit height.
-        ..position = vm.Vector3(-2.0, -0.28, -1.5)
-        ..scale = vm.Vector3.all(0.35);
+        ..position = vm.Vector3.zero()
+        ..scale = vm.Vector3.all(0.42);
       bodyRoot.add(rocket);
       _importedRocket = rocket;
     } catch (error, stackTrace) {
