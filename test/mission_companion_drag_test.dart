@@ -1,8 +1,11 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:kidz_planets/application/controllers/avatar_controller.dart';
+import 'package:kidz_planets/application/state/avatar_physics_config.dart';
 import 'package:kidz_planets/application/state/avatar_state.dart';
 import 'package:kidz_planets/application/state/explorer_state.dart';
 import 'package:kidz_planets/application/state/providers.dart';
@@ -10,7 +13,9 @@ import 'package:kidz_planets/infrastructure/scene/avatar_face_projection.dart';
 import 'package:kidz_planets/infrastructure/scene/avatar_scene_controller.dart';
 import 'package:kidz_planets/l10n/localized_planet.dart';
 import 'package:kidz_planets/presentation/widgets/panels/avatar_speech.dart';
+
 import 'helpers/localized_app.dart';
+
 import 'package:kidz_planets/presentation/widgets/panels/mission_companion.dart';
 
 /// Bubble placement is pure geometry, so it is exercised directly: the point of
@@ -29,14 +34,13 @@ void main() {
     required double left,
     required double top,
     Size size = viewport,
-  }) =>
-      bubblePlacement(
-        avatarTop: top,
-        avatarLeft: left,
-        avatarWidth: kCompanionBoxWidth,
-        avatarHeight: kCompanionBoxHeight,
-        viewport: size,
-      );
+  }) => bubblePlacement(
+    avatarTop: top,
+    avatarLeft: left,
+    avatarWidth: kCompanionBoxWidth,
+    avatarHeight: kCompanionBoxHeight,
+    viewport: size,
+  );
 
   double leftEdgeFor(BubbleSide side, double left, {Size size = viewport}) =>
       bubbleLeft(
@@ -127,8 +131,9 @@ void main() {
       await _runOutCompanionTimers(tester);
     });
 
-    testWidgets('the whole toy is the move affordance, not a second handle',
-        (tester) async {
+    testWidgets('the whole toy is the move affordance, not a second handle', (
+      tester,
+    ) async {
       // The child drags the character itself. Nothing else on screen is
       // labelled as a way to move it, which is what "no separate handle" means.
       await _pumpCompanion(tester);
@@ -168,8 +173,9 @@ void main() {
       await _runOutCompanionTimers(tester);
     });
 
-    testWidgets('a drag parks the companion where the child put it',
-        (tester) async {
+    testWidgets('a drag parks the companion where the child put it', (
+      tester,
+    ) async {
       await _pumpCompanion(tester);
       final container = ProviderScope.containerOf(
         tester.element(find.byType(MissionCompanion)),
@@ -221,8 +227,9 @@ void main() {
     // pose and the mission target reach the 3D layer, so these read the calls
     // the stand-in controller recorded rather than the provider state the
     // widget already had.
-    testWidgets('the pose reaches the 3D layer, not just the state',
-        (tester) async {
+    testWidgets('the pose reaches the 3D layer, not just the state', (
+      tester,
+    ) async {
       final fake = await _pumpCompanion(tester);
       final container = ProviderScope.containerOf(
         tester.element(find.byType(MissionCompanion)),
@@ -240,7 +247,9 @@ void main() {
       await _runOutCompanionTimers(tester);
     });
 
-    testWidgets('moving updates the position without re-aiming', (tester) async {
+    testWidgets('moving updates the position without re-aiming', (
+      tester,
+    ) async {
       final fake = await _pumpCompanion(tester);
       final container = ProviderScope.containerOf(
         tester.element(find.byType(MissionCompanion)),
@@ -251,14 +260,23 @@ void main() {
       await tester.pump();
 
       final pose = container.read(avatarControllerProvider);
-      expect(pose.screenPosition, isNot(before), reason: 'the move took effect');
-      expect(fake.poses.last.yaw, 0, reason: 'a move must not re-aim the model');
+      expect(
+        pose.screenPosition,
+        isNot(before),
+        reason: 'the move took effect',
+      );
+      expect(
+        fake.poses.last.yaw,
+        0,
+        reason: 'a move must not re-aim the model',
+      );
       expect(fake.poses.last.pitch, 0);
       await _runOutCompanionTimers(tester);
     });
 
-    testWidgets('a mood change reaches the 3D layer as a reaction',
-        (tester) async {
+    testWidgets('a mood change reaches the 3D layer as a reaction', (
+      tester,
+    ) async {
       final fake = await _pumpCompanion(tester);
       final container = ProviderScope.containerOf(
         tester.element(find.byType(MissionCompanion)),
@@ -274,7 +292,9 @@ void main() {
           .read(planetsProvider)
           .firstWhere((p) => p.id != target);
 
-      container.read(explorerControllerProvider.notifier).selectPlanet(wrong.id);
+      container
+          .read(explorerControllerProvider.notifier)
+          .selectPlanet(wrong.id);
       // Let the reaction play out and the spin hint expire, so nothing is left
       // pending when the test ends.
       await tester.pump(const Duration(milliseconds: 40));
@@ -293,8 +313,9 @@ void main() {
       );
     });
 
-    testWidgets('the companion says the mission line when the beat lands',
-        (tester) async {
+    testWidgets('the companion says the mission line when the beat lands', (
+      tester,
+    ) async {
       await _pumpCompanion(tester);
       final container = ProviderScope.containerOf(
         tester.element(find.byType(MissionCompanion)),
@@ -348,19 +369,95 @@ void main() {
       expect(controller.state.isThrowing, isTrue);
       expect(controller.state.velocity.dx, greaterThan(0));
 
-      // Advance physics by 0.1 second
-      controller.updateFlight(0.1, viewport, maxPos);
+      // One real frame. The old test stepped by 0.1s, which is more than the
+      // simulation's own clamp allows, so it was measuring a tenth of the
+      // motion it thought it was.
+      controller.updateFlight(1 / 60, viewport, maxPos);
       expect(controller.state.screenPosition!.dx, greaterThan(100.0));
       // Friction decelerates the velocity
       expect(controller.state.velocity.dx, lessThan(1000.0));
 
-      // Advance time until momentum stops
-      for (var i = 0; i < 30; i++) {
-        controller.updateFlight(0.1, viewport, maxPos);
+      // Advance time until momentum stops. Friction is a per-frame constant, so
+      // a 1000 px/s throw coasts for a few seconds before it is slow enough to
+      // settle; the step count is generous rather than exact so this asserts
+      // that it settles, not how long it takes.
+      for (var i = 0; i < 600; i++) {
+        controller.updateFlight(1 / 60, viewport, maxPos);
       }
 
       expect(controller.state.isThrowing, isFalse);
       expect(controller.state.velocity, Offset.zero);
+    });
+
+    test('a throw bleeds the same energy at any frame rate', () {
+      // Friction is expressed per 1/60th of a second, so a naive step would
+      // bleed twice the energy per second at 120 Hz and a throw would die at
+      // half the distance. This is the whole reason the step raises the factor
+      // to a power of the elapsed time.
+      //
+      // The region is far larger than a throw covers in a second, so nothing
+      // bounces: comparing where a throw ended after it has bounced off several
+      // walls would compare two different paths, not two frame rates.
+      ({double dx, double speed}) throwFor({
+        required int steps,
+        required double dt,
+      }) {
+        final controller = AvatarController();
+        const maxPos = Offset(4000, 4000);
+        controller.placeAt(const Offset(100, 100), maxPosition: maxPos);
+        controller.launchWithVelocity(
+          velocity: const Offset(1000, 0),
+          maxPosition: maxPos,
+        );
+        for (var i = 0; i < steps; i++) {
+          controller.updateFlight(dt, viewport, maxPos);
+        }
+        return (
+          dx: controller.state.screenPosition!.dx,
+          speed: controller.state.velocity.distance,
+        );
+      }
+
+      final at30 = throwFor(steps: 30, dt: 1 / 30);
+      final at60 = throwFor(steps: 60, dt: 1 / 60);
+      final at120 = throwFor(steps: 120, dt: 1 / 120);
+
+      // A second of wall-clock time either way. The 30 Hz case lands on a
+      // frame boundary, so the tolerance absorbs a partial frame's worth of
+      // difference rather than any difference in the decay itself.
+      expect(at30.dx, closeTo(at60.dx, 40));
+      expect(at120.dx, closeTo(at60.dx, 20));
+      expect(at30.speed, closeTo(at60.speed, 20));
+      expect(at120.speed, closeTo(at60.speed, 10));
+
+      // And the decay is the configured one: 0.985 raised to sixty frames.
+      expect(at60.speed, closeTo(1000 * pow(0.985, 60), 5));
+    });
+
+    test('a frame longer than the clamp cannot teleport the toy', () {
+      // A backgrounded tab or a stalled frame can hand the ticker an enormous
+      // delta. Integrating it literally would throw the companion across the
+      // screen, so the excess is dropped.
+      final controller = AvatarController();
+      const maxPos = Offset(300, 600);
+      controller.placeAt(const Offset(100, 100), maxPosition: maxPos);
+      controller.launchWithVelocity(
+        velocity: const Offset(1000, 0),
+        maxPosition: maxPos,
+      );
+
+      controller.updateFlight(10.0, viewport, maxPos);
+      final afterStall = controller.state.screenPosition!;
+
+      final stepped = AvatarController()
+        ..placeAt(const Offset(100, 100), maxPosition: maxPos)
+        ..launchWithVelocity(
+          velocity: const Offset(1000, 0),
+          maxPosition: maxPos,
+        );
+      stepped.updateFlight(AvatarPhysicsConfig.maxDeltaTime, viewport, maxPos);
+
+      expect(afterStall.dx, closeTo(stepped.state.screenPosition!.dx, 0.001));
     });
 
     test('bounces off screen edges when thrown with high velocity', () {
@@ -389,7 +486,11 @@ void main() {
 /// centre would be poking at empty space next to the toy instead of the toy.
 Offset _avatarCentre(ProviderContainer container) {
   final position = container.read(avatarControllerProvider).screenPosition;
-  expect(position, isNotNull, reason: 'the companion is placed before gestures');
+  expect(
+    position,
+    isNotNull,
+    reason: 'the companion is placed before gestures',
+  );
   return position! +
       const Offset(kCompanionBoxWidth / 2, kCompanionBoxHeight / 2);
 }
@@ -410,18 +511,17 @@ Future<void> _runOutCompanionTimers(WidgetTester tester) async {
 /// back, so a test can inspect what the overlay asked the 3D layer to do.
 Future<_FakeController> _pumpCompanion(WidgetTester tester) async {
   final controller = _FakeController();
-  await tester.pumpWidget(localizedApp(
-    Scaffold(
-      body: MissionCompanion(controllerFactory: () => controller),
+  await tester.pumpWidget(
+    localizedApp(
+      Scaffold(body: MissionCompanion(controllerFactory: () => controller)),
     ),
-  ));
+  );
   // Enough pumps to run the post-frame scene build and to commit the
   // starting position.
   await tester.pump();
   await tester.pump();
   return controller;
 }
-
 
 /// A stand-in for the GPU-backed companion scene.
 ///
@@ -430,6 +530,7 @@ Future<_FakeController> _pumpCompanion(WidgetTester tester) async {
 class _FakeController implements AvatarSceneController {
   final List<({double yaw, double pitch})> poses = [];
   final List<({bool visible, Color color})> targets = [];
+  final List<double> squashes = [];
   final List<AvatarReaction> reactions = [];
 
   // Recorded but never asserted on: `_CompanionScene` short-circuits to a plain
@@ -457,6 +558,9 @@ class _FakeController implements AvatarSceneController {
 
   @override
   void ensureBuilt() {}
+
+  @override
+  void setImpactSquash(double scale) => squashes.add(scale);
 
   @override
   void tick(

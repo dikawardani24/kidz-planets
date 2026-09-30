@@ -1,23 +1,29 @@
 import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../application/controllers/avatar_controller.dart';
+import '../../../application/state/avatar_physics.dart';
+import '../../../application/state/avatar_physics_config.dart';
 import '../../../application/state/avatar_reaction_policy.dart';
 import '../../../application/state/avatar_state.dart';
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../../infrastructure/scene/avatar_scene_controller.dart';
+import '../../../infrastructure/services/avatar_impact_sound_provider.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../../l10n/localized_planet.dart';
 import 'avatar_face.dart';
-import 'avatar_speech.dart';
+import 'companion_safe_area.dart';
 
-const double kCompanionBoxWidth = 132;
-const double kCompanionBoxHeight = 148;
-const double kCompanionEdge = 8;
+export 'companion_safe_area.dart'
+    show kCompanionBoxWidth, kCompanionBoxHeight, kCompanionEdge;
+import 'avatar_speech.dart';
 
 /// How much a two-finger twist turns the toy, per radian of twist.
 const double kCompanionTwistYaw = 18;
@@ -40,49 +46,223 @@ class MissionCompanion extends ConsumerStatefulWidget {
 }
 
 class _MissionCompanionState extends ConsumerState<MissionCompanion>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AvatarSceneController _controller;
-  late final AnimationController _flightTicker;
+
+  /// The frame clock.
+  ///
+  /// A ticker rather than a repeating animation controller, because the physics
+  /// needs a monotonically increasing elapsed time to difference against the
+  /// previous frame. An animation controller's elapsed time resets on every
+  /// repeat, so differencing it would produce one enormous negative delta once
+  /// a second, which the clamp would turn into a dropped frame at a fixed and
+  /// very visible cadence.
+  late final _FrameClock _frameClock;
+
+  /// The bounce squash, eased back to nothing over
+  /// [AvatarPhysicsConfig.impactDuration].
+  late final AnimationController _impactTicker;
+
+  /// The companion's own controller, held for the life of the state.
+  ///
+  /// The frame loop reads this on every frame, and a `ref.read` from inside a
+  /// ticker callback is not safe: a ticker that outlives its element, which a
+  /// torn-down tree can produce, finds the element's provider already
+  /// deinitialised and throws from inside the scheduler. The notifier itself
+  /// lives in the container rather than in the element, so holding it costs
+  /// nothing and stays usable for as long as the clock does.
+  late final AvatarController _avatar;
+
+  /// Whether a planet is selected, sampled once per frame from the explorer.
+  ///
+  /// Cached for the same reason as [_avatar]; [didChangeDependencies] keeps it
+  /// current, since the frame loop has to read it without building.
+  bool _hasSelection = false;
+
   bool _ready = false;
   bool _placed = false;
 
-  Size _lastViewport = const Size(400, 800);
-  Offset _lastMaxPosition = const Offset(350, 700);
+  /// A viewport to use before the first layout, so the ticker always has
+  /// something valid to work with. Only the pre-layout frames see it, and no
+  /// motion is possible before then anyway.
+  static const Size _fallbackViewport = Size(400, 800);
+
+  /// The throwable area from the most recent layout.
+  ///
+  /// Kept as a rectangle rather than a maximum offset because the top and left
+  /// edges are not at the origin once the safe area and the bars are accounted
+  /// for, and a throw that ignored the minimum would park the toy under the top
+  /// bar.
+  CompanionSafeArea _safeArea = CompanionSafeArea.forViewport(
+    _fallbackViewport,
+    EdgeInsets.zero,
+  );
 
   @override
   void initState() {
     super.initState();
     _controller =
         widget.controllerFactory?.call() ?? AvatarSceneControllerImpl();
+    _avatar = ref.read(avatarControllerProvider.notifier);
+    _hasSelection = ref.read(explorerControllerProvider).hasSelection;
 
-    _flightTicker = AnimationController(
+    _frameClock = _FrameClock(vsync: this, onFrame: _onFlightFrame);
+
+    _impactTicker = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat();
-
-    _flightTicker.addListener(() {
-      if (!mounted) return;
-      final ui = ref.read(explorerControllerProvider);
-      final pose = ref.read(avatarControllerProvider);
-      // Parked by a drag, or busy focussing a planet: the companion holds its
-      // place instead of flying. The pause lives in the state, so the widget
-      // never has to guess what the controller is up to.
-      if (ui.hasSelection || pose.isFlightPaused ||
-          pose.idleAction != AvatarIdleAction.flying) {
-        return;
-      }
-      ref.read(avatarControllerProvider.notifier).updateFlight(
-            0.016,
-            _lastViewport,
-            _lastMaxPosition,
-          );
-    });
+      duration: AvatarPhysicsConfig.impactDuration,
+    )..addListener(_onImpactFrame);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _controller.ensureBuilt();
       setState(() => _ready = true);
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The frame loop cannot watch anything, and this rebuild is the only moment
+    // a changed selection is visible to a state that holds it as a plain field.
+    _hasSelection = ref.read(explorerControllerProvider).hasSelection;
+  }
+
+  /// Eases the impact squash back to an undeformed toy.
+  ///
+  /// A symmetric in-and-out would read as a heartbeat; easing out over a
+  /// slightly longer tail reads as the toy absorbing the hit and settling, which
+  /// is what actually happens. The squashed scale is written directly rather
+  /// than through a `setState`, because a throw is already rebuilding this
+  /// widget every frame and a second notification per frame would double the
+  /// build cost for one effect.
+  void _onImpactFrame() {
+    // Ease-out cubic: the toy pops back quickly and then eases away the last of
+    // the deformation, which reads as absorbing the hit. An ease-in-out would
+    // read as a heartbeat instead.
+    final eased = 1 - math.pow(1 - _impactTicker.value, 3).toDouble();
+    _impactSquash = _impactFrom + (1 - _impactFrom) * eased;
+    // The 3D body is deformed here rather than from a build, so the deformation
+    // costs a transform write and not a second rebuild of this widget on top of
+    // the one a throw is already causing every frame.
+    _controller.setImpactSquash(_impactSquash);
+  }
+
+  /// Advances the companion one frame.
+  ///
+  /// Two separate jobs share this one ticker, and the order of the checks below
+  /// is the reason a throw used to die on its very first frame: a launched
+  /// companion is parked as well as moving, so `isFlightPaused` was already
+  /// true at the moment it was thrown, and the pause check returned before
+  /// anything integrated the velocity. The toy therefore had its throw
+  /// velocity set and then stopped dead, which is exactly the "it stops where I
+  /// let go" behaviour a flick is supposed to avoid.
+  ///
+  /// `isThrowing` is the real test for "a throw is in flight", so it is checked
+  /// first and short-circuits the pause.
+  void _onFlightFrame(double dt) {
+    if (!mounted) return;
+
+    if (_avatar.isThrowing) {
+      _updateThrow(dt, _avatar);
+      return;
+    }
+
+    // A planet being focused takes priority over a throw: the child asked for
+    // something else, and a toy still bouncing across the screen would be in
+    // the way of the answer they are waiting for.
+    if (_hasSelection) return;
+
+    // Parked by a drag, or mid-reaction: the companion holds its place instead
+    // of flying. The pause lives in the state, so the widget never has to guess
+    // what the controller is up to.
+    _avatar.updateFlight(dt, _safeArea.viewport, _safeArea.max);
+  }
+
+  /// Steps the throw, then reacts to whatever the physics hit.
+  ///
+  /// The order matters: the reaction reads the bounces the step just reported,
+  /// so an impact is always heard on the same frame the toy reaches the wall
+  /// rather than a frame late.
+  void _updateThrow(double dt, AvatarController notifier) {
+    notifier.updateFlight(
+      dt,
+      _safeArea.viewport,
+      _safeArea.max,
+      minPosition: _safeArea.min,
+    );
+    _reactToBounces(notifier.takeBounces());
+  }
+
+  /// The scale to recover to once the current squash has finished.
+  double _impactFrom = 1;
+
+  /// How much the toy is squashed right now, `1` meaning unsquashed.
+  ///
+  /// Driven by [_onImpact] from the physics and read by the build, so an impact
+  /// never triggers a widget rebuild of its own: the companion's position is
+  /// already being rebuilt every frame during a throw, and a second
+  /// notification for the same frame would double the work for one effect.
+  double _impactSquash = 1;
+
+  /// When the squash may next be triggered, to keep fast bounces from stacking.
+  DateTime _lastImpactAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Whether the platform has asked for less motion.
+  bool _reducedMotion = false;
+
+  /// Reacts to the bounces the physics reported this frame.
+  ///
+  /// A bounce is only worth showing if the toy hit hard enough to notice.
+  /// Below [AvatarPhysicsConfig.impactVelocity] the toy is settling rather than
+  /// bouncing, and squashing or clicking for each of those would turn the last
+  /// second of a throw into a rattle.
+  void _reactToBounces(List<AvatarBounce> bounces) {
+    if (bounces.isEmpty) return;
+
+    // A corner hit reports both axes at once. The hardest of the two is the
+    // one the child would describe as "it hit the wall", so it is the one that
+    // decides the volume and the squash.
+    var hardest = 0.0;
+    for (final bounce in bounces) {
+      if (bounce.impactSpeed > hardest) hardest = bounce.impactSpeed;
+    }
+    if (hardest < AvatarPhysicsConfig.impactVelocity) return;
+
+    // The cooldown also stops a toy pinned in a corner, bouncing on the spot,
+    // from retriggering the effect every frame.
+    final now = DateTime.now();
+    if (now.difference(_lastImpactAt).inMilliseconds <
+        AvatarPhysicsConfig.impactCooldownMs) {
+      return;
+    }
+    _lastImpactAt = now;
+
+    // Normalised against a hard throw rather than against the cap, so an
+    // ordinary throw squashes clearly and only an extreme one saturates.
+    final strength = (hardest / AvatarPhysicsConfig.maxThrowVelocity).clamp(
+      0.0,
+      1.0,
+    );
+    _impactFrom =
+        1 -
+        0.14 *
+            strength *
+            (_reducedMotion
+                ? AvatarPhysicsConfig.reducedMotionImpactScale
+                : 1.0);
+    _impactSquash = _impactFrom;
+    _controller.setImpactSquash(_impactFrom);
+    _impactTicker.forward(from: 0);
+
+    // Read lazily rather than held: the sound outlives any single companion
+    // through the provider, and a test that pumps the widget without audio still
+    // gets a valid object whose player simply fails to load the asset.
+    unawaited(
+      ref
+          .read(avatarImpactSoundProvider)
+          .playBounce(impactSpeed: hardest, reducedMotion: _reducedMotion),
+    );
   }
 
   final Map<int, Offset> _activePointers = {};
@@ -102,6 +282,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
       _firstDownTime = DateTime.now();
       _hasMovedFar = false;
       _isLongPress = false;
+      _dragSamples.clear();
 
       _velocityTracker = VelocityTracker.withKind(event.kind);
       _velocityTracker?.addPosition(event.timeStamp, event.position);
@@ -111,7 +292,9 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
       _longPressTimer = Timer(const Duration(milliseconds: 500), () {
         if (_activePointers.length == 1 && !_hasMovedFar && mounted) {
           _isLongPress = true;
-          ref.read(avatarControllerProvider.notifier).react(
+          ref
+              .read(avatarControllerProvider.notifier)
+              .react(
                 AvatarReaction.sleepy,
                 duration: const Duration(milliseconds: 1800),
               );
@@ -119,6 +302,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
       });
     } else if (_activePointers.length >= 2) {
       _velocityTracker = null;
+      _dragSamples.clear();
       _longPressTimer?.cancel();
     }
   }
@@ -133,19 +317,95 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
         _longPressTimer?.cancel();
       }
       _velocityTracker?.addPosition(event.timeStamp, event.position);
-      ref.read(avatarControllerProvider.notifier).moveBy(
+      // Every move is also fed to a short history, because the velocity of the
+      // last event alone is a poor estimate of a throw: a release often arrives
+      // with a tiny or zero final delta while the real speed is still high, and
+      // relying on it is what makes a flick feel like a drop.
+      _recordDragSample(event.position, event.timeStamp);
+      ref
+          .read(avatarControllerProvider.notifier)
+          .moveBy(
             delta: event.delta,
-            maxPosition: _lastMaxPosition,
+            maxPosition: _safeArea.max,
+            // The minimum matters as much as the maximum here: a drag that only
+            // respected the far corner would slide the toy under the status bar
+            // and the top bar, where it could no longer be seen or grabbed.
+            minPosition: _safeArea.min,
           );
     } else if (_activePointers.length >= 2) {
       _velocityTracker = null;
       _longPressTimer?.cancel();
       _hasMovedFar = true;
-      ref.read(avatarControllerProvider.notifier).rotateBy(
+      ref
+          .read(avatarControllerProvider.notifier)
+          .rotateBy(
             dx: event.delta.dx * kCompanionDragYaw,
             dy: event.delta.dy * kCompanionDragPitch,
           );
     }
+  }
+
+  /// Recent drag samples, newest last.
+  ///
+  /// A fixed-capacity ring rather than a growing list: a long drag must not
+  /// accumulate memory, and only the tail of the gesture describes how fast
+  /// the toy was actually moving when it was let go.
+  final List<_DragSample> _dragSamples = <_DragSample>[];
+
+  /// How many recent samples a throw velocity is estimated from.
+  static const int _kDragSampleCount = 5;
+
+  /// Records a drag position, dropping the oldest sample once full.
+  void _recordDragSample(Offset position, Duration timeStamp) {
+    _dragSamples.add(_DragSample(position, timeStamp));
+    if (_dragSamples.length > _kDragSampleCount) _dragSamples.removeAt(0);
+  }
+
+  /// The speed to throw at, in logical pixels per second.
+  ///
+  /// The recent samples are combined with the framework's own velocity tracker:
+  /// the tracker fits a curve through the whole gesture and is the better
+  /// estimate of a smooth flick, while the sample history survives the two cases
+  /// it handles badly, namely a release whose last event reports almost no
+  /// movement and a slow drag that the tracker rounds to zero.
+  ///
+  /// The two are blended rather than one overriding the other, so neither a
+  /// spurious final sample nor a tracker's zero can decide the throw on its
+  /// own. The sample history is weighted towards its newest entries, because
+  /// how fast the toy was going just before release is the question being
+  /// asked.
+  Offset _throwVelocity(Offset? tracked) {
+    if (_dragSamples.length < 2) {
+      return tracked ?? Offset.zero;
+    }
+
+    // Per-sample velocity, each weighted by recency, integrated over the
+    // window's own duration so a slow sample cannot outvote a fast one just by
+    // being older.
+    var weightedDx = 0.0;
+    var weightedDy = 0.0;
+    var totalWeight = 0.0;
+    for (var i = 1; i < _dragSamples.length; i++) {
+      final previous = _dragSamples[i - 1];
+      final current = _dragSamples[i];
+      final micros = (current.time - previous.time).inMicroseconds;
+      if (micros <= 0) continue;
+      final seconds = micros / 1e6;
+      final weight = i.toDouble();
+      weightedDx +=
+          (current.position.dx - previous.position.dx) / seconds * weight;
+      weightedDy +=
+          (current.position.dy - previous.position.dy) / seconds * weight;
+      totalWeight += weight;
+    }
+    if (totalWeight <= 0) return tracked ?? Offset.zero;
+
+    final sampled = Offset(weightedDx / totalWeight, weightedDy / totalWeight);
+    if (tracked == null) return sampled;
+
+    // The two estimates agreeing is the common case, so the blend is only
+    // visible when they disagree, which is exactly when one of them is wrong.
+    return Offset((sampled.dx + tracked.dx) / 2, (sampled.dy + tracked.dy) / 2);
   }
 
   void _onPointerUp(PointerUpEvent event) {
@@ -156,16 +416,26 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
       if (_hasMovedFar && _velocityTracker != null) {
         _velocityTracker?.addPosition(event.timeStamp, event.position);
         final estimate = _velocityTracker?.getVelocity();
-        if (estimate != null) {
-          ref.read(avatarControllerProvider.notifier).launchWithVelocity(
-                velocity: Offset(
-                  estimate.pixelsPerSecond.dx,
-                  estimate.pixelsPerSecond.dy,
-                ),
-                maxPosition: _lastMaxPosition,
+        _recordDragSample(event.position, event.timeStamp);
+        final tracked = estimate == null
+            ? null
+            : Offset(estimate.pixelsPerSecond.dx, estimate.pixelsPerSecond.dy);
+        final velocity = _throwVelocity(tracked);
+        if (velocity.distance > 0) {
+          ref
+              .read(avatarControllerProvider.notifier)
+              .launchWithVelocity(
+                velocity: _reducedMotion
+                    // Reduced motion keeps the toy controllable rather than
+                    // removing the throw, so the speed is capped low enough
+                    // that it settles almost immediately.
+                    ? velocity * AvatarPhysicsConfig.reducedMotionThrowScale
+                    : velocity,
+                maxPosition: _safeArea.max,
               );
         }
         _velocityTracker = null;
+        _dragSamples.clear();
       }
 
       final downTime = _firstDownTime;
@@ -193,7 +463,9 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
         } else if (_tapCount >= 2) {
           _singleTapTimer?.cancel();
           _tapCount = 0;
-          ref.read(avatarControllerProvider.notifier).react(
+          ref
+              .read(avatarControllerProvider.notifier)
+              .react(
                 AvatarReaction.dizzy,
                 duration: const Duration(milliseconds: 1300),
               );
@@ -215,7 +487,8 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
   void dispose() {
     _singleTapTimer?.cancel();
     _longPressTimer?.cancel();
-    _flightTicker.dispose();
+    _frameClock.dispose();
+    _impactTicker.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -248,24 +521,45 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
         final viewport = Size(constraints.maxWidth, constraints.maxHeight);
         if (viewport.isEmpty) return const SizedBox.shrink();
 
-        _lastViewport = viewport;
-        final maxPosition = Offset(
-          (viewport.width - kCompanionBoxWidth - kCompanionEdge)
-              .clamp(kCompanionEdge, double.infinity),
-          (viewport.height - kCompanionBoxHeight - kCompanionEdge)
-              .clamp(kCompanionEdge, double.infinity),
+        // Read rather than watch: the platform can turn reduced motion on
+        // while the app is running, and a throw has to notice that on the next
+        // release rather than on the next rebuild of something else.
+        final reduceMotion = MediaQuery.disableAnimationsOf(context);
+        if (reduceMotion != _reducedMotion) {
+          _reducedMotion = reduceMotion;
+          // The simulation has to know as well. Scaling the release gesture
+          // alone leaves a throw launched by anything else, a reaction, or a
+          // restored state, travelling at full strength for a reader who asked
+          // for less of it.
+          _avatar.setReducedMotion(reduceMotion);
+        }
+
+        // The region the toy may be thrown around in, derived from the space
+        // this widget was actually given rather than from the window, so it is
+        // correct in the explorer's stack and in the smaller test layouts alike.
+        _safeArea = CompanionSafeArea.forViewport(
+          viewport,
+          MediaQuery.paddingOf(context),
         );
-        _lastMaxPosition = maxPosition;
+        final bounds = _safeArea.bounds;
 
         final hasFocus = ui.hasSelection;
 
+        // The toy centres itself above the nav when a planet is focused, and
+        // the anchor is taken from the same bounds a throw would use so the two
+        // cannot disagree about where the bottom of the screen is.
         final bottomAnchor = Offset(
-          (viewport.width / 2 - kCompanionBoxWidth / 2)
-              .clamp(kCompanionEdge, viewport.width - kCompanionBoxWidth - kCompanionEdge),
-          viewport.height - kCompanionBoxHeight - 85,
+          (viewport.width / 2 - kCompanionBoxWidth / 2).clamp(
+            bounds.min.dx,
+            bounds.max.dx,
+          ),
+          bounds.max.dy,
         );
 
-        final home = Offset(maxPosition.dx, viewport.height * 0.42);
+        final home = Offset(
+          bounds.max.dx,
+          bounds.min.dy + (bounds.max.dy - bounds.min.dy) * 0.42,
+        );
 
         if (!_placed && pose.screenPosition == null) {
           _placed = true;
@@ -273,15 +567,18 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
             if (!mounted) return;
             ref
                 .read(avatarControllerProvider.notifier)
-                .placeAt(home, maxPosition: maxPosition);
+                .placeAt(
+                  home,
+                  maxPosition: bounds.max,
+                  minPosition: bounds.min,
+                );
           });
         }
 
-        final rawPosition = hasFocus ? bottomAnchor : (pose.screenPosition ?? home);
-        final position = Offset(
-          rawPosition.dx.clamp(0.0, maxPosition.dx),
-          rawPosition.dy.clamp(0.0, maxPosition.dy),
-        );
+        final rawPosition = hasFocus
+            ? bottomAnchor
+            : (pose.screenPosition ?? home);
+        final position = bounds.clamp(rawPosition);
 
         _controller.applyPose(pose);
         _controller.applyReaction(pose.reaction);
@@ -302,10 +599,12 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
           viewport: viewport,
         );
 
-        final isIceWorld = ui.selectedPlanetId == 'neptune' ||
+        final isIceWorld =
+            ui.selectedPlanetId == 'neptune' ||
             ui.selectedPlanetId == 'uranus' ||
             ui.selectedPlanetId == 'pluto';
-        final isHotWorld = ui.selectedPlanetId == 'sun' ||
+        final isHotWorld =
+            ui.selectedPlanetId == 'sun' ||
             ui.selectedPlanetId == 'mercury' ||
             ui.selectedPlanetId == 'venus';
 
@@ -359,10 +658,10 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
                 accent: isIceWorld
                     ? const Color(0xFF38BDF8)
                     : isHotWorld
-                        ? const Color(0xFFFBBF24)
-                        : pose.isHeartVisible
-                            ? const Color(0xFFEC4899)
-                            : avatarAccent(ui.avatarMood),
+                    ? const Color(0xFFFBBF24)
+                    : pose.isHeartVisible
+                    ? const Color(0xFFEC4899)
+                    : avatarAccent(ui.avatarMood),
               ),
             ),
             Positioned(
@@ -384,8 +683,10 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
                         builder: (context, scale, child) {
                           return Transform.scale(
                             scale: scale,
-                            child: const Text('❤️',
-                                style: TextStyle(fontSize: 32)),
+                            child: const Text(
+                              '❤️',
+                              style: TextStyle(fontSize: 32),
+                            ),
                           );
                         },
                       ),
@@ -406,20 +707,32 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
                             ready: _ready,
                             controller: _controller,
                             mood: ui.avatarMood,
-                            idleAction: hasFocus ? AvatarIdleAction.sitting : pose.idleAction,
+                            idleAction: hasFocus
+                                ? AvatarIdleAction.sitting
+                                : pose.idleAction,
                             selectedPlanetId: ui.selectedPlanetId,
                           ),
                           // The face is Flutter paint over the 3D render, so it
                           // must not swallow drags meant for the toy.
                           if (_ready)
                             AnimatedBuilder(
-                              animation: _flightTicker,
+                              // The face is driven by the same clock as the
+                              // physics, so the expression and the toy never
+                              // disagree about how much time has passed.
+                              animation: Listenable.merge([
+                                _frameClock,
+                                _impactTicker,
+                              ]),
                               builder: (context, _) => IgnorePointer(
                                 child: AvatarFace(
-                                  box: const Size(kCompanionBoxWidth, kCompanionBoxHeight),
+                                  box: const Size(
+                                    kCompanionBoxWidth,
+                                    kCompanionBoxHeight,
+                                  ),
                                   pose: pose,
                                   motion: _controller.bodyMotion,
-                                  phase: _flightTicker.value,
+                                  phase: _frameClock.seconds,
+                                  squash: _impactSquash,
                                 ),
                               ),
                             ),
@@ -435,6 +748,74 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
       },
     );
   }
+}
+
+/// One recorded point of a drag, with the time it was seen at.
+///
+/// The timestamp has to be the event's own rather than `DateTime.now()` at the
+/// time it was handled: a pointer event carries the time the platform produced
+/// it, which is what a velocity is a function of, and handling a batch of
+/// queued events late would otherwise understate how fast the toy was really
+/// moving.
+/// The companion's frame clock: a monotonic elapsed time, a clamped per-frame
+/// delta, and a notification on every frame.
+///
+/// A [Ticker] is not a [Listenable] in this Flutter version, and the face
+/// painted over the 3D window has to be repainted on the same frames the body
+/// moves on. Wrapping the ticker is what lets one clock drive both the throw
+/// physics and that repaint, instead of running two loops that would drift apart
+/// and leave the face a frame behind the toy it belongs to.
+class _FrameClock extends ChangeNotifier {
+  _FrameClock({required TickerProvider vsync, required this.onFrame}) {
+    _ticker = vsync.createTicker(_onTick)..start();
+  }
+
+  final void Function(double dt) onFrame;
+
+  late final Ticker _ticker;
+  Duration? _lastElapsed;
+
+  /// Elapsed seconds, accumulated from clamped frame deltas.
+  ///
+  /// The idle animation runs off this rather than off the wall clock, so it
+  /// keeps its own pace regardless of the display's refresh rate, and it
+  /// advances by exactly the delta the physics integrates, so the face and the
+  /// toy never disagree about how much time has passed.
+  double seconds = 0;
+
+  /// The current frame's delta, in seconds.
+  ///
+  /// Zero on the first frame, which has no previous timestamp to measure
+  /// against and no motion behind it.
+  double delta = 0;
+
+  void _onTick(Duration elapsed) {
+    final previous = _lastElapsed;
+    _lastElapsed = elapsed;
+    delta = previous == null
+        ? 0.0
+        : ((elapsed - previous).inMicroseconds / 1e6).clamp(
+            0.0,
+            AvatarPhysicsConfig.maxDeltaTime,
+          );
+    seconds += delta;
+    onFrame(delta);
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+}
+
+/// One recorded point of a drag, with the time it was seen at.
+class _DragSample {
+  const _DragSample(this.position, this.time);
+
+  final Offset position;
+  final Duration time;
 }
 
 class _CompanionScene extends StatelessWidget {
@@ -459,7 +840,8 @@ class _CompanionScene extends StatelessWidget {
     return SceneView(
       controller.scene,
       camera: AvatarSceneControllerImpl.camera,
-      onTick: (elapsed, _) => controller.tick(elapsed, mood, idleAction, selectedPlanetId),
+      onTick: (elapsed, _) =>
+          controller.tick(elapsed, mood, idleAction, selectedPlanetId),
     );
   }
 }

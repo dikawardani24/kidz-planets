@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
+import '../../application/state/avatar_squash.dart';
 import '../../application/state/avatar_state.dart';
 import '../../application/state/explorer_state.dart';
 import 'avatar_exhaust.dart';
@@ -22,10 +23,7 @@ import 'avatar_materials.dart';
 /// crisp white nosecone, glowing porthole window, sunny yellow fins,
 /// and dynamic planetary reactions.
 class AvatarSceneBuilder {
-  AvatarSceneBuilder({
-    required this.geometries,
-    required this.materials,
-  });
+  AvatarSceneBuilder({required this.geometries, required this.materials});
 
   final AvatarGeometryFactory geometries;
   final AvatarMaterialFactory materials;
@@ -81,16 +79,15 @@ class AvatarSceneBuilder {
     scene
       ..environmentIntensity = 0.60
       ..add(
-        Node(name: 'avatar:light')
-          ..addComponent(
-            DirectionalLightComponent.aimed(
-              DirectionalLight(
-                color: vm.Vector3(1.0, 0.97, 0.92),
-                intensity: 2.8,
-              ),
-              vm.Vector3(0.4, -1.0, 0.6),
+        Node(name: 'avatar:light')..addComponent(
+          DirectionalLightComponent.aimed(
+            DirectionalLight(
+              color: vm.Vector3(1.0, 0.97, 0.92),
+              intensity: 2.8,
             ),
+            vm.Vector3(0.4, -1.0, 0.6),
           ),
+        ),
       );
 
     avatarRoot.add(bodyRoot);
@@ -169,8 +166,10 @@ class AvatarSceneBuilder {
       exhaustGroupNode.add(exhaust.pivot);
       _exhaust = exhaust;
     } catch (error, stackTrace) {
-      debugPrint('AvatarSceneBuilder: exhaust unavailable, continuing without '
-          'it: $error\n$stackTrace');
+      debugPrint(
+        'AvatarSceneBuilder: exhaust unavailable, continuing without '
+        'it: $error\n$stackTrace',
+      );
     } finally {
       _exhaustPending = false;
     }
@@ -186,11 +185,24 @@ class AvatarSceneBuilder {
     return node;
   }
 
+  /// Deforms the whole body for the moment after an impact.
+  ///
+  /// Written straight onto the root rather than animated here, because the
+  /// caller already has a clock for the impact, and a second one would mean two
+  /// animations of the same thing a frame apart.
+  void setImpactSquash(double scale) {
+    if (scale == 1.0) {
+      avatarRoot.scale = vm.Vector3.all(1.0);
+      return;
+    }
+    final axes = AvatarSquash.axes(scale);
+    avatarRoot.scale = vm.Vector3(axes.dx, axes.dy, axes.dx);
+  }
+
   void setRotation(AvatarState pose) {
-    avatarRoot.rotation = vm.Quaternion.axisAngle(
-      vm.Vector3(0, 1, 0),
-      pose.yaw,
-    ) * vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), pose.pitchClamped);
+    avatarRoot.rotation =
+        vm.Quaternion.axisAngle(vm.Vector3(0, 1, 0), pose.yaw) *
+        vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), pose.pitchClamped);
 
     _requestedThrottle = ExhaustPlume.throttleForSpeed(pose.velocity.distance);
   }
@@ -216,7 +228,12 @@ class AvatarSceneBuilder {
     return c * c * (3 - 2 * c);
   }
 
-  void tick(Duration elapsed, AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId) {
+  void tick(
+    Duration elapsed,
+    AvatarMood mood,
+    AvatarIdleAction idleAction,
+    String? selectedPlanetId,
+  ) {
     final t = elapsed.inMicroseconds / 1e6;
 
     // Reaction-local clock: zero on the first tick after setReaction, so every
@@ -231,10 +248,12 @@ class AvatarSceneBuilder {
     double hover = 0.0;
     double tilt = 0.0;
 
-    final isIceWorld = selectedPlanetId == 'neptune' ||
+    final isIceWorld =
+        selectedPlanetId == 'neptune' ||
         selectedPlanetId == 'uranus' ||
         selectedPlanetId == 'pluto';
-    final isHotWorld = selectedPlanetId == 'sun' ||
+    final isHotWorld =
+        selectedPlanetId == 'sun' ||
         selectedPlanetId == 'mercury' ||
         selectedPlanetId == 'venus';
 
@@ -306,7 +325,8 @@ class AvatarSceneBuilder {
 
     bodyRoot
       ..position = vm.Vector3(0, hover, 0)
-      ..rotation = vm.Quaternion.axisAngle(vm.Vector3(0, 0, 1), tilt) *
+      ..rotation =
+          vm.Quaternion.axisAngle(vm.Vector3(0, 0, 1), tilt) *
           vm.Quaternion.axisAngle(vm.Vector3(0, 1, 0), spin);
 
     // The plume steps on its own delta, derived from the elapsed time rather
@@ -319,7 +339,9 @@ class AvatarSceneBuilder {
 
     // A sleeping rocket is not under power; every other reaction keeps the
     // engine running, because a startle is not a shutdown.
-    final target = _reaction == AvatarReaction.sleepy ? 0.12 : _requestedThrottle;
+    final target = _reaction == AvatarReaction.sleepy
+        ? 0.12
+        : _requestedThrottle;
     final exhaust = _exhaust;
     if (exhaust != null) {
       exhaust.plume
@@ -335,13 +357,18 @@ class AvatarSceneBuilder {
     _setPortholeColor(mood, idleAction, selectedPlanetId);
   }
 
-  void _setPortholeColor(AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId) {
+  void _setPortholeColor(
+    AvatarMood mood,
+    AvatarIdleAction idleAction,
+    String? selectedPlanetId,
+  ) {
     final material = _portholeMaterial;
     if (material == null) return;
     final color = switch (_reaction) {
       // A reaction overrides the ambient tint for as long as it plays, so the
       // window reads as the companion's mood rather than as the planet's.
-      AvatarReaction.happy || AvatarReaction.laughing => const Color(0xFFFF7EB6),
+      AvatarReaction.happy ||
+      AvatarReaction.laughing => const Color(0xFFFF7EB6),
       AvatarReaction.excited => const Color(0xFFFFC93C),
       AvatarReaction.surprised => const Color(0xFFEAF6FF),
       AvatarReaction.sad => const Color(0xFF4C63C8),
@@ -349,17 +376,17 @@ class AvatarSceneBuilder {
       AvatarReaction.sleepy => const Color(0xFF3F4E92),
       AvatarReaction.talking => const Color(0xFF7DD3FC),
       AvatarReaction.none => switch (selectedPlanetId) {
-          'neptune' || 'uranus' || 'pluto' => const Color(0xFF38BDF8),
-          'sun' || 'mercury' || 'venus' => const Color(0xFFFBBF24),
-          _ => switch (idleAction) {
-              AvatarIdleAction.dancing => const Color(0xFF38BDF8),
-              AvatarIdleAction.thinking => const Color(0xFF8B5CF6),
-              AvatarIdleAction.sitting => const Color(0xFF64748B),
-              AvatarIdleAction.flying => const Color(0xFF06B6D4),
-              AvatarIdleAction.sendingHeart => const Color(0xFFEC4899),
-              AvatarIdleAction.none => const Color(0xFF06B6D4),
-            },
+        'neptune' || 'uranus' || 'pluto' => const Color(0xFF38BDF8),
+        'sun' || 'mercury' || 'venus' => const Color(0xFFFBBF24),
+        _ => switch (idleAction) {
+          AvatarIdleAction.dancing => const Color(0xFF38BDF8),
+          AvatarIdleAction.thinking => const Color(0xFF8B5CF6),
+          AvatarIdleAction.sitting => const Color(0xFF64748B),
+          AvatarIdleAction.flying => const Color(0xFF06B6D4),
+          AvatarIdleAction.sendingHeart => const Color(0xFFEC4899),
+          AvatarIdleAction.none => const Color(0xFF06B6D4),
         },
+      },
     };
     material.baseColorFactor = vm.Vector4(
       color.r.toDouble(),

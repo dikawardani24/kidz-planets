@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../application/state/avatar_squash.dart';
 import '../../../application/state/avatar_state.dart';
 import '../../../infrastructure/scene/avatar_face_projection.dart';
 
@@ -21,6 +22,7 @@ class AvatarFace extends StatelessWidget {
     required this.pose,
     required this.motion,
     this.phase = 0,
+    this.squash = 1,
   });
 
   /// Size of the companion box the face is drawn inside.
@@ -32,8 +34,20 @@ class AvatarFace extends StatelessWidget {
   /// The rocket body's own animation for this frame.
   final AvatarBodyMotion motion;
 
-  /// Looping 0..1 clock, for the expressions that move (talking, laughing).
+  /// Running clock in seconds, for the expressions that move (talking,
+  /// laughing).
+  ///
+  /// In seconds rather than `0..1` because it is fed by the same running total
+  /// as the throw physics. An unbounded clock lets the expression and the toy
+  /// agree on how much time has passed, which a wrapped one cannot.
   final double phase;
+
+  /// How much the body is squashed by an impact, `1` meaning undeformed.
+  ///
+  /// The face is painted over the 3D body's window, so when the body is
+  /// deformed the face has to be deformed by the same amount, or it reads as
+  /// floating in front of the toy rather than sitting in its window.
+  final double squash;
 
   /// Below this much facing the window is nearly edge-on, and half a face
   /// squashed onto its side reads as a drawing error rather than as a turning
@@ -57,6 +71,7 @@ class AvatarFace extends StatelessWidget {
         projection: projection,
         reaction: pose.reaction,
         phase: phase,
+        squash: squash,
       ),
     );
   }
@@ -65,7 +80,16 @@ class AvatarFace extends StatelessWidget {
 /// Which eyes and which mouth the face is showing.
 enum AvatarEye { open, wide, happy, droopy, halfClosed, spiral, sparkle }
 
-enum AvatarMouth { smile, grin, openSmall, openWide, frown, flat, wavy, talking }
+enum AvatarMouth {
+  smile,
+  grin,
+  openSmall,
+  openWide,
+  frown,
+  flat,
+  wavy,
+  talking,
+}
 
 /// One frame of the face.
 class AvatarExpression {
@@ -89,33 +113,48 @@ class AvatarExpression {
 /// sad, not how the arc happens to be stroked.
 AvatarExpression avatarExpression(AvatarReaction reaction, double phase) {
   return switch (reaction) {
-    AvatarReaction.none =>
-      const AvatarExpression(eyes: AvatarEye.open, mouth: AvatarMouth.smile),
-    AvatarReaction.happy =>
-      const AvatarExpression(eyes: AvatarEye.happy, mouth: AvatarMouth.grin),
-    AvatarReaction.laughing =>
-      const AvatarExpression(eyes: AvatarEye.happy, mouth: AvatarMouth.openWide),
-    AvatarReaction.surprised =>
-      const AvatarExpression(eyes: AvatarEye.wide, mouth: AvatarMouth.openSmall),
-    AvatarReaction.sad =>
-      const AvatarExpression(eyes: AvatarEye.droopy, mouth: AvatarMouth.frown),
-    AvatarReaction.dizzy =>
-      const AvatarExpression(eyes: AvatarEye.spiral, mouth: AvatarMouth.wavy),
-    AvatarReaction.sleepy =>
-      const AvatarExpression(eyes: AvatarEye.halfClosed, mouth: AvatarMouth.flat),
-    AvatarReaction.excited =>
-      const AvatarExpression(eyes: AvatarEye.sparkle, mouth: AvatarMouth.grin),
+    AvatarReaction.none => const AvatarExpression(
+      eyes: AvatarEye.open,
+      mouth: AvatarMouth.smile,
+    ),
+    AvatarReaction.happy => const AvatarExpression(
+      eyes: AvatarEye.happy,
+      mouth: AvatarMouth.grin,
+    ),
+    AvatarReaction.laughing => const AvatarExpression(
+      eyes: AvatarEye.happy,
+      mouth: AvatarMouth.openWide,
+    ),
+    AvatarReaction.surprised => const AvatarExpression(
+      eyes: AvatarEye.wide,
+      mouth: AvatarMouth.openSmall,
+    ),
+    AvatarReaction.sad => const AvatarExpression(
+      eyes: AvatarEye.droopy,
+      mouth: AvatarMouth.frown,
+    ),
+    AvatarReaction.dizzy => const AvatarExpression(
+      eyes: AvatarEye.spiral,
+      mouth: AvatarMouth.wavy,
+    ),
+    AvatarReaction.sleepy => const AvatarExpression(
+      eyes: AvatarEye.halfClosed,
+      mouth: AvatarMouth.flat,
+    ),
+    AvatarReaction.excited => const AvatarExpression(
+      eyes: AvatarEye.sparkle,
+      mouth: AvatarMouth.grin,
+    ),
     // Talking *is* the mouth animation: it opens and shuts about three times a
     // second, which is what makes a silent companion look like it is speaking.
     AvatarReaction.talking => AvatarExpression(
-        eyes: AvatarEye.open,
-        mouth: math.sin(phase * math.pi * 6) > 0
-            ? AvatarMouth.openSmall
-            : AvatarMouth.talking,
-      ),
+      eyes: AvatarEye.open,
+      mouth: math.sin(phase * math.pi * 6) > 0
+          ? AvatarMouth.openSmall
+          : AvatarMouth.talking,
+    ),
   };
 }
-
 
 /// Draws an [AvatarExpression] around the projected window.
 class AvatarFacePainter extends CustomPainter {
@@ -123,11 +162,13 @@ class AvatarFacePainter extends CustomPainter {
     required this.projection,
     required this.reaction,
     required this.phase,
+    this.squash = 1,
   });
 
   final AvatarFaceProjection projection;
   final AvatarReaction reaction;
   final double phase;
+  final double squash;
 
   /// Face ink: a dark navy that reads on both the cyan window and the red body.
   static const Color ink = Color(0xFF10203F);
@@ -143,6 +184,11 @@ class AvatarFacePainter extends CustomPainter {
 
     canvas.save();
     canvas.translate(projection.centre.dx, projection.centre.dy);
+    // The impact squash comes first, because it is a transform of the whole
+    // body and the facing below is a transform of the face within it. The same
+    // [AvatarSquash] the 3D body uses, so the two cannot drift apart.
+    final squashAxes = AvatarSquash.axes(squash);
+    canvas.scale(squashAxes.dx, squashAxes.dy);
     // Squashing the face sideways is the cheap way to show the rocket turning:
     // at 45 degrees the face is half as wide, and it is gone at 90.
     canvas.scale(opacity, 1);
@@ -226,7 +272,6 @@ class AvatarFacePainter extends CustomPainter {
     }
   }
 
-
   void _paintCheeks(Canvas canvas, double unit, double opacity) {
     final paint = _fill(cheek, opacity * 0.55);
     for (final side in const [-1.0, 1.0]) {
@@ -238,12 +283,20 @@ class AvatarFacePainter extends CustomPainter {
     }
   }
 
-  void _paintMouth(Canvas canvas, AvatarMouth style, double unit, double opacity) {
+  void _paintMouth(
+    Canvas canvas,
+    AvatarMouth style,
+    double unit,
+    double opacity,
+  ) {
     final centre = Offset(0, 1.15 * unit);
     switch (style) {
       case AvatarMouth.smile:
         canvas.drawArc(
-          Rect.fromCircle(center: centre - Offset(0, 0.3 * unit), radius: 0.62 * unit),
+          Rect.fromCircle(
+            center: centre - Offset(0, 0.3 * unit),
+            radius: 0.62 * unit,
+          ),
           0,
           math.pi,
           false,
@@ -251,7 +304,10 @@ class AvatarFacePainter extends CustomPainter {
         );
       case AvatarMouth.grin:
         canvas.drawArc(
-          Rect.fromCircle(center: centre - Offset(0, 0.28 * unit), radius: 0.78 * unit),
+          Rect.fromCircle(
+            center: centre - Offset(0, 0.28 * unit),
+            radius: 0.78 * unit,
+          ),
           0,
           math.pi,
           false,
@@ -259,17 +315,28 @@ class AvatarFacePainter extends CustomPainter {
         );
       case AvatarMouth.openSmall:
         canvas.drawOval(
-          Rect.fromCenter(center: centre, width: 0.62 * unit, height: 0.78 * unit),
+          Rect.fromCenter(
+            center: centre,
+            width: 0.62 * unit,
+            height: 0.78 * unit,
+          ),
           _fill(ink, opacity),
         );
       case AvatarMouth.openWide:
         canvas.drawOval(
-          Rect.fromCenter(center: centre, width: 1.25 * unit, height: 0.95 * unit),
+          Rect.fromCenter(
+            center: centre,
+            width: 1.25 * unit,
+            height: 0.95 * unit,
+          ),
           _fill(ink, opacity),
         );
       case AvatarMouth.frown:
         canvas.drawArc(
-          Rect.fromCircle(center: centre + Offset(0, 0.55 * unit), radius: 0.66 * unit),
+          Rect.fromCircle(
+            center: centre + Offset(0, 0.55 * unit),
+            radius: 0.66 * unit,
+          ),
           math.pi,
           math.pi,
           false,
@@ -282,10 +349,17 @@ class AvatarFacePainter extends CustomPainter {
           _stroke(ink, opacity, 0.15 * unit),
         );
       case AvatarMouth.wavy:
-        canvas.drawPath(_wave(centre, unit), _stroke(ink, opacity, 0.13 * unit));
+        canvas.drawPath(
+          _wave(centre, unit),
+          _stroke(ink, opacity, 0.13 * unit),
+        );
       case AvatarMouth.talking:
         canvas.drawOval(
-          Rect.fromCenter(center: centre, width: 0.85 * unit, height: 0.5 * unit),
+          Rect.fromCenter(
+            center: centre,
+            width: 0.85 * unit,
+            height: 0.5 * unit,
+          ),
           _fill(ink, opacity),
         );
     }
@@ -299,8 +373,12 @@ class AvatarFacePainter extends CustomPainter {
     for (var i = 0; i <= steps; i++) {
       final progress = i / steps;
       final angle = progress * math.pi * 3;
-      final point = centre +
-          Offset(math.cos(angle) * radius * progress, math.sin(angle) * radius * progress);
+      final point =
+          centre +
+          Offset(
+            math.cos(angle) * radius * progress,
+            math.sin(angle) * radius * progress,
+          );
       if (i == 0) {
         path.moveTo(point.dx, point.dy);
       } else {
@@ -323,5 +401,6 @@ class AvatarFacePainter extends CustomPainter {
       oldDelegate.projection.radius != projection.radius ||
       oldDelegate.projection.facing != projection.facing ||
       oldDelegate.reaction != reaction ||
-      oldDelegate.phase != phase;
+      oldDelegate.phase != phase ||
+      oldDelegate.squash != squash;
 }

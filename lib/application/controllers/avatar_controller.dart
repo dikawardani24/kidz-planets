@@ -5,16 +5,19 @@ import 'dart:ui' show Offset, Size;
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../state/avatar_physics.dart';
 import '../state/avatar_reaction_policy.dart';
 import '../state/avatar_state.dart';
 
 /// Owns the companion's pose, screen position, and continuous non-stop flying behaviors.
 class AvatarController extends StateNotifier<AvatarState> {
   AvatarController({this.flightHold = const Duration(seconds: 10)})
-      : super(const AvatarState(
+    : super(
+        const AvatarState(
           idleAction: AvatarIdleAction.flying,
           flightStyle: FlightStyle.circle,
-        )) {
+        ),
+      ) {
     _startFlightStyleSwitcher();
   }
 
@@ -106,127 +109,135 @@ class AvatarController extends StateNotifier<AvatarState> {
     }
   }
 
-  Offset _clampTo(Offset position, Offset maxPosition) => Offset(
-        position.dx.clamp(0.0, math.max(0.0, maxPosition.dx)),
-        position.dy.clamp(0.0, math.max(0.0, maxPosition.dy)),
-      );
+  /// Holds a position inside the region the companion may occupy.
+  ///
+  /// The minimum is passed in rather than assumed to be the origin because the
+  /// top and left of the screen are not the edge of the playable area: the
+  /// status bar, the top bar and the toy-sized margin all sit inside the window,
+  /// and a drag that only respected the far corner could slide the toy under
+  /// all of them, where the child could neither see nor grab it.
+  Offset _clampTo(
+    Offset position,
+    Offset maxPosition, [
+    Offset minPosition = Offset.zero,
+  ]) {
+    // The bounds are ordered rather than merely sanitised, because a region too
+    // small for the toy has to collapse to a point rather than throw: a split
+    // screen on a small phone really can leave less room than the toy needs.
+    final maxX = math.max(0.0, maxPosition.dx);
+    final maxY = math.max(0.0, maxPosition.dy);
+    return Offset(
+      position.dx.clamp(math.min(minPosition.dx, maxX), maxX),
+      position.dy.clamp(math.min(minPosition.dy, maxY), maxY),
+    );
+  }
 
-  /// Current throw momentum velocity in pixels per second.
-  Offset _throwVelocity = Offset.zero;
+  /// The throw simulation, which owns the position, velocity and roll of a
+  /// thrown companion.
+  ///
+  /// A throw has to survive a rebuild of the Explorer screen mid-flight, so it
+  /// cannot live in a widget; and it has to be testable without a frame
+  /// callback, so it cannot depend on one. Holding it here gives it both, and
+  /// keeps the physics itself as plain Dart in [AvatarPhysics].
+  final AvatarPhysics _physics = AvatarPhysics();
 
-  /// Bounce coefficient for screen edge collisions (0.5 - 0.75).
-  static const double _bounceFactor = 0.65;
+  /// The bounces from the most recent [updateFlight], for the caller to react
+  /// to with a sound and a squash.
+  ///
+  /// The simulation reports these rather than playing them, because playing a
+  /// sound and animating a squash both belong to the widget layer.
+  List<AvatarBounce> _lastBounces = const [];
 
-  /// Exponential friction coefficient for decelerating after a throw.
-  static const double _throwFrictionCoeff = 3.0;
+  /// Bounces the most recent [updateFlight] reported, clearing them.
+  List<AvatarBounce> takeBounces() {
+    if (_lastBounces.isEmpty) return const [];
+    final taken = _lastBounces;
+    _lastBounces = const [];
+    return taken;
+  }
+
+  /// Whether a throw is still in progress.
+  ///
+  /// The caller needs this because a thrown companion is parked as well as
+  /// moving: the flight loop is paused for it, so the pause cannot be used to
+  /// decide whether to keep stepping the physics.
+  bool get isThrowing => _physics.isThrowing;
 
   /// Launches the companion with initial [velocity] (pixels/sec) after a flick.
+  ///
+  /// [minPosition] defaults to the origin, which is where the flight path
+  /// starts, so a caller that does not know about the bars can still throw.
   void launchWithVelocity({
     required Offset velocity,
     required Offset maxPosition,
+    Offset minPosition = Offset.zero,
   }) {
     _maxPosition = maxPosition;
-    // Cap maximum throw speed so a super-fast flick stays playful and controllable
-    const double maxSpeed = 3200.0;
-    final speed = velocity.distance;
+    final start = state.screenPosition;
+    if (start != null) _physics.placeAt(start);
 
-    if (speed < 50.0) {
-      stopMomentum();
-      _restartHold();
-      return;
-    }
+    // The throw continues the roll the child may have set up with two fingers,
+    // rather than snapping the toy level the moment it is let go.
+    _physics.setRotation(yaw: state.yaw, pitch: state.pitch);
+    _physics.launch(velocity);
 
-    final clampedVelocity = speed > maxSpeed ? velocity * (maxSpeed / speed) : velocity;
-    _throwVelocity = clampedVelocity;
+    state = state.copyWith(velocity: _physics.velocity, isFlightPaused: true);
 
-    state = state.copyWith(
-      velocity: _throwVelocity,
-      isFlightPaused: true,
-    );
-    _restartHold();
+    // A throw is not a park. The hold timer is deliberately not restarted here:
+    // it would end the throw early by sliding the companion back onto its
+    // flight path mid-bounce. The throw ends when the simulation says it has.
+    if (!_physics.isThrowing) _restartHold();
   }
 
   /// Cancels any active throw momentum.
   void stopMomentum() {
-    _throwVelocity = Offset.zero;
+    _physics.stop();
     if (state.velocity != Offset.zero) {
       state = state.copyWith(velocity: Offset.zero);
     }
   }
 
-  void _updateMomentumPhysics(double dt, Offset maxPosition) {
-    if (_throwVelocity.distanceSquared < 100.0) { // < 10 px/s
-      stopMomentum();
+  void _updateThrowPhysics(double dt, AvatarBounds bounds) {
+    _lastBounces = _physics.step(dt, bounds);
+
+    state = state.copyWith(
+      screenPosition: _physics.position,
+      velocity: _physics.velocity,
+      yaw: _physics.yaw,
+      pitch: _physics.pitch.clamp(
+        -AvatarState.pitchLimit,
+        AvatarState.pitchLimit,
+      ),
+      isFlightPaused: true,
+    );
+
+    // The throw is over once the simulation says so, at which point the
+    // companion parks exactly where it settled rather than snapping anywhere.
+    if (!_physics.isThrowing) {
+      _lastBounces = const [];
       _restartHold();
-      return;
-    }
-
-    // Apply smooth deceleration
-    _throwVelocity *= math.exp(-_throwFrictionCoeff * dt);
-
-    final currentPos = state.screenPosition ?? Offset.zero;
-    var nextX = currentPos.dx + _throwVelocity.dx * dt;
-    var nextY = currentPos.dy + _throwVelocity.dy * dt;
-
-    var vx = _throwVelocity.dx;
-    var vy = _throwVelocity.dy;
-
-    // Bounce off left/right edges
-    if (nextX <= 0.0) {
-      nextX = 0.0;
-      vx = -vx * _bounceFactor;
-    } else if (nextX >= maxPosition.dx) {
-      nextX = maxPosition.dx;
-      vx = -vx * _bounceFactor;
-    }
-
-    // Bounce off top/bottom edges
-    if (nextY <= 0.0) {
-      nextY = 0.0;
-      vy = -vy * _bounceFactor;
-    } else if (nextY >= maxPosition.dy) {
-      nextY = maxPosition.dy;
-      vy = -vy * _bounceFactor;
-    }
-
-    _throwVelocity = Offset(vx, vy);
-    final clampedPos = _clampTo(Offset(nextX, nextY), maxPosition);
-
-    // Subtle 3D spin and tilt proportional to velocity
-    final spinDx = vx * dt * 0.006;
-    final spinDy = vy * dt * 0.004;
-    final newYaw = state.yaw + spinDx;
-    final newPitch = (state.pitch + spinDy)
-        .clamp(-AvatarState.pitchLimit, AvatarState.pitchLimit);
-
-    if (_throwVelocity.distance < 15.0) {
-      _throwVelocity = Offset.zero;
-      state = state.copyWith(
-        screenPosition: clampedPos,
-        velocity: Offset.zero,
-        yaw: newYaw,
-        pitch: newPitch,
-        isFlightPaused: true,
-      );
-      _restartHold();
-    } else {
-      state = state.copyWith(
-        screenPosition: clampedPos,
-        velocity: _throwVelocity,
-        yaw: newYaw,
-        pitch: newPitch,
-        isFlightPaused: true,
-      );
     }
   }
 
   /// Updates continuous non-stop flight movement along the chosen path.
-  void updateFlight(double dt, Size viewport, Offset maxPosition) {
+  ///
+  /// [minPosition] is the other edge of the region the companion may occupy.
+  /// The flight path is only ever asked for a maximum, because the path it
+  /// follows starts at the origin; a throw needs both edges, since the top and
+  /// left of the screen are taken by the status bar and the top bar.
+  void updateFlight(
+    double dt,
+    Size viewport,
+    Offset maxPosition, {
+    Offset minPosition = Offset.zero,
+  }) {
     _maxPosition = maxPosition;
 
-    // Active throw momentum physics takes precedence while decelerating
-    if (_throwVelocity.distanceSquared > 100.0) {
-      _updateMomentumPhysics(dt, maxPosition);
+    // An active throw takes precedence over the flight path, and is checked
+    // before the pause below: a thrown companion is parked as well as moving,
+    // so `isFlightPaused` alone would stop the throw on its very first frame.
+    if (_physics.isThrowing) {
+      _updateThrowPhysics(dt, AvatarBounds(min: minPosition, max: maxPosition));
       return;
     }
 
@@ -264,6 +275,18 @@ class AvatarController extends StateNotifier<AvatarState> {
   @visibleForTesting
   void debugSetFlightStyle(FlightStyle style) {
     state = state.copyWith(flightStyle: style);
+  }
+
+  /// Turns reduced motion on or off for a throw already in flight.
+  ///
+  /// The platform can change this preference while the app is running, and the
+  /// platform is also what a reader uses to ask for calmer motion at all, so
+  /// the simulation has to be told rather than deciding for itself. It is
+  /// applied to the flight in progress as well as the next one: a throw that
+  /// was already under way when the preference was switched on should calm
+  /// down, not finish at the speed it started.
+  void setReducedMotion(bool reducedMotion) {
+    _physics.reducedMotion = reducedMotion;
   }
 
   void react(
@@ -312,8 +335,10 @@ class AvatarController extends StateNotifier<AvatarState> {
     const pitchPerPixel = 0.008;
     state = state.copyWith(
       yaw: state.yaw + dx * yawPerPixel,
-      pitch: (state.pitch + dy * pitchPerPixel)
-          .clamp(-AvatarState.pitchLimit, AvatarState.pitchLimit),
+      pitch: (state.pitch + dy * pitchPerPixel).clamp(
+        -AvatarState.pitchLimit,
+        AvatarState.pitchLimit,
+      ),
     );
   }
 
@@ -324,15 +349,18 @@ class AvatarController extends StateNotifier<AvatarState> {
   void moveBy({
     required Offset delta,
     required Offset maxPosition,
+    Offset minPosition = Offset.zero,
   }) {
     stopMomentum();
     final current = state.screenPosition;
     if (current == null) return;
     _maxPosition = maxPosition;
-    state = state.copyWith(
-      screenPosition: _clampTo(current + delta, maxPosition),
-      isFlightPaused: true,
-    );
+    final moved = _clampTo(current + delta, maxPosition, minPosition);
+    // The simulation owns the position, so it has to be moved with the finger.
+    // Otherwise the next throw would launch from wherever the last one ended
+    // rather than from where the child actually let the toy go.
+    _physics.placeAt(moved);
+    state = state.copyWith(screenPosition: moved, isFlightPaused: true);
     _restartHold();
   }
 
@@ -360,16 +388,26 @@ class AvatarController extends StateNotifier<AvatarState> {
     _flightRebase = position - _flightPathAt(_pathTime, _maxPosition);
   }
 
-  void placeAt(Offset position, {Offset? maxPosition}) {
-    if (maxPosition == null) {
-      state = state.copyWith(screenPosition: position);
-      return;
+  void placeAt(
+    Offset position, {
+    Offset? maxPosition,
+    Offset minPosition = Offset.zero,
+  }) {
+    // The simulation is moved first, and unconditionally. A placement that set
+    // the state without moving the simulation would look right until the next
+    // frame, when the frame loop wrote the simulation's position straight back
+    // over it and the toy appeared to snap to wherever it had been before.
+    final clamped = maxPosition == null
+        ? position
+        : _clampTo(position, maxPosition, minPosition);
+    _physics.placeAt(clamped);
+
+    if (maxPosition != null) {
+      _maxPosition = maxPosition;
+      // The opening placement is off the flight path too, so it rebases: the
+      // companion eases out of its home corner into its first circuit.
+      _rebaseFlightFrom(clamped);
     }
-    _maxPosition = maxPosition;
-    final clamped = _clampTo(position, maxPosition);
-    // The opening placement is off the flight path too, so it rebases: the
-    // companion eases out of its home corner into its first circuit.
-    _rebaseFlightFrom(clamped);
     state = state.copyWith(screenPosition: clamped);
   }
 
@@ -379,5 +417,5 @@ class AvatarController extends StateNotifier<AvatarState> {
 
 final avatarControllerProvider =
     StateNotifierProvider<AvatarController, AvatarState>(
-  (ref) => AvatarController(),
-);
+      (ref) => AvatarController(),
+    );

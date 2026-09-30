@@ -22,8 +22,17 @@ abstract class AvatarSceneController {
   AvatarBodyMotion get bodyMotion;
 
   void ensureBuilt();
-  void tick(Duration elapsed, AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId);
+  void tick(
+    Duration elapsed,
+    AvatarMood mood,
+    AvatarIdleAction idleAction,
+    String? selectedPlanetId,
+  );
   void applyPose(AvatarState pose);
+
+  /// Deforms the body for the moment after an impact. See
+  /// [AvatarSceneBuilder.setImpactSquash].
+  void setImpactSquash(double scale);
 
   /// Starts a reaction pose in the 3D layer.
   ///
@@ -38,9 +47,9 @@ abstract class AvatarSceneController {
 /// Owns the companion's own [Scene] and drives it from the avatar state.
 class AvatarSceneControllerImpl implements AvatarSceneController {
   AvatarSceneControllerImpl()
-      : _scene = Scene(),
-        _geometries = AvatarGeometryFactory(),
-        _materials = AvatarMaterialFactory() {
+    : _scene = Scene(),
+      _geometries = AvatarGeometryFactory(),
+      _materials = AvatarMaterialFactory() {
     _builder = AvatarSceneBuilder(
       geometries: _geometries,
       materials: _materials,
@@ -80,11 +89,18 @@ class AvatarSceneControllerImpl implements AvatarSceneController {
   }
 
   @override
-  void tick(Duration elapsed, AvatarMood mood, AvatarIdleAction idleAction, String? selectedPlanetId) =>
-      _builder.tick(elapsed, mood, idleAction, selectedPlanetId);
+  void tick(
+    Duration elapsed,
+    AvatarMood mood,
+    AvatarIdleAction idleAction,
+    String? selectedPlanetId,
+  ) => _builder.tick(elapsed, mood, idleAction, selectedPlanetId);
 
   @override
   void applyPose(AvatarState pose) => _builder.setRotation(pose);
+
+  @override
+  void setImpactSquash(double scale) => _builder.setImpactSquash(scale);
 
   @override
   void applyReaction(AvatarReaction reaction) => _builder.setReaction(reaction);
