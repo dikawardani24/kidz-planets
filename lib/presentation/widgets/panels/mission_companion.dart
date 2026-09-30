@@ -503,6 +503,22 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
     super.dispose();
   }
 
+  /// Resolves the mix level for an expression cue.
+  ///
+  /// Mission cues are deliberately quieter because the mission result sound
+  /// is the primary audio event. Regular expression and idle cues use the
+  /// normal expression level.
+  double _volumeForCue(AvatarExpressionCue cue) {
+    switch (cue.asset) {
+      case 'assets/audio/sfx/avatar/avatar_success.mp3':
+      case 'assets/audio/sfx/avatar/avatar_failure.mp3':
+      case 'assets/audio/sfx/avatar/avatar_find_object.mp3':
+        return AvatarExpressionSound.missionVolume;
+      default:
+        return AvatarExpressionSound.baseVolume;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final pose = ref.watch(avatarControllerProvider);
