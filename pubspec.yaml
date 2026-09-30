@@ -38,6 +38,7 @@ flutter:
   uses-material-design: true
   generate: true
   assets:
+    - flutter_scene_generated/
     - assets/textures/
     - assets/textures/moons/
     - assets/audio/narration/planets/
@@ -49,3 +50,4 @@ flutter:
     - assets/audio/sfx/planets/
     - assets/audio/sfx/missions/
     - assets/audio/sfx/avatar/
+    - assets/models/avatar/

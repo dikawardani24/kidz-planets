@@ -11,11 +11,11 @@ class AvatarPorthole {
   static const double radius = 0.075;
 
   /// Height of the window's centre on the rocket body.
-  static const double height = 0.05;
+  static const double height = 0.08;
 
   /// How far the window sits in front of the body's centre line. Negative is
   /// towards the camera, which is where the front of the rocket is.
-  static const double depth = -0.12;
+  static const double depth = -0.30;
 }
 
 /// Geometry for the Chubby Cartoon Rocket Ship Mascot.

@@ -37,6 +37,11 @@ class AvatarSceneBuilder {
   /// can supply the sprite materials it needs.
   AvatarExhaust? _exhaust;
 
+  /// Imported GLB rocket. The procedural model remains as a safe fallback if
+  /// the bundled asset cannot be loaded on a device/build.
+  Node? _importedRocket;
+  bool _rocketLoadPending = false;
+
   /// Set while that attach is in flight, so a burst of rebuilds cannot queue
   /// several plumes onto the same node.
   bool _exhaustPending = false;
@@ -52,8 +57,6 @@ class AvatarSceneBuilder {
   /// the plume steps by. Null before the first tick, when there is no previous
   /// frame to measure from.
   double? _lastTickSeconds;
-
-  UnlitMaterial? _portholeMaterial;
 
   /// The reaction currently being played, and when it started.
   ///
@@ -98,46 +101,46 @@ class AvatarSceneBuilder {
   }
 
   void _buildBody() {
-    final bodyMat = materials.rocketBody();
-    final whiteMat = materials.whiteAccent();
-    final finMat = materials.fins();
-
-    // Rocket fuselage body
-    bodyRoot.add(
-      _mesh('fuselage', geometries.rocketBody(), bodyMat)
-        ..position = vm.Vector3(0, 0, 0),
-    );
-
-    // Rounded nosecone
-    bodyRoot.add(
-      _mesh('nosecone', geometries.noseCone(), whiteMat)
-        ..position = vm.Vector3(0, 0.22, 0),
-    );
-
-    // Side fins / wings
-    bodyRoot.add(
-      _mesh('fin-left', geometries.fin(), finMat)
-        ..position = vm.Vector3(-0.16, -0.10, 0),
-    );
-    bodyRoot.add(
-      _mesh('fin-right', geometries.fin(), finMat)
-        ..position = vm.Vector3(0.16, -0.10, 0),
-    );
-
-    // Engine bell at the base.
-    bodyRoot.add(
-      _mesh('engine', geometries.engineNozzle(), whiteMat)
-        ..position = vm.Vector3(0, -0.22, 0),
-    );
-
-    // The plume hangs off the bell. It is attached asynchronously, because
-    // the sprite materials it needs cannot be constructed until the engine's
-    // shader library has finished loading, so the group node is parented
-    // immediately and filled in as soon as that is safe.
-    exhaustGroupNode.position = vm.Vector3(0, AvatarExhaust.nozzleHeight, 0);
+    // The bundled GLB is now the avatar's primary and only body model.
+    // Keep the face window and exhaust as lightweight scene overlays so the
+    // existing reactions, physics, and 2D expressions continue to work.
+    exhaustGroupNode.position = vm.Vector3(0, -0.20, 0);
     bodyRoot.add(exhaustGroupNode);
-
+    unawaited(_attachImportedRocket());
     unawaited(_attachExhaust());
+  }
+
+  /// Loads and normalizes the bundled low-poly rocket used by the companion.
+  ///
+  /// Kenney's source asset is authored inside a kit coordinate space, so its
+  /// scene root is translated back to the avatar origin and scaled to match
+  /// the existing companion viewport.
+  Future<void> _attachImportedRocket() async {
+    if (_rocketLoadPending || _importedRocket != null) return;
+    _rocketLoadPending = true;
+    try {
+      await Scene.initializeStaticResources();
+      final rocket = await loadScene('assets/models/avatar/rocket.glb');
+      if (avatarRoot.parent == null) return;
+
+      rocket
+        ..name = 'avatar-glb-rocket'
+        ..raycastable = false
+        // rocket_baseA.glb is authored at (2, 0, 1.5) in the Kenney kit.
+        // Center it around the same origin used by the old avatar and scale
+        // its 1.6-unit body to roughly the previous 0.56-unit height.
+        ..position = vm.Vector3.zero()
+        ..scale = vm.Vector3.all(0.42);
+      bodyRoot.add(rocket);
+      _importedRocket = rocket;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'AvatarSceneBuilder: imported rocket unavailable; using procedural '
+        'fallback: $error\\n$stackTrace',
+      );
+    } finally {
+      _rocketLoadPending = false;
+    }
   }
 
   /// Builds the particle plume once the renderer can supply its materials.
@@ -359,47 +362,6 @@ class AvatarSceneBuilder {
     _tilt = tilt;
     _spin = spin;
 
-    _setPortholeColor(mood, idleAction, selectedPlanetId);
-  }
-
-  void _setPortholeColor(
-    AvatarMood mood,
-    AvatarIdleAction idleAction,
-    String? selectedPlanetId,
-  ) {
-    final material = _portholeMaterial;
-    if (material == null) return;
-    final color = switch (_reaction) {
-      // A reaction overrides the ambient tint for as long as it plays, so the
-      // window reads as the companion's mood rather than as the planet's.
-      AvatarReaction.happy ||
-      AvatarReaction.laughing => const Color(0xFFFF7EB6),
-      AvatarReaction.excited => const Color(0xFFFFC93C),
-      AvatarReaction.surprised => const Color(0xFFEAF6FF),
-      AvatarReaction.sad => const Color(0xFF4C63C8),
-      AvatarReaction.dizzy => const Color(0xFFB388FF),
-      AvatarReaction.sleepy => const Color(0xFF3F4E92),
-      AvatarReaction.talking => const Color(0xFF7DD3FC),
-      AvatarReaction.confused => const Color(0xFFA5B4FC),
-      AvatarReaction.none => switch (selectedPlanetId) {
-        'neptune' || 'uranus' || 'pluto' => const Color(0xFF38BDF8),
-        'sun' || 'mercury' || 'venus' => const Color(0xFFFBBF24),
-        _ => switch (idleAction) {
-          AvatarIdleAction.dancing => const Color(0xFF38BDF8),
-          AvatarIdleAction.thinking => const Color(0xFF8B5CF6),
-          AvatarIdleAction.sitting => const Color(0xFF64748B),
-          AvatarIdleAction.flying => const Color(0xFF06B6D4),
-          AvatarIdleAction.sendingHeart => const Color(0xFFEC4899),
-          AvatarIdleAction.none => const Color(0xFF06B6D4),
-        },
-      },
-    };
-    material.baseColorFactor = vm.Vector4(
-      color.r.toDouble(),
-      color.g.toDouble(),
-      color.b.toDouble(),
-      1.0,
-    );
   }
 
   void showTarget({required bool visible, required Color color}) {
