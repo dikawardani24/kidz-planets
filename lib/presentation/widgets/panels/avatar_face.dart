@@ -49,10 +49,9 @@ class AvatarFace extends StatelessWidget {
   /// floating in front of the toy rather than sitting in its window.
   final double squash;
 
-  /// Below this much facing the window is nearly edge-on, and half a face
-  /// squashed onto its side reads as a drawing error rather than as a turning
-  /// toy. The face simply steps aside until the child turns it back.
-  static const double minimumFacing = 0.18;
+  /// The face is a camera-facing billboard. It never disappears when the
+  /// rocket tumbles; the 3D body can rotate independently underneath it.
+  static const double minimumFacing = 0.0;
 
   @override
   Widget build(BuildContext context) {
@@ -195,9 +194,9 @@ class AvatarFacePainter extends CustomPainter {
     // [AvatarSquash] the 3D body uses, so the two cannot drift apart.
     final squashAxes = AvatarSquash.axes(squash);
     canvas.scale(squashAxes.dx, squashAxes.dy);
-    // Squashing the face sideways is the cheap way to show the rocket turning:
-    // at 45 degrees the face is half as wide, and it is gone at 90.
-    canvas.scale(opacity, 1);
+    // The face deliberately does NOT inherit the rocket's yaw/pitch/roll.
+    // It is a camera-facing character layer, so expressions stay readable while
+    // the 3D rocket tumbles freely underneath it.
     if (expression.mouth == AvatarMouth.grin ||
         expression.mouth == AvatarMouth.openWide) {
       _paintCheeks(canvas, unit, opacity);
