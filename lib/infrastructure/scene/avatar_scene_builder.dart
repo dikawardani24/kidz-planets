@@ -182,12 +182,6 @@ class AvatarSceneBuilder {
     targetPivot.visible = false;
   }
 
-  Node _mesh(String name, MeshGeometry geometry, Material material) {
-    final node = Node(mesh: Mesh(geometry, material))..name = name;
-    node.raycastable = false;
-    return node;
-  }
-
   /// Deforms the whole body for the moment after an impact.
   ///
   /// Written straight onto the root rather than animated here, because the

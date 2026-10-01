@@ -25,6 +25,12 @@ dependencies:
   # Required by the generated AppLocalizations, and by the ARB date/number
   # formatters the planet facts use for locale-correct digit grouping.
   intl: ^0.20.2
+  # Imported directly by hook/build.dart. It arrives transitively through
+  # flutter_scene, but a direct import needs its own declaration. Declared as a
+  # regular dependency rather than a dev one because the analyzer does not
+  # accept a dev_dependency for an import outside test/, and the build hook runs
+  # during `flutter build`, which reads this section.
+  hooks: ^2.2.0
 
 dev_dependencies:
   flutter_test:
