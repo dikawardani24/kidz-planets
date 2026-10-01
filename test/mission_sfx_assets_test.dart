@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kidz_planets/application/state/avatar_state.dart' hide AvatarMood;
+import 'package:kidz_planets/application/state/avatar_state.dart';
 import 'package:kidz_planets/application/state/explorer_state.dart';
 import 'package:kidz_planets/infrastructure/services/avatar_expression_sound.dart';
 import 'package:kidz_planets/infrastructure/services/avatar_impact_sound.dart';

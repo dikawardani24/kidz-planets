@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
-import '../../application/state/avatar_state.dart' hide AvatarMood;
+import '../../application/state/avatar_state.dart';
 import '../../application/state/explorer_state.dart';
 import 'avatar_face_projection.dart';
 import 'avatar_geometry.dart';

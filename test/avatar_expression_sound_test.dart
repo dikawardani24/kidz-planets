@@ -1,7 +1,7 @@
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:kidz_planets/application/state/avatar_state.dart' hide AvatarMood;
+import 'package:kidz_planets/application/state/avatar_state.dart';
 import 'package:kidz_planets/application/state/explorer_state.dart';
 import 'package:kidz_planets/infrastructure/services/avatar_expression_sound.dart';
 

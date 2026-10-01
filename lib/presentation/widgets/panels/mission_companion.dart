@@ -11,7 +11,7 @@ import '../../../application/controllers/avatar_controller.dart';
 import '../../../application/state/avatar_physics.dart';
 import '../../../application/state/avatar_physics_config.dart';
 import '../../../application/state/avatar_reaction_policy.dart';
-import '../../../application/state/avatar_state.dart' hide AvatarMood;
+import '../../../application/state/avatar_state.dart';
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../../infrastructure/scene/avatar_scene_controller.dart';
@@ -265,6 +265,16 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
           .read(avatarImpactSoundProvider)
           .playBounce(impactSpeed: hardest, reducedMotion: _reducedMotion),
     );
+
+    // A hard wall hit is also a character moment: let the rocket look briefly
+    // dizzy instead of only deforming physically. Keep gentle bounces purely
+    // physical so normal play does not become noisy or over-animated.
+    if (!_reducedMotion && hardest >= 700.0) {
+      ref.read(avatarControllerProvider.notifier).react(
+            AvatarReaction.dizzy,
+            duration: const Duration(milliseconds: 700),
+          );
+    }
   }
 
   final Map<int, Offset> _activePointers = {};
@@ -442,6 +452,13 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
             unawaited(
               ref.read(avatarExpressionSoundProvider).playThrowWhoosh(),
             );
+            // A fast launch makes the companion feel excited about being
+            // thrown, while the scene builder simultaneously increases the
+            // engine plume from the actual flight speed.
+            ref.read(avatarControllerProvider.notifier).react(
+                  AvatarReaction.excited,
+                  duration: const Duration(milliseconds: 650),
+                );
           }
         }
         _velocityTracker = null;

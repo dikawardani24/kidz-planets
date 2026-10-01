@@ -57,9 +57,9 @@ class AvatarFaceProjection {
   /// Projected radius of the window, in pixels.
   final double radius;
 
-  /// How squarely the face looks at the child: 1 straight on, 0 edge-on or
-  /// turned away. Used both to fade the face out and to squash it sideways, so
-  /// the face belongs to the window rather than hovering over the rocket.
+  /// Face readability factor. The face is a camera-facing billboard, so it
+  /// stays fully readable even when the rocket body tumbles upside down or
+  /// turns away during a throw. Kept as a field for painter compatibility.
   final double facing;
 
   /// Vertical field of view of the companion's camera, in radians.
@@ -102,10 +102,13 @@ class AvatarFaceProjection {
 
     // The face looks down the rocket's nose, so it is the window normal - not
     // the window's position - that says whether the child can see it.
-    final normalInWorld = avatarRotation.rotated(
-      bodyRotation.rotated(vm.Vector3(0, 0, -1)),
-    );
-    final facing = (-normalInWorld.z).clamp(0.0, 1.0);
+    // The rocket body is allowed to tumble freely, but the cartoon face is
+    // intentionally a camera-facing billboard. Previously this value faded
+    // the face whenever the body became edge-on or upside down, which made a
+    // fast throw turn the companion into a faceless rocket. The face remains
+    // attached to the projected window position while its drawing itself is
+    // kept upright by AvatarFacePainter.
+    const facing = 1.0;
 
     final depth = windowInWorld.z + cameraDistance;
     if (depth <= 0) {

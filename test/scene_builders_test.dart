@@ -3,7 +3,7 @@ import 'dart:ui' show Color;
 
 import 'package:flutter_scene/scene.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kidz_planets/application/state/avatar_state.dart' hide AvatarMood;
+import 'package:kidz_planets/application/state/avatar_state.dart';
 import 'package:kidz_planets/application/state/explorer_state.dart';
 import 'package:kidz_planets/infrastructure/scene/avatar_geometry.dart';
 import 'package:kidz_planets/infrastructure/scene/avatar_materials.dart';
