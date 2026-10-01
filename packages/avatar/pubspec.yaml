@@ -1,0 +1,19 @@
+name: avatar
+description: >-
+  The 3D companion: rendering, drag, rotation, throw physics, bouncing,
+  reactions, speech bubbles and avatar sound effects.
+version: 1.0.0+1
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  core:
+  equatable: ^2.0.7
+  flutter_riverpod: ^2.6.1
+  just_audio: ^0.10.6
+  audio_session: ^0.2.4
