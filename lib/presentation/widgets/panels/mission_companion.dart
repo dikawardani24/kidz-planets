@@ -11,7 +11,7 @@ import '../../../application/controllers/avatar_controller.dart';
 import '../../../application/state/avatar_physics.dart';
 import '../../../application/state/avatar_physics_config.dart';
 import '../../../application/state/avatar_reaction_policy.dart';
-import '../../../application/state/avatar_state.dart' hide AvatarMood;
+import '../../../application/state/avatar_state.dart';
 import '../../../application/state/explorer_state.dart';
 import '../../../application/state/providers.dart';
 import '../../../infrastructure/scene/avatar_scene_controller.dart';

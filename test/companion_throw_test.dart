@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:kidz_planets/application/controllers/avatar_controller.dart';
 import 'package:kidz_planets/application/state/avatar_physics_config.dart';
-import 'package:kidz_planets/application/state/avatar_state.dart' hide AvatarMood;
+import 'package:kidz_planets/application/state/avatar_state.dart';
 import 'package:kidz_planets/application/state/explorer_state.dart';
 import 'package:kidz_planets/infrastructure/scene/avatar_face_projection.dart';
 import 'package:kidz_planets/infrastructure/scene/avatar_scene_controller.dart';
