@@ -1,11 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kidz_planets/data/datasources/planet_catalog.dart';
-import 'package:kidz_planets/data/localizations/planet_translations_id.dart';
-import 'package:kidz_planets/domain/entities/planet.dart';
-
-import 'helpers/translation_allowlist.dart';
 
 /// Both Indonesian content files, guarded together.
 ///
@@ -14,9 +9,15 @@ import 'helpers/translation_allowlist.dart';
 /// "Bumi.planet ketiga"). Nothing about the Dart type system catches that, and
 /// a reader who does not speak Indonesian will not either, so the checks below
 /// are mechanical.
+///
+/// This is the one translation check that stays in the app: the two tables live
+/// in different feature packages and the corruption they invite is the same in
+/// both. Each package also guards its own table alongside its coverage tests.
 const translationFiles = [
-  'lib/data/localizations/planet_translations_id.dart',
-  'lib/data/localizations/mission_translations_id.dart',
+  // Relative to the workspace root: the two tables now live in the feature
+  // packages that own their copy, not beside the app.
+  '../../packages/planets/lib/src/data/localizations/planet_translations_id.dart',
+  '../../packages/mission/lib/src/data/localizations/mission_translations_id.dart',
 ];
 
 const garbageTokens = [
@@ -50,37 +51,6 @@ void main() {
         final hit = pattern.firstMatch(File(path).readAsStringSync());
         expect(hit, isNull, reason: 'found "${hit?.group(0)}"');
       });
-
     }
-  });
-
-  group('allowlist', () {
-    test('the planet name allowlist has no stale entries', () {
-      // A name that starts being translated should drop out of the list, and a
-      // name that quietly reverts to English should drop in. Either way the
-      // list must not accumulate entries nobody is checking.
-      final stale = <String>[];
-      for (final id in allowedIdenticalNames) {
-        final planet = PlanetCatalog.planets.firstWhere((p) => p.id == id);
-        if (planetCopyId[id]?.name != planet.name) stale.add(id);
-      }
-      for (final key in allowedIdenticalHotspotTitles) {
-        final parts = key.split('/');
-        final planet =
-            PlanetCatalog.planets.firstWhere((p) => p.id == parts[0]);
-        final hotspot = planet.hotspots
-            .firstWhere((h) => hotspotSlug(h.title) == parts[1]);
-        if (planetCopyId[parts[0]]?.hotspots[parts[1]]?.title != hotspot.title) {
-          stale.add(key);
-        }
-      }
-      expect(stale, isEmpty, reason: 'stale allowlist entries: $stale');
-    });
-
-    test('every allowlist entry is a real row', () {
-      for (final id in allowedIdenticalNames) {
-        expect(planetCopyId.containsKey(id), isTrue, reason: id);
-      }
-    });
   });
 }

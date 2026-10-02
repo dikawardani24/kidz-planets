@@ -2,7 +2,7 @@
 //
 // The rule the packages are built around:
 //
-//   app -> {planets, moon, avatar, mission, core}
+//   kidz_planets -> {planets, avatar, mission, core}
 //   feature -> core
 //
 // So a feature package importing another feature package, or anything
@@ -13,11 +13,15 @@
 // Run with: melos run check:deps
 import 'dart:io';
 
-/// Workspace members and what each one is allowed to import.
-const _featurePackages = {'planets', 'moon', 'avatar', 'mission'};
+/// Feature packages and what each one is allowed to import.
+const _featurePackages = {'planets', 'avatar', 'mission'};
 
 /// Packages that may be imported by anything in the workspace.
 const _sharedPackages = {'core'};
+
+/// The runnable app. It is the composition root, so it may import every
+/// feature; nothing may import it.
+const _appPackages = {'kidz_planets'};
 
 void main(List<String> args) {
   final root = Directory.current;
@@ -58,11 +62,11 @@ void main(List<String> args) {
         final target = match.group(1)!;
         if (target == owner) continue;
         if (_sharedPackages.contains(target)) continue;
-        if (owner == 'app') continue; // the app composes everything
-        if (target == 'kidz_planets') {
+        if (_appPackages.contains(target)) {
           violations.add('$relative imports the app package ($target)');
           continue;
         }
+        if (_appPackages.contains(owner)) continue; // it composes everything
         if (_featurePackages.contains(owner) &&
             _featurePackages.contains(target)) {
           violations.add(
@@ -77,7 +81,7 @@ void main(List<String> args) {
   if (violations.isEmpty) {
     stdout.writeln(
       'check_package_deps: OK - ${packages.length} packages, '
-      'no feature-to-feature or app imports.',
+      'no feature-to-feature imports and nothing imports the app.',
     );
     return;
   }

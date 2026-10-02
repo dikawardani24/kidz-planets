@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kidz_planets/application/state/explorer_state.dart';
-import 'package:kidz_planets/presentation/widgets/panels/avatar_speech.dart';
+
+import 'package:avatar/state.dart';
+import 'package:avatar/widgets.dart';
+import 'package:mission/state.dart';
 
 void main() {
   group('companion line', () {
@@ -53,11 +55,11 @@ void main() {
         ),
       ];
 
-      const first = ExplorerState(
+      const first = MissionProgressState(
         missions: missions,
         activeMissionId: 1,
       );
-      const second = ExplorerState(
+      const second = MissionProgressState(
         missions: missions,
         activeMissionId: 2,
       );
@@ -67,7 +69,7 @@ void main() {
     });
 
     test('is null once every mission is complete, so the target is hidden', () {
-      const done = ExplorerState(
+      const done = MissionProgressState(
         missions: [
           MissionState(
             id: 1,
@@ -83,7 +85,7 @@ void main() {
     });
 
     test('is null when no mission is active', () {
-      expect(const ExplorerState().activeMission, isNull);
+      expect(const MissionProgressState().activeMission, isNull);
     });
   });
 }

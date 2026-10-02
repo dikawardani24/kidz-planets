@@ -2,13 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_scene/scene.dart';
-import 'package:kidz_planets/application/controllers/avatar_controller.dart';
-import 'package:kidz_planets/application/state/avatar_physics_config.dart';
-import 'package:kidz_planets/application/state/avatar_state.dart';
-import 'package:kidz_planets/application/state/explorer_state.dart';
-import 'package:kidz_planets/infrastructure/scene/avatar_face_projection.dart';
-import 'package:kidz_planets/infrastructure/scene/avatar_scene_controller.dart';
-import 'package:kidz_planets/presentation/widgets/panels/companion_safe_area.dart';
+import 'package:avatar/controllers.dart';
+import 'package:avatar/state.dart';
+import 'package:avatar/scene.dart';
+import 'package:avatar/widgets.dart';
 import 'package:kidz_planets/presentation/widgets/panels/mission_companion.dart';
 
 import 'helpers/localized_app.dart';

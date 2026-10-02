@@ -1,7 +1,7 @@
 name: core
 description: >-
-  Shared infrastructure for Kidz Planets: localization, theme, audio and
-  utility abstractions. Depends on no feature package and contains no feature
+  Shared infrastructure for Kidz Planets: localization, theme, audio ports and
+  the simulation clock. Depends on no feature package and contains no feature
   business logic.
 version: 1.0.0+1
 publish_to: none
@@ -16,3 +16,15 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   equatable: ^2.0.7
+  flutter_riverpod: ^2.6.1
+  intl: ^0.20.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  # Generates AppLocalizations into lib/src/l10n/generated (see l10n.yaml), so
+  # every feature package can resolve copy without depending on the app.
+  generate: true

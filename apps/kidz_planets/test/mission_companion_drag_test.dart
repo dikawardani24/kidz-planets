@@ -4,19 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_scene/scene.dart';
-import 'package:kidz_planets/application/controllers/avatar_controller.dart';
-import 'package:kidz_planets/application/state/avatar_physics_config.dart';
-import 'package:kidz_planets/application/state/avatar_state.dart';
-import 'package:kidz_planets/application/state/explorer_state.dart';
+import 'package:avatar/controllers.dart';
+import 'package:avatar/scene.dart';
+import 'package:avatar/state.dart';
+import 'package:avatar/widgets.dart';
 import 'package:kidz_planets/application/state/providers.dart';
-import 'package:kidz_planets/infrastructure/scene/avatar_face_projection.dart';
-import 'package:kidz_planets/infrastructure/scene/avatar_scene_controller.dart';
-import 'package:kidz_planets/l10n/localized_planet.dart';
-import 'package:kidz_planets/presentation/widgets/panels/avatar_speech.dart';
+import 'package:kidz_planets/presentation/widgets/panels/mission_companion.dart';
+import 'package:planets/data.dart';
+import 'package:planets/state.dart';
 
 import 'helpers/localized_app.dart';
-
-import 'package:kidz_planets/presentation/widgets/panels/mission_companion.dart';
 
 /// Bubble placement is pure geometry, so it is exercised directly: the point of
 /// these tests is the edge behaviour, not Flutter's layout. The widget tests
@@ -284,10 +281,7 @@ void main() {
 
       // Miss the active mission on purpose: the mission is what changes the
       // mood, and the mood is what the companion reacts to.
-      final target = container
-          .read(explorerControllerProvider)
-          .activeMission!
-          .targetPlanetId;
+      final target = container.read(activeMissionProvider)!.targetPlanetId;
       final wrong = container
           .read(planetsProvider)
           .firstWhere((p) => p.id != target);
@@ -320,7 +314,7 @@ void main() {
       final container = ProviderScope.containerOf(
         tester.element(find.byType(MissionCompanion)),
       );
-      final mission = container.read(explorerControllerProvider).activeMission!;
+      final mission = container.read(activeMissionProvider)!;
       final name = localizedPlanetName(
         mission.targetPlanetId,
         const Locale('en'),
@@ -330,7 +324,7 @@ void main() {
       expect(find.text(avatarLine(AvatarMood.instruction, name)), findsNothing);
 
       container
-          .read(explorerControllerProvider.notifier)
+          .read(appShellProvider.notifier)
           .setAvatarMood(AvatarMood.instruction);
       await tester.pump();
 

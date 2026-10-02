@@ -2,24 +2,22 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../application/state/app_message.dart';
-import '../../../application/state/explorer_state.dart';
-import '../../../application/state/providers.dart';
-import '../../../infrastructure/services/scene_providers.dart';
-import '../../../l10n/generated/app_localizations.dart';
-import '../../../l10n/resolve_message.dart';
-import '../../../infrastructure/services/avatar_impact_sound_provider.dart';
-import '../../../infrastructure/services/planet_narration_provider.dart';
-import '../../../infrastructure/services/planet_sound_provider.dart';
-import '../theme/app_theme.dart';
-import '../widgets/overlays/bottom_nav.dart';
-import '../widgets/overlays/toast_overlay.dart';
-import '../widgets/overlays/top_bar.dart';
-import '../widgets/panels/mission_companion.dart';
-import '../widgets/panels/missions_panel.dart';
-import '../widgets/panels/planet_detail_sheet.dart';
-import '../widgets/panels/playground_panel.dart';
-import '../widgets/scene/solar_system_scene_view.dart';
+
+import 'package:avatar/audio.dart';
+import 'package:core/l10n.dart';
+import 'package:core/theme.dart';
+import 'package:kidz_planets/application/state/providers.dart';
+import 'package:kidz_planets/presentation/widgets/overlays/bottom_nav.dart';
+import 'package:kidz_planets/presentation/widgets/overlays/toast_overlay.dart';
+import 'package:kidz_planets/presentation/widgets/overlays/top_bar.dart';
+import 'package:kidz_planets/presentation/widgets/panels/mission_companion.dart';
+import 'package:kidz_planets/presentation/widgets/panels/playground_panel.dart';
+import 'package:mission/state.dart';
+import 'package:mission/widgets.dart';
+import 'package:planets/audio.dart';
+import 'package:planets/scene.dart';
+import 'package:planets/state.dart';
+import 'package:planets/widgets.dart';
 
 /// Decides whether a body's ambience and voice description may start now.
 ///
@@ -34,8 +32,8 @@ import '../widgets/scene/solar_system_scene_view.dart';
 /// planets. What a wrong pick suppresses is the *mission* feedback, which the
 /// companion now owns: no mission replay, no mission dialog, and no failure
 /// cue. Those live in the branch above, not behind this gate.
-bool canStartPlanetAudio({required ExplorerState current}) {
-  if (current.celebrationVisible) return false;
+bool canStartPlanetAudio({required bool celebrationVisible}) {
+  if (celebrationVisible) return false;
   return true;
 }
 
@@ -45,6 +43,54 @@ class ExplorerScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ui = ref.watch(explorerControllerProvider);
+    final shell = ref.watch(appShellProvider);
+    final progress = ref.watch(missionProgressProvider);
+
+    // Mission progress and the explorer's own state used to be one object.
+    // They are separate now, so both are observed here and the decisions that
+    // span them are made in this listener rather than inside either feature.
+    ref.listen<MissionProgressState>(missionProgressProvider, (prev, next) {
+      final celebrationClosed =
+          (prev?.celebrationVisible ?? false) && !next.celebrationVisible;
+      if (!celebrationClosed) return;
+
+      // Dismissing the celebration is the cue to describe the body that was
+      // just found. The mission success sound plays alone while the modal is
+      // up: narration runs at 0.92 and would otherwise talk over the 0.65 cue
+      // and read the dialog out loud.
+      final selectedId = ref.read(explorerControllerProvider).selectedPlanetId;
+      if (selectedId == null) return;
+      final planet = ref.read(planetByIdProvider(selectedId));
+      ref.read(planetNarrationServiceProvider).speakPlanet(planet);
+      ref.read(planetSoundServiceProvider).playBody(planet);
+    });
+
+    ref.listen<MissionProgressState>(missionProgressProvider, (prev, next) {
+      if (prev?.activeMissionId == next.activeMissionId ||
+          next.activeMissionId == null) {
+        return;
+      }
+      final missionId = next.activeMissionId;
+      // The controller raises the celebration in the same state assignment that
+      // advances activeMissionId, but the dialog's own appearance is a later
+      // build, so the same microtask deferral is needed to see it.
+      scheduleMicrotask(() {
+        if (!context.mounted) return;
+        final progress = ref.read(missionProgressProvider);
+        if (progress.activeMissionId != missionId) return;
+        final matches = progress.missions.where((m) => m.id == missionId);
+        if (matches.isEmpty) return;
+        if (!canStartPlanetAudio(
+          celebrationVisible: progress.celebrationVisible,
+        )) {
+          return;
+        }
+        final planet = ref.read(
+          planetByIdProvider(matches.first.targetPlanetId),
+        );
+        ref.read(planetNarrationServiceProvider).replay(planet);
+      });
+    });
 
     ref.listen<ExplorerState>(explorerControllerProvider, (prev, next) {
       // Expression SFX duck under narration instead of competing with it.
@@ -54,8 +100,7 @@ class ExplorerScreen extends ConsumerWidget {
       final narrationActive = next.selectedPlanetId != null;
       if ((prev?.selectedPlanetId != null) != narrationActive) {
         try {
-          ref.read(avatarExpressionSoundProvider).voiceActive =
-              narrationActive;
+          ref.read(avatarExpressionSoundProvider).voiceActive = narrationActive;
         } catch (_) {}
       }
 
@@ -74,41 +119,17 @@ class ExplorerScreen extends ConsumerWidget {
       // ambience further down, because tapping a body is how the child explores
       // and the mission being wrong does not make the body uninteresting.
 
-      // Dismissing the celebration is the cue to describe the body that was
-      // just found. The mission success sound plays alone while the modal is
-      // up: narration runs at 0.92 and would otherwise talk over the 0.65 cue
-      // and read the dialog out loud.
-      if (prev?.celebrationVisible == true && !next.celebrationVisible) {
-        speakSelected(next.selectedPlanetId);
-      }
-
-      if (prev?.activeMissionId != next.activeMissionId && next.activeMissionId != null) {
-        final missionId = next.activeMissionId;
-        // _checkMission() raises the celebration in a later state assignment
-        // than the one that advances activeMissionId, so the same microtask
-        // deferral is needed here to see it.
-        scheduleMicrotask(() {
-          if (!context.mounted) return;
-          final current = ref.read(explorerControllerProvider);
-          if (current.activeMissionId != missionId) return;
-          final matches = current.missions.where((m) => m.id == missionId);
-          if (matches.isEmpty) return;
-          if (!canStartPlanetAudio(current: current)) return;
-          final planet = ref.read(planetByIdProvider(matches.first.targetPlanetId));
-          ref.read(planetNarrationServiceProvider).replay(planet);
-        });
-      }
-
       if (prev?.selectedPlanetId != next.selectedPlanetId) {
         final selectedId = next.selectedPlanetId;
         if (selectedId == null) {
           ref.read(planetNarrationServiceProvider).stop();
           ref.read(planetSoundServiceProvider).stop();
         } else {
-          // selectPlanet() checks the mission in the same synchronous turn, so
-          // a celebration raised by this tap is not set yet on this pass.
-          // Re-reading the state on a microtask lets it be seen; when one is up
-          // the celebration-dismissed branch above does the narration instead.
+          // Grading the tap against the active mission happens in the same
+          // synchronous turn as the selection, so a celebration raised by this
+          // tap is not set yet on this pass. Re-reading the state on a microtask
+          // lets it be seen; when one is up the celebration-dismissed listener
+          // above does the narration instead.
           //
           // The body that was tapped is described and sounds either way,
           // including when it was the wrong mission target: the companion owns
@@ -117,7 +138,13 @@ class ExplorerScreen extends ConsumerWidget {
             if (!context.mounted) return;
             final current = ref.read(explorerControllerProvider);
             if (current.selectedPlanetId != selectedId) return;
-            if (!canStartPlanetAudio(current: current)) return;
+            if (!canStartPlanetAudio(
+              celebrationVisible: ref
+                  .read(missionProgressProvider)
+                  .celebrationVisible,
+            )) {
+              return;
+            }
             speakSelected(selectedId);
           });
         }
@@ -125,7 +152,9 @@ class ExplorerScreen extends ConsumerWidget {
 
       if (prev?.showOrbits != next.showOrbits) {
         try {
-          ref.read(solarSystemSceneControllerProvider).setOrbitsVisible(next.showOrbits);
+          ref
+              .read(solarSystemSceneControllerProvider)
+              .setOrbitsVisible(next.showOrbits);
         } catch (_) {}
       }
     });
@@ -140,74 +169,78 @@ class ExplorerScreen extends ConsumerWidget {
               // OrientationBuilder explicitly reacts to device rotation.
               // LayoutBuilder then supplies the new viewport dimensions.
               final isLandscape = orientation == Orientation.landscape;
-          final horizontalInset = isLandscape ? 24.0 : 0.0;
+              final horizontalInset = isLandscape ? 24.0 : 0.0;
 
-          // The scene is intentionally allowed to use the entire viewport.
-          // The previous 390px width cap made landscape render as a narrow
-          // portrait-sized canvas with unused space on both sides.
+              // The scene is intentionally allowed to use the entire viewport.
+              // The previous 390px width cap made landscape render as a narrow
+              // portrait-sized canvas with unused space on both sides.
               return Stack(
                 fit: StackFit.expand,
                 children: [
-              const SolarSystemSceneView(),
-              const Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: ExplorerTopBar(),
-              ),
-              const ExplorerInteractionOverlays(),
-              const ToastOverlay(),
-
-              if (ui.tab == ExplorerTab.playground)
-                Positioned(
-                  left: horizontalInset + 12,
-                  right: horizontalInset + 12,
-                  top: isLandscape ? 68 : 64,
-                  bottom: isLandscape ? 72 : 66,
-                  child: const PlaygroundPanel(),
-                ),
-
-              if (ui.tab == ExplorerTab.missions)
-                Positioned(
-                  left: horizontalInset + 12,
-                  right: horizontalInset + 12,
-                  top: isLandscape ? 68 : 64,
-                  bottom: isLandscape ? 72 : 66,
-                  child: const MissionsPanel(),
-                ),
-
-              if (ui.hasSelection && ui.tab == ExplorerTab.explore)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 76,
-                  child: Center(
-                    child: DetailDescriptionToggle(
-                      planet: ref.watch(
-                        planetByIdProvider(ui.selectedPlanetId!),
-                      ),
+                  const SolarSystemSceneView(),
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: ExplorerTopBar(
+                      isExploreTab: shell.tab == AppTab.explore,
                     ),
                   ),
-                ),
-
-              if (ui.hasSelection && ui.tab == ExplorerTab.explore)
-                const Positioned.fill(child: DetailSideRails()),
-
-              const ExplorerBottomNav(),
-
-              if (ui.celebrationVisible)
-                Positioned.fill(
-                  child: _CelebrationModal(
-                    title: ui.celebrationTitle!,
-                    description: ui.celebrationDescription!,
+                  ExplorerInteractionOverlays(
+                    isExploreTab: shell.tab == AppTab.explore,
                   ),
-                ),
+                  const ToastOverlay(),
 
-              // Last in the stack, so the companion is the topmost thing on
-              // screen: above the scene, the panels, the nav, and the
-              // celebration dialog. It is a permanent part of the mission UI,
-              // never hidden and never promoted into a dialog of its own.
-              const MissionCompanion(),
+                  if (shell.tab == AppTab.playground)
+                    Positioned(
+                      left: horizontalInset + 12,
+                      right: horizontalInset + 12,
+                      top: isLandscape ? 68 : 64,
+                      bottom: isLandscape ? 72 : 66,
+                      child: const PlaygroundPanel(),
+                    ),
+
+                  if (shell.tab == AppTab.missions)
+                    Positioned(
+                      left: horizontalInset + 12,
+                      right: horizontalInset + 12,
+                      top: isLandscape ? 68 : 64,
+                      bottom: isLandscape ? 72 : 66,
+                      child: const MissionsPanel(),
+                    ),
+
+                  if (ui.hasSelection && shell.tab == AppTab.explore)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 76,
+                      child: Center(
+                        child: DetailDescriptionToggle(
+                          planet: ref.watch(
+                            planetByIdProvider(ui.selectedPlanetId!),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  if (ui.hasSelection && shell.tab == AppTab.explore)
+                    const Positioned.fill(child: DetailSideRails()),
+
+                  const ExplorerBottomNav(),
+
+                  if (progress.celebrationVisible)
+                    Positioned.fill(
+                      child: _CelebrationModal(
+                        title: progress.celebrationTitle!,
+                        description: progress.celebrationDescription!,
+                      ),
+                    ),
+
+                  // Last in the stack, so the companion is the topmost thing on
+                  // screen: above the scene, the panels, the nav, and the
+                  // celebration dialog. It is a permanent part of the mission UI,
+                  // never hidden and never promoted into a dialog of its own.
+                  const MissionCompanion(),
                 ],
               );
             },
@@ -219,10 +252,7 @@ class ExplorerScreen extends ConsumerWidget {
 }
 
 class _CelebrationModal extends ConsumerWidget {
-  const _CelebrationModal({
-    required this.title,
-    required this.description,
-  });
+  const _CelebrationModal({required this.title, required this.description});
 
   final AppMessage title;
   final AppMessage description;
@@ -230,6 +260,8 @@ class _CelebrationModal extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppLocalizations.of(context);
+    final locale = Localizations.localeOf(context);
+    final bodyName = ref.watch(bodyNameResolverProvider);
     return Container(
       color: AppTheme.space950.withValues(alpha: .85),
       child: Center(
@@ -251,7 +283,7 @@ class _CelebrationModal extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                title.resolve(t, Localizations.localeOf(context)),
+                title.resolve(t, locale, bodyName: bodyName),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 23,
@@ -261,7 +293,7 @@ class _CelebrationModal extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                description.resolve(t, Localizations.localeOf(context)),
+                description.resolve(t, locale, bodyName: bodyName),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 12,
@@ -271,9 +303,8 @@ class _CelebrationModal extends ConsumerWidget {
               ),
               const SizedBox(height: 22),
               GestureDetector(
-                onTap: () => ref
-                    .read(explorerControllerProvider.notifier)
-                    .closeCelebration(),
+                onTap: () =>
+                    ref.read(appShellProvider.notifier).closeCelebration(),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 26,

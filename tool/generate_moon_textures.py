@@ -26,7 +26,9 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "assets/textures/moons"
+# The runnable app is the only package that bundles assets.
+ASSETS = ROOT / "apps/kidz_planets/assets"
+OUTPUT = ASSETS / "textures/moons"
 W, H = 1024, 512
 
 # id -> (base color, crater base color for shading, crater count, grain)

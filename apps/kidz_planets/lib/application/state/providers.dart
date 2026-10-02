@@ -1,48 +1,67 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/datasources/solar_system_local_datasource.dart';
-import '../../data/repositories/solar_system_repository_impl.dart';
-import '../../domain/entities/planet.dart';
-import '../../domain/repositories/solar_system_repository.dart';
-import '../../domain/usecases/get_missions_usecase.dart';
-import '../../domain/usecases/get_planets_usecase.dart';
-import '../controllers/explorer_controller.dart';
-import 'explorer_state.dart';
-import 'simulation_clock.dart';
+import 'package:core/l10n.dart';
+import 'package:mission/state.dart';
+import 'package:planets/audio.dart';
+import 'package:planets/data.dart';
+import 'package:planets/state.dart';
 
-// --- Data layer (DIP: UI depends on abstractions) ---
+import 'app_shell_controller.dart';
 
-final _dataSourceProvider = Provider<SolarSystemLocalDataSource>((ref) {
-  return SolarSystemLocalDataSource();
-});
+export 'app_shell_controller.dart';
 
-final solarSystemRepositoryProvider = Provider<SolarSystemRepository>((ref) {
-  return SolarSystemRepositoryImpl(ref.watch(_dataSourceProvider));
-});
-
-final planetsProvider = Provider<List<Planet>>((ref) {
-  return GetPlanetsUseCase(ref.watch(solarSystemRepositoryProvider)).call();
-});
-
-final planetByIdProvider = Provider.family<Planet, String>((ref, id) {
-  return ref.watch(planetsProvider).firstWhere((p) => p.id == id);
-});
-
-// --- Application layer ---
-
-final simulationClockProvider = Provider<SimulationClock>((ref) {
-  final clock = SimulationClock();
-  ref.onDispose(clock.dispose);
-  return clock;
-});
-
-final explorerControllerProvider =
-    StateNotifierProvider<ExplorerController, ExplorerState>((ref) {
-  final missions =
-      GetMissionsUseCase(ref.watch(solarSystemRepositoryProvider)).call();
-  final controller = ExplorerController(
-    clock: ref.watch(simulationClockProvider),
-    initialMissions: missions,
+/// App-level state: the current tab and the companion's mood.
+///
+/// This is where the two features meet. The explorer is used exactly as the
+/// planets package ships it; the shell watches it for a new selection and asks
+/// the mission feature whether that tap was the target. Nothing is overridden,
+/// so there is only ever one explorer and one mission progress in the container
+/// and either could be watched by a widget without knowing about this file.
+final appShellProvider = StateNotifierProvider<AppShellController, AppShellState>((
+  ref,
+) {
+  final shell = AppShellController(
+    missions: ref.watch(missionProgressProvider.notifier),
+    // Lazy lookups rather than values captured here, so the shell can be built
+    // without dragging the scene and the audio player into a cycle.
+    showToast: (message) =>
+        ref.read(explorerControllerProvider.notifier).showToast(message),
+    closeDetail: () =>
+        ref.read(explorerControllerProvider.notifier).closeDetail(),
+    // The feature's own provider, which `main` overrides with the app-wide
+    // singleton. Reading it here rather than building another player is what
+    // stops the celebration loop from running under the planet narration.
+    startSuccessCue: ref.read(planetSoundServiceProvider).startMissionSuccess,
+    stopSuccessCue: ref.read(planetSoundServiceProvider).stop,
   );
-  return controller;
+
+  // A tap that lands on the body already selected is not a new selection, so it
+  // is not graded again. Reading the explorer here is safe: the explorer does
+  // not read the shell, which is the only reason this direction can be a plain
+  // watch instead of a hand-built bridge.
+  ref.listen<ExplorerState>(explorerControllerProvider, (previous, next) {
+    final planetId = next.selectedPlanetId;
+    if (planetId == null || planetId == previous?.selectedPlanetId) return;
+    shell.handlePlanetSelected(planetId);
+  });
+
+  return shell;
+});
+
+/// Resolves a body id to its name, for core's message templates.
+///
+/// Core owns the template that names a discovered body but not the catalogue it
+/// names from, so the lookup is supplied here where both halves are visible.
+final bodyNameResolverProvider = Provider<BodyNameResolver>((ref) {
+  return localizedPlanetName;
+});
+
+/// The curriculum as the UI sees it.
+final missionsProvider = Provider<List<MissionState>>((ref) {
+  return ref.watch(missionProgressProvider.select((s) => s.missions));
+});
+
+/// The active mission, or null once every mission is complete.
+final activeMissionProvider = Provider<MissionState?>((ref) {
+  return ref.watch(missionProgressProvider.select((s) => s.activeMission));
 });

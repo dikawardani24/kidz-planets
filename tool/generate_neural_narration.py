@@ -34,9 +34,13 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CATALOG = ROOT / "lib/data/datasources/planet_catalog.dart"
-PLANET_OUTPUT = ROOT / "assets/audio/narration/planets"
-HOTSPOT_OUTPUT = ROOT / "assets/audio/narration/hotspots"
+# The runnable app is the only package that bundles assets; the catalogue
+# belongs to the planets package.
+ASSETS = ROOT / "apps/kidz_planets/assets"
+CATALOG_SRC = ROOT / "packages/planets/lib/src/data/planet_catalog.dart"
+CATALOG = CATALOG_SRC
+PLANET_OUTPUT = ASSETS / "audio/narration/planets"
+HOTSPOT_OUTPUT = ASSETS / "audio/narration/hotspots"
 
 STRING = r"'(?:\\.|[^'\\])*'"
 STRING_GROUP = rf"((?:{STRING}\s*)+)"

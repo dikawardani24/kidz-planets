@@ -2,11 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kidz_planets/application/state/avatar_state.dart';
-import 'package:kidz_planets/application/state/explorer_state.dart';
-import 'package:kidz_planets/infrastructure/services/avatar_expression_sound.dart';
-import 'package:kidz_planets/infrastructure/services/avatar_impact_sound.dart';
-import 'package:kidz_planets/infrastructure/services/planet_sound_service.dart';
+import 'package:avatar/state.dart';
+import 'package:avatar/audio.dart';
+import 'package:planets/audio.dart';
 
 /// Sample rates MPEG-2 defines, indexed by the header's 2-bit rate field.
 /// The cues are 24 kHz, so only that entry is expected to be referenced.
@@ -236,7 +234,8 @@ void main() {
     test('every expressive idle pose has a cue', () {
       for (final idle in AvatarIdleAction.values) {
         final cue = AvatarExpressionSoundCatalog.idleCueFor(idle);
-        final expressive = idle == AvatarIdleAction.thinking ||
+        final expressive =
+            idle == AvatarIdleAction.thinking ||
             idle == AvatarIdleAction.sendingHeart ||
             idle == AvatarIdleAction.dancing;
         expect(cue != null, expressive, reason: '$idle');
@@ -255,7 +254,8 @@ void main() {
         expect(
           file.existsSync(),
           isTrue,
-          reason: '$asset is missing; run tool/generate_avatar_expression_sfx.py',
+          reason:
+              '$asset is missing; run tool/generate_avatar_expression_sfx.py',
         );
         expect(file.lengthSync(), greaterThan(1024));
       }
@@ -274,8 +274,7 @@ void main() {
           data.offsetInBytes,
           data.lengthInBytes,
         );
-        final firstFrame =
-            _id3TagLength(bytes) == 0 ? 0 : _id3TagLength(bytes);
+        final firstFrame = _id3TagLength(bytes) == 0 ? 0 : _id3TagLength(bytes);
         expect(bytes[firstFrame], 0xff, reason: 'no frame sync in $path');
         final stream = _readMp3(bytes);
         expect(stream.sampleRate, 24000, reason: path);

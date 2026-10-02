@@ -7,24 +7,18 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../application/controllers/avatar_controller.dart';
-import '../../../application/state/avatar_physics.dart';
-import '../../../application/state/avatar_physics_config.dart';
-import '../../../application/state/avatar_reaction_policy.dart';
-import '../../../application/state/avatar_state.dart';
-import '../../../application/state/explorer_state.dart';
-import '../../../application/state/providers.dart';
-import '../../../infrastructure/scene/avatar_scene_controller.dart';
-import '../../../infrastructure/services/avatar_expression_sound.dart';
-import '../../../infrastructure/services/avatar_impact_sound_provider.dart';
-import '../../../l10n/generated/app_localizations.dart';
-import '../../../l10n/localized_planet.dart';
-import 'avatar_face.dart';
-import 'companion_safe_area.dart';
+import 'package:avatar/audio.dart';
+import 'package:avatar/controllers.dart';
+import 'package:avatar/scene.dart';
+import 'package:avatar/state.dart';
+import 'package:avatar/widgets.dart';
+import 'package:core/l10n.dart';
+import 'package:kidz_planets/application/state/providers.dart';
+import 'package:planets/data.dart';
+import 'package:planets/state.dart';
 
-export 'companion_safe_area.dart'
+export 'package:avatar/widgets.dart'
     show kCompanionBoxWidth, kCompanionBoxHeight, kCompanionEdge;
-import 'avatar_speech.dart';
 
 /// How much a two-finger twist turns the toy, per radian of twist.
 const double kCompanionTwistYaw = 18;
@@ -270,7 +264,9 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
     // dizzy instead of only deforming physically. Keep gentle bounces purely
     // physical so normal play does not become noisy or over-animated.
     if (!_reducedMotion && hardest >= 700.0) {
-      ref.read(avatarControllerProvider.notifier).react(
+      ref
+          .read(avatarControllerProvider.notifier)
+          .react(
             AvatarReaction.dizzy,
             duration: const Duration(milliseconds: 700),
           );
@@ -455,7 +451,9 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
             // A fast launch makes the companion feel excited about being
             // thrown, while the scene builder simultaneously increases the
             // engine plume from the actual flight speed.
-            ref.read(avatarControllerProvider.notifier).react(
+            ref
+                .read(avatarControllerProvider.notifier)
+                .react(
                   AvatarReaction.excited,
                   duration: const Duration(milliseconds: 650),
                 );
@@ -476,9 +474,8 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
           _singleTapTimer?.cancel();
           _singleTapTimer = Timer(const Duration(milliseconds: 250), () {
             if (_tapCount == 1 && mounted) {
-              final ui = ref.read(explorerControllerProvider);
-              if (ui.avatarMood == AvatarMood.wrong) {
-                ref.read(explorerControllerProvider.notifier).retryMission();
+              if (ref.read(appShellProvider).avatarMood == AvatarMood.wrong) {
+                ref.read(appShellProvider.notifier).retryMission();
               } else {
                 ref
                     .read(avatarControllerProvider.notifier)
@@ -540,6 +537,8 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
   Widget build(BuildContext context) {
     final pose = ref.watch(avatarControllerProvider);
     final ui = ref.watch(explorerControllerProvider);
+    final mission = ref.watch(activeMissionProvider);
+    final mood = ref.watch(appShellProvider.select((s) => s.avatarMood));
 
     // One centralized SFX trigger for the whole expressive state. Both
     // listeners resolve through the same `avatarCueFor`, which picks exactly
@@ -554,9 +553,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
     // fires second for a single beat re-resolves the same cue and is dropped
     // by the dedupe key — that is the guard doing its job, not a bug.
     void playResolvedCue() {
-      final mood = ref.read(
-        explorerControllerProvider.select((s) => s.avatarMood),
-      );
+      final mood = ref.read(appShellProvider).avatarMood;
       final pose = ref.read(avatarControllerProvider);
       final cue = avatarCueFor(
         mood: mood,
@@ -569,28 +566,25 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
       unawaited(sound.playCue(cue, volume: _volumeForCue(cue)));
     }
 
-    ref.listen<AvatarMood>(
-      explorerControllerProvider.select((s) => s.avatarMood),
-      (previous, next) {
-        if (previous == next) return;
-        final beat = companionBeatFor(next);
-        final avatar = ref.read(avatarControllerProvider.notifier);
-        if (beat.reaction == AvatarReaction.none) {
-          avatar.clearReaction();
-        } else {
-          avatar.react(beat.reaction, duration: beat.duration);
-        }
-        playResolvedCue();
-      },
-    );
+    ref.listen<AvatarMood>(appShellProvider.select((s) => s.avatarMood), (
+      previous,
+      next,
+    ) {
+      if (previous == next) return;
+      final beat = companionBeatFor(next);
+      final avatar = ref.read(avatarControllerProvider.notifier);
+      if (beat.reaction == AvatarReaction.none) {
+        avatar.clearReaction();
+      } else {
+        avatar.react(beat.reaction, duration: beat.duration);
+      }
+      playResolvedCue();
+    });
 
-    ref.listen<AvatarState>(
-      avatarControllerProvider,
-      (previous, next) {
-        if (previous == next) return;
-        playResolvedCue();
-      },
-    );
+    ref.listen<AvatarState>(avatarControllerProvider, (previous, next) {
+      if (previous == next) return;
+      playResolvedCue();
+    });
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -659,7 +653,6 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
         _controller.applyPose(pose);
         _controller.applyReaction(pose.reaction);
 
-        final mission = ui.activeMission;
         final targetColor = mission == null
             ? Theme.of(context).colorScheme.primary
             : Color(
@@ -706,9 +699,9 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
         // companion is what tells the child what to look for, that a pick was
         // wrong, and that it was found - and it says it by the planet's own
         // name, in the language the rest of the screen is in.
-        if (mission != null && ui.avatarMood != AvatarMood.searching) {
+        if (mission != null && mood != AvatarMood.searching) {
           companionText = avatarLine(
-            ui.avatarMood,
+            mood,
             localizedPlanetName(
               mission.targetPlanetId,
               Localizations.localeOf(context),
@@ -737,7 +730,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
                     ? const Color(0xFFFBBF24)
                     : pose.isHeartVisible
                     ? const Color(0xFFEC4899)
-                    : avatarAccent(ui.avatarMood),
+                    : avatarAccent(mood),
               ),
             ),
             Positioned(
@@ -782,7 +775,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
                           _CompanionScene(
                             ready: _ready,
                             controller: _controller,
-                            mood: ui.avatarMood,
+                            mood: mood,
                             idleAction: hasFocus
                                 ? AvatarIdleAction.sitting
                                 : pose.idleAction,

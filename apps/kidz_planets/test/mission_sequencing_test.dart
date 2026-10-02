@@ -1,15 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kidz_planets/application/state/explorer_state.dart';
+
 import 'package:kidz_planets/presentation/screens/explorer_screen.dart';
+import 'package:mission/state.dart';
 
 import 'helpers/app_messages.dart';
 
-ExplorerState _state({
-  String? selectedPlanetId = 'earth',
-  bool celebrating = false,
-}) {
-  return ExplorerState(
-    selectedPlanetId: selectedPlanetId,
+MissionProgressState _state({bool celebrating = false}) {
+  return MissionProgressState(
     celebrationTitle: celebrating ? TestMessages.title : null,
     celebrationDescription: celebrating ? TestMessages.description : null,
   );
@@ -23,7 +20,9 @@ void main() {
 
   test('planet audio is held while the celebration is showing', () {
     expect(
-      canStartPlanetAudio(current: _state(celebrating: true)),
+      canStartPlanetAudio(
+        celebrationVisible: _state(celebrating: true).celebrationVisible,
+      ),
       isFalse,
       reason: 'the success cue must be audible on its own',
     );
@@ -31,7 +30,9 @@ void main() {
 
   test('planet audio starts once the celebration is dismissed', () {
     expect(
-      canStartPlanetAudio(current: _state(celebrating: false)),
+      canStartPlanetAudio(
+        celebrationVisible: _state(celebrating: false).celebrationVisible,
+      ),
       isTrue,
     );
   });
@@ -40,21 +41,20 @@ void main() {
     // Tapping a planet is how the child explores, so the body that was tapped
     // is described and plays its own ambience regardless of whether it was the
     // mission target. Only the *mission* feedback is the companion's job.
-    expect(canStartPlanetAudio(current: _state()), isTrue);
+    expect(canStartPlanetAudio(celebrationVisible: false), isTrue);
   });
 
   test('an ordinary selection speaks immediately', () {
-    expect(
-      canStartPlanetAudio(current: _state()),
-      isTrue,
-    );
+    expect(canStartPlanetAudio(celebrationVisible: false), isTrue);
   });
 
   test('celebrationVisible needs both title and description', () {
-    final partial = const ExplorerState(celebrationTitle: TestMessages.title);
+    final partial = const MissionProgressState(
+      celebrationTitle: TestMessages.title,
+    );
     expect(partial.celebrationVisible, isFalse);
     expect(
-      canStartPlanetAudio(current: partial),
+      canStartPlanetAudio(celebrationVisible: partial.celebrationVisible),
       isTrue,
       reason: 'a half-raised celebration must not stall the voice forever',
     );
@@ -67,7 +67,7 @@ void main() {
     for (final celebrating in [true, false]) {
       final state = _state(celebrating: celebrating);
       expect(
-        canStartPlanetAudio(current: state),
+        canStartPlanetAudio(celebrationVisible: state.celebrationVisible),
         isNot(state.celebrationVisible),
         reason: 'celebrating=$celebrating',
       );

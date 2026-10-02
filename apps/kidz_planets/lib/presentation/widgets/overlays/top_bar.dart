@@ -1,59 +1,124 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../application/state/explorer_state.dart';
-import '../../../application/state/locale_controller.dart';
-import '../../../application/state/providers.dart';
-import '../../../l10n/generated/app_localizations.dart';
-import '../../theme/app_theme.dart';
-import '../panels/mission_guide.dart';
 
+import 'package:core/l10n.dart';
+import 'package:core/layout.dart';
+import 'package:core/theme.dart';
+import 'package:kidz_planets/application/state/providers.dart';
+import 'package:kidz_planets/presentation/widgets/panels/mission_guide.dart';
+import 'package:planets/state.dart';
+
+/// The app's title strip and the transient banner above it.
+///
+/// Lives in the application package because the banner it shows is a mission's
+/// and opens the mission dialog: it reads the planets state and the mission
+/// state, and neither feature can read the other.
 class ExplorerTopBar extends ConsumerWidget {
-  const ExplorerTopBar({super.key});
+  const ExplorerTopBar({super.key, this.isExploreTab = true});
+
+  /// Whether the explore space is the one on screen.
+  ///
+  /// Passed in rather than read from a provider, because the tab belongs to the
+  /// shell and this widget belongs to neither feature.
+  final bool isExploreTab;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ui = ref.watch(explorerControllerProvider);
     final notifier = ref.read(explorerControllerProvider.notifier);
     final t = AppLocalizations.of(context);
-    return SafeArea(bottom: false, child: Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
-      child: Row(children: [
-        Flexible(
-          child: AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Container(width: 28, height: 28, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFFF97316), Color(0xFF4F46E5)])),
-                alignment: Alignment.center, child: const Icon(Icons.wb_sunny, size: 14, color: Colors.white)),
-              const SizedBox(width: 8),
-              Flexible(child: Text(t.topBarTitle, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: .2, color: Colors.white))),
-            ])),
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+        child: Row(
+          children: [
+            Flexible(
+              child: AppTheme.glass(
+                pill: true,
+                radius: BorderRadius.circular(999),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [
+                            Color(0xFFF59E0B),
+                            Color(0xFFF97316),
+                            Color(0xFF4F46E5),
+                          ],
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.wb_sunny,
+                        size: 14,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        t.topBarTitle,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: .2,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            LanguageButton(),
+            const SizedBox(width: 6),
+            Tooltip(
+              message: ui.showLabels
+                  ? t.tooltipHideLabels
+                  : t.tooltipShowLabels,
+              child: _CircleButton(
+                icon: ui.showLabels
+                    ? Icons.label_outline
+                    : Icons.label_off_outlined,
+                color: ui.showLabels ? AppTheme.accentAmber : Colors.white54,
+                onTap: notifier.toggleLabels,
+              ),
+            ),
+            const SizedBox(width: 6),
+            _CircleButton(
+              icon: ui.running ? Icons.pause : Icons.play_arrow,
+              color: AppTheme.accentSky,
+              onTap: notifier.toggleRunning,
+            ),
+            const SizedBox(width: 6),
+            Tooltip(
+              message: ui.showOrbits
+                  ? t.tooltipHideOrbits
+                  : t.tooltipShowOrbits,
+              child: _CircleButton(
+                icon: ui.showOrbits
+                    ? Icons.track_changes
+                    : Icons.track_changes_outlined,
+                color: ui.showOrbits ? AppTheme.accentViolet : Colors.white54,
+                onTap: notifier.toggleOrbits,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 8),
-        LanguageButton(),
-        const SizedBox(width: 6),
-        Tooltip(
-          message: ui.showLabels ? t.tooltipHideLabels : t.tooltipShowLabels,
-          child: _CircleButton(
-            icon: ui.showLabels ? Icons.label_outline : Icons.label_off_outlined,
-            color: ui.showLabels ? AppTheme.accentAmber : Colors.white54,
-            onTap: notifier.toggleLabels,
-          ),
-        ),
-        const SizedBox(width: 6),
-        _CircleButton(
-          icon: ui.running ? Icons.pause : Icons.play_arrow,
-          color: AppTheme.accentSky,
-          onTap: notifier.toggleRunning,
-        ),
-        const SizedBox(width: 6),
-        Tooltip(
-          message: ui.showOrbits ? t.tooltipHideOrbits : t.tooltipShowOrbits,
-          child: _CircleButton(
-            icon: ui.showOrbits ? Icons.track_changes : Icons.track_changes_outlined,
-            color: ui.showOrbits ? AppTheme.accentViolet : Colors.white54,
-            onTap: notifier.toggleOrbits,
-          ),
-        ),
-      ]),
-    ));
+      ),
+    );
   }
 }
 
@@ -67,21 +132,40 @@ class LanguageButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppLocalizations.of(context);
     final chosen = ref.watch(localeControllerProvider);
-    final current = ref.watch(localeControllerProvider.notifier).resolve(Localizations.localeOf(context));
+    final current = ref
+        .watch(localeControllerProvider.notifier)
+        .resolve(Localizations.localeOf(context));
     return Tooltip(
       message: t.tooltipLanguage,
       child: PopupMenuButton<String>(
         tooltip: '',
-        onSelected: (code) => ref.read(localeControllerProvider.notifier).select(Locale(code)),
+        onSelected: (code) =>
+            ref.read(localeControllerProvider.notifier).select(Locale(code)),
         color: AppTheme.space800,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         itemBuilder: (context) => [
-          for (final (code, label) in [('en', t.languageEnglish), ('id', t.languageIndonesian)])
-            PopupMenuItem(value: code, child: Text(label, style: TextStyle(color: Colors.white, fontWeight: chosen?.languageCode == code ? FontWeight.w900 : FontWeight.w500))),
+          for (final (code, label) in [
+            ('en', t.languageEnglish),
+            ('id', t.languageIndonesian),
+          ])
+            PopupMenuItem(
+              value: code,
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: chosen?.languageCode == code
+                      ? FontWeight.w900
+                      : FontWeight.w500,
+                ),
+              ),
+            ),
         ],
         child: _CircleButton(
           icon: Icons.translate_rounded,
-          color: current.languageCode == 'id' ? AppTheme.accentAmber : Colors.white70,
+          color: current.languageCode == 'id'
+              ? AppTheme.accentAmber
+              : Colors.white70,
           // A dot on the button is the only signal a pre-literate child gets
           // that the app is not speaking their language.
           badge: current.languageCode == 'id',
@@ -92,7 +176,12 @@ class LanguageButton extends ConsumerWidget {
 }
 
 class _CircleButton extends StatelessWidget {
-  const _CircleButton({required this.icon, required this.color, this.onTap, this.badge = false});
+  const _CircleButton({
+    required this.icon,
+    required this.color,
+    this.onTap,
+    this.badge = false,
+  });
 
   final IconData icon;
   final Color color;
@@ -115,48 +204,89 @@ class _CircleButton extends StatelessWidget {
           boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 12)],
         ),
         alignment: Alignment.center,
-        child: Stack(clipBehavior: Clip.none, children: [
-          Icon(icon, size: 18, color: color),
-          if (badge)
-            Positioned(right: -4, top: -4, child: Container(
-              width: 9, height: 9,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: AppTheme.accentAmber, border: Border.all(color: Colors.black.withValues(alpha: .5), width: 1)),
-            )),
-        ]),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Icon(icon, size: 18, color: color),
+            if (badge)
+              Positioned(
+                right: -4,
+                top: -4,
+                child: Container(
+                  width: 9,
+                  height: 9,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppTheme.accentAmber,
+                    border: Border.all(
+                      color: Colors.black.withValues(alpha: .5),
+                      width: 1,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Vertical space the top bar occupies below the safe-area inset:
-/// 10px top padding + 38px controls + 2px bottom padding.
-const double topBarExtent = 50;
-
-/// Y offset for banners that must sit below the top bar, so they stay clear
-/// of it on devices with a status bar or notch.
-double bannerTop(BuildContext context) =>
-    MediaQuery.paddingOf(context).top + topBarExtent;
-
+/// The transient banners that sit under the top bar: the spin hint, the play
+/// mode notice and the active mission's cue.
 class ExplorerInteractionOverlays extends ConsumerWidget {
-  const ExplorerInteractionOverlays({super.key});
+  const ExplorerInteractionOverlays({super.key, required this.isExploreTab});
+
+  /// Whether the explore space is the one on screen.
+  ///
+  /// Passed in because the tab belongs to the shell: the mission cue only makes
+  /// sense while the solar system is behind it.
+  final bool isExploreTab;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ui = ref.watch(explorerControllerProvider);
     final t = AppLocalizations.of(context);
-    final top = bannerTop(context);
+    final top = bannerTopFor(MediaQuery.paddingOf(context));
     if (ui.hasSelection && ui.spinHintVisible) {
-      return _Banner(top: top + 14, borderColor: const Color(0x66F59E0B), background: const Color(0xD9040712), textColor: const Color(0xFFFFE7A3),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [Text(t.bannerSwipeToSpin), const SizedBox(width: 8), const Text('•', style: TextStyle(color: AppTheme.accentViolet)), const SizedBox(width: 8), Text(t.bannerZoom)]));
+      return _Banner(
+        top: top + 14,
+        borderColor: const Color(0x66F59E0B),
+        background: const Color(0xD9040712),
+        textColor: const Color(0xFFFFE7A3),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(t.bannerSwipeToSpin),
+            const SizedBox(width: 8),
+            const Text('•', style: TextStyle(color: AppTheme.accentViolet)),
+            const SizedBox(width: 8),
+            Text(t.bannerZoom),
+          ],
+        ),
+      );
     }
     if (ui.playModeBannerVisible) {
-      return _Banner(top: top + 14, borderColor: const Color(0x80F59E0B), background: const Color(0xE6040712), textColor: const Color(0xFFFFE7A3),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.gamepad, size: 13, color: AppTheme.accentAmber), const SizedBox(width: 6), Text(t.bannerPlayMode)]));
+      return _Banner(
+        top: top + 14,
+        borderColor: const Color(0x80F59E0B),
+        background: const Color(0xE6040712),
+        textColor: const Color(0xFFFFE7A3),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.gamepad, size: 13, color: AppTheme.accentAmber),
+            const SizedBox(width: 6),
+            Text(t.bannerPlayMode),
+          ],
+        ),
+      );
     }
-    if (!ui.hasSelection && ui.tab == ExplorerTab.explore) {
+    if (!ui.hasSelection && isExploreTab) {
       // The same getter the companion uses, so the banner and the target ring
       // can never disagree. Recomputing it here by id alone would keep naming a
       // mission the child has already finished.
-      final activeMission = ui.activeMission;
+      final activeMission = ref.watch(activeMissionProvider);
       if (activeMission != null) {
         return _Banner(
           top: top + 8,
@@ -223,7 +353,11 @@ class _Banner extends StatelessWidget {
             boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 14)],
           ),
           child: DefaultTextStyle.merge(
-            style: TextStyle(color: textColor, fontSize: 10, fontWeight: FontWeight.w700),
+            style: TextStyle(
+              color: textColor,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
             child: child,
           ),
         ),
@@ -239,12 +373,37 @@ class ExplorerControlPills extends ConsumerWidget {
     final ui = ref.watch(explorerControllerProvider);
     final notifier = ref.read(explorerControllerProvider.notifier);
     final t = AppLocalizations.of(context);
-    return AppTheme.glass(pill: true, radius: BorderRadius.circular(999), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.speed, size: 14, color: AppTheme.accentSky),
-        SizedBox(width: 105, child: Slider(value: ui.speed.clamp(0, 4), min: 0, max: 4, divisions: 8, activeColor: AppTheme.accentAmber, inactiveColor: Colors.white24, onChanged: notifier.setSpeed)),
-        Text(t.speedLabel(ui.speed.toStringAsFixed(1)), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppTheme.accentAmber)),
-        const SizedBox(width: 6),
-      ]));
+    return AppTheme.glass(
+      pill: true,
+      radius: BorderRadius.circular(999),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.speed, size: 14, color: AppTheme.accentSky),
+          SizedBox(
+            width: 105,
+            child: Slider(
+              value: ui.speed.clamp(0, 4),
+              min: 0,
+              max: 4,
+              divisions: 8,
+              activeColor: AppTheme.accentAmber,
+              inactiveColor: Colors.white24,
+              onChanged: notifier.setSpeed,
+            ),
+          ),
+          Text(
+            t.speedLabel(ui.speed.toStringAsFixed(1)),
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.accentAmber,
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
+      ),
+    );
   }
 }

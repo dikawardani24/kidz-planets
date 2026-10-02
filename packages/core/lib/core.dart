@@ -1,7 +1,19 @@
 /// Shared infrastructure for the Kidz Planets workspace.
 ///
-/// Core owns localization, theme, audio and utility abstractions that more than
-/// one feature needs. It must never depend on a feature package, and it must
-/// never hold feature business logic: if something here would only ever be
-/// used by the avatar, it belongs in the avatar package.
+/// Core owns localization, theme, audio abstractions and the simulation clock:
+/// the things more than one feature package genuinely needs. It must never
+/// depend on a feature package (`planets`, `moon`, `avatar`, `mission`) and it
+/// must never hold feature business logic. If something here would only ever be
+/// used by one feature, it belongs in that feature package.
+///
+/// The dependency direction is:
+///
+///   features -> core
+///   app -> features, core
 library;
+
+export 'audio.dart';
+export 'layout.dart';
+export 'l10n.dart';
+export 'theme.dart';
+export 'time.dart';

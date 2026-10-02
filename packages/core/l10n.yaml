@@ -1,0 +1,10 @@
+# Localizations live in `core` because every feature package needs to resolve
+# copy, and generated localization classes cannot be imported across packages
+# from the app without making `core` depend on the app. Generating them into
+# `core` keeps the dependency pointing the right way: features -> core.
+arb-dir: lib/src/l10n/arb
+template-arb-file: app_en.arb
+output-localization-file: app_localizations.dart
+output-class: AppLocalizations
+output-dir: lib/src/l10n/generated
+nullable-getter: false

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:avatar/widgets.dart';
+import 'package:core/layout.dart';
+
 import 'package:kidz_planets/presentation/widgets/overlays/bottom_nav.dart';
-import 'package:kidz_planets/presentation/widgets/panels/companion_safe_area.dart';
 
 import 'helpers/localized_app.dart';
 
@@ -116,9 +118,9 @@ void main() {
       // the label's, and the glass border.
       expect(
         height,
-        closeTo(bottomNavExtent, 0.5),
+        closeTo(kBottomNavExtent, 0.5),
         reason:
-            'bottomNavExtent is $bottomNavExtent but the nav is '
+            'kBottomNavExtent is $kBottomNavExtent but the nav is '
             '${height.toStringAsFixed(1)} tall; update it or the companion '
             'will settle behind the nav',
       );

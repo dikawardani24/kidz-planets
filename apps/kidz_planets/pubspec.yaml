@@ -19,7 +19,6 @@ dependencies:
   # Feature packages. The app composes these and owns no feature logic.
   core:
   planets:
-  moon:
   avatar:
   mission:
 
@@ -27,6 +26,14 @@ dependencies:
   # state. The two are never used interchangeably.
   get_it: ^9.2.1
   flutter_riverpod: ^2.6.1
+
+  # Value equality for the shell's state objects, so a rebuild only happens
+  # when a field actually changed.
+  equatable: ^2.0.7
+
+  # The audio session the app configures at startup, so the child's own audio
+  # keeps playing alongside the solar system.
+  audio_session: ^0.2.4
 
   # Direct use is confined to the composition root.
   flutter_scene: ^0.23.0
@@ -47,23 +54,27 @@ dev_dependencies:
   # Used directly by the controller tests to drive the toast, spin-hint and
   # flight-style timers without waiting in real time.
   fake_async: ^1.3.3
+  # The sound tests assert on the player type the feature packages build their
+  # catalogs from, so they name it directly.
+  just_audio: ^0.10.6
 
 flutter:
   uses-material-design: true
-  generate: true
-  # Assets live at the repository root so every package resolves them through
-  # one tree; the app is the only package that bundles them.
+  # The runnable app is the only package that bundles assets, so the tree lives
+  # here. Every entry is package-relative on purpose: a path written as
+  # `../../assets/...` keeps the `../../` in the bundle key, and nothing that
+  # asks for `assets/textures/earth.png` would find it.
   assets:
-    - ../../flutter_scene_generated/
-    - ../../assets/textures/
-    - ../../assets/textures/moons/
-    - ../../assets/audio/narration/planets/
-    - ../../assets/audio/narration/hotspots/
+    - flutter_scene_generated/
+    - assets/textures/
+    - assets/textures/moons/
+    - assets/audio/narration/planets/
+    - assets/audio/narration/hotspots/
     # Indonesian narration. The folders ship empty until the recordings land;
     # the catalog falls back to the English files above until then.
-    - ../../assets/audio/narration/id/planets/
-    - ../../assets/audio/narration/id/hotspots/
-    - ../../assets/audio/sfx/planets/
-    - ../../assets/audio/sfx/missions/
-    - ../../assets/audio/sfx/avatar/
-    - ../../assets/models/avatar/
+    - assets/audio/narration/id/planets/
+    - assets/audio/narration/id/hotspots/
+    - assets/audio/sfx/planets/
+    - assets/audio/sfx/missions/
+    - assets/audio/sfx/avatar/
+    - assets/models/avatar/

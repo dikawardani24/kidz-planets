@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'application/state/locale_controller.dart';
-import 'l10n/generated/app_localizations.dart';
+
+import 'package:core/l10n.dart';
+import 'package:core/theme.dart';
+import 'package:planets/audio.dart';
+
+import 'dependency_injection/injection.dart';
 import 'presentation/screens/explorer_screen.dart';
-import 'presentation/theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,7 +21,28 @@ Future<void> main() async {
     DeviceOrientation.landscapeRight,
   ]);
 
-  runApp(const ProviderScope(child: KidzPlanetsApp()));
+  // Before the first frame: the audio session has to be configured before
+  // anything can make a sound, and the players below are created once here
+  // rather than by whichever feature happens to reach them first.
+  await configureDependencies();
+
+  runApp(
+    ProviderScope(
+      // The features ship their own providers for these, which is right for a
+      // feature that is used on its own. Here they are overridden with the
+      // singletons GetIt owns, so narration and ambience stay one voice no
+      // matter how many packages ask for them.
+      overrides: [
+        planetSoundServiceProvider.overrideWith(
+          (ref) => locator<PlanetSoundService>(),
+        ),
+        planetNarrationServiceProvider.overrideWith(
+          (ref) => locator<PlanetNarrationService>(),
+        ),
+      ],
+      child: const KidzPlanetsApp(),
+    ),
+  );
 }
 
 class KidzPlanetsApp extends ConsumerWidget {
@@ -32,7 +56,9 @@ class KidzPlanetsApp extends ConsumerWidget {
       onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
-      locale: controller.resolve(chosen ?? WidgetsBinding.instance.platformDispatcher.locale),
+      locale: controller.resolve(
+        chosen ?? WidgetsBinding.instance.platformDispatcher.locale,
+      ),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: kSupportedLocales,
       home: const ExplorerScreen(),

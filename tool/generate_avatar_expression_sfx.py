@@ -38,7 +38,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT_DIR = ROOT / "assets/audio/sfx/avatar"
+# The runnable app is the only package that bundles assets.
+ASSETS = ROOT / "apps/kidz_planets/assets"
+OUTPUT_DIR = ASSETS / "audio/sfx/avatar"
 
 SAMPLE_RATE = 24_000
 BITRATE_KBPS = 96

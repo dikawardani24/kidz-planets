@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:kidz_planets/infrastructure/services/planet_narration_provider.dart';
-import 'package:kidz_planets/infrastructure/services/planet_narration_service.dart';
 import 'package:kidz_planets/presentation/widgets/panels/mission_guide.dart';
+import 'package:planets/audio.dart';
 
 import 'helpers/localized_app.dart';
 
@@ -17,8 +16,7 @@ class _SilentPlayer extends AudioPlayer {
     bool preload = true,
     Duration? initialPosition,
     dynamic tag,
-  }) async =>
-      const Duration(milliseconds: 10);
+  }) async => const Duration(milliseconds: 10);
 
   @override
   Future<void> play() async {}
@@ -32,26 +30,31 @@ class _Launcher extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => Scaffold(
-        body: Center(
-          child: ElevatedButton(
-            onPressed: () => showMissionDialog(context, ref),
-            child: const Text('open'),
-          ),
-        ),
-      );
+    body: Center(
+      child: ElevatedButton(
+        onPressed: () => showMissionDialog(context, ref),
+        child: const Text('open'),
+      ),
+    ),
+  );
 }
 
 void main() {
-  Future<void> openMissionDialog(WidgetTester tester, {Locale locale = const Locale('en')}) async {
-    await tester.pumpWidget(localizedApp(
-      const _Launcher(),
-      locale: locale,
-      overrides: [
-        planetNarrationServiceProvider.overrideWithValue(
-          PlanetNarrationService(playerFactory: _SilentPlayer.new),
-        ),
-      ],
-    ));
+  Future<void> openMissionDialog(
+    WidgetTester tester, {
+    Locale locale = const Locale('en'),
+  }) async {
+    await tester.pumpWidget(
+      localizedApp(
+        const _Launcher(),
+        locale: locale,
+        overrides: [
+          planetNarrationServiceProvider.overrideWithValue(
+            PlanetNarrationService(playerFactory: _SilentPlayer.new),
+          ),
+        ],
+      ),
+    );
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
@@ -90,11 +93,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Need a bigger clue?'), findsNothing);
-    expect(find.textContaining('the only world where we have people'),
-        findsOneWidget);
+    expect(
+      find.textContaining('the only world where we have people'),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('the dialog still fits after the button is added', (tester) async {
+  testWidgets('the dialog still fits after the button is added', (
+    tester,
+  ) async {
     // A short viewport is the case that used to clip the sheet.
     tester.view.physicalSize = const Size(320 * 3, 480 * 3);
     tester.view.devicePixelRatio = 3.0;

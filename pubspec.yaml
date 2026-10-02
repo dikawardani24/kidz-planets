@@ -36,11 +36,14 @@ melos:
   scripts:
     analyze:
       description: Analyze every package for errors and lints.
-      run: melos exec --fail-fast -- "flutter analyze"
+      run: melos exec --fail-fast --concurrency=1 -- "flutter analyze"
 
+    # Serial, because `flutter` takes a single startup lock per SDK and a
+    # parallel run fails five packages at once on "waiting for another flutter
+    # command to release the startup lock" rather than on anything in the code.
     test:
       description: Run the unit and widget tests of every package.
-      run: melos exec --fail-fast -- "flutter test"
+      run: melos exec --fail-fast --concurrency=1 -- "flutter test"
 
     format:
       description: Format every package.
@@ -50,11 +53,13 @@ melos:
       description: Fail if any package is not formatted.
       run: melos exec --fail-fast -- "dart format --output=none --set-exit-if-changed ."
 
-    # flutter_scene compiles GLB and scene assets through a build hook that
-    # writes into the app's generated asset tree, so it only runs for the app.
+    # The ARB sources and l10n.yaml live in core, because every feature package
+    # resolves copy and the generated delegate has to sit downstream of them all.
+    # flutter_scene compiles GLB and scene assets through a build hook that runs
+    # on the app, so there is nothing to invoke for assets.
     gen:
-      description: Run Flutter code generation (localizations, assets).
-      run: melos exec --scope=kidz_planets -- "flutter gen-l10n"
+      description: Run Flutter code generation (localizations).
+      run: melos exec --scope=core -- "flutter gen-l10n"
 
     # Guards the dependency direction the architecture depends on. A feature
     # package importing another feature package, or any package importing an
