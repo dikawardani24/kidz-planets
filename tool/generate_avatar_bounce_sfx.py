@@ -33,7 +33,9 @@ import wave
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "assets/audio/sfx/avatar/avatar_bounce.mp3"
+# The runnable app is the only package that bundles assets.
+ASSETS = ROOT / "apps/kidz_planets/assets"
+OUTPUT = ASSETS / "audio/sfx/avatar/avatar_bounce.mp3"
 
 # 24 kHz matches the narration and the planetary beds, and is one of the rates
 # MPEG-2 defines, so the file needs no resampling and the existing asset tests

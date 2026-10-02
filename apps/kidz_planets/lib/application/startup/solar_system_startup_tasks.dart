@@ -1,0 +1,205 @@
+import 'dart:async';
+
+import 'package:core/startup.dart';
+
+import 'intro_copy.dart' show SolarSystemStartupTaskId;
+
+/// A [StartupTask] over an inline function.
+///
+/// The app composes six of these rather than growing six classes: each task's
+/// real work is one call into a feature-owned API, so the class would carry
+/// nothing but the id, the weight and the copy. Retrying a function task
+/// re-invokes the function, which is what the coordinator's retry path needs;
+/// idempotency itself belongs to the callee (the scene controller memoizes,
+/// the players are lazy singletons, the catalogue read is pure).
+class FunctionStartupTask implements StartupTask {
+  const FunctionStartupTask({
+    required this.id,
+    required this.message,
+    required this.title,
+    required this.failureMessage,
+    required this.weight,
+    required this.criticality,
+    required Future<void> Function(StartupTaskContext context) execute,
+    this.dependsOn = const {},
+  }) : run = execute;
+
+  @override
+  final String id;
+
+  @override
+  final StartupMessage message;
+
+  @override
+  final String title;
+
+  @override
+  final String failureMessage;
+
+  @override
+  final double weight;
+
+  @override
+  final StartupCriticality criticality;
+
+  @override
+  final Set<String> dependsOn;
+
+  final Future<void> Function(StartupTaskContext context) run;
+
+  @override
+  Future<void> execute(StartupTaskContext context) => run(context);
+}
+
+/// Relative bar shares for the six startup tasks.
+///
+/// Estimates, not decoration: the solar system decodes the texture bulk, so it
+/// owns the bar's middle; the catalogue read is microseconds and owns almost
+/// nothing.
+abstract final class SolarSystemStartupWeights {
+  static const double core = 0.6;
+  static const double solarSystem = 3.4;
+  static const double missions = 0.2;
+  static const double companion = 0.8;
+  static const double sounds = 0.6;
+  static const double moons = 1.4;
+
+  /// The sum the coordinator normalizes against; asserted in tests so a weight
+  /// edit that silently rescales the whole bar fails loudly.
+  static const double total = 7.0;
+}
+
+/// The six tasks every cold start runs, in dependency order.
+///
+/// Only the moons task declares a dependency (on the scene it extends). The
+/// rest are independent by construction and the coordinator overlaps them:
+/// the catalogue decode runs while the GPU is busy, which is where the cold
+/// start's wall-clock savings come from.
+List<StartupTask> buildSolarSystemStartupTasks({
+  SolarSystemStartupHooks? hooks,
+}) {
+  final resolved = hooks ?? const SolarSystemStartupHooks();
+  return [
+    FunctionStartupTask(
+      id: SolarSystemStartupTaskId.core,
+      message: StartupMessage.preparing,
+      title: 'Preparing the launch pad',
+      failureMessage: 'We could not start your spaceship.',
+      weight: SolarSystemStartupWeights.core,
+      criticality: StartupCriticality.required,
+      execute: (context) => resolved.configureSession(context),
+    ),
+    FunctionStartupTask(
+      id: SolarSystemStartupTaskId.solarSystem,
+      message: StartupMessage.solarSystem,
+      title: 'Building the solar system',
+      failureMessage: 'We could not load the planets.',
+      weight: SolarSystemStartupWeights.solarSystem,
+      criticality: StartupCriticality.required,
+      execute: (context) => resolved.buildSolarSystem(context),
+    ),
+    FunctionStartupTask(
+      id: SolarSystemStartupTaskId.missions,
+      message: StartupMessage.missions,
+      title: 'Reading the missions',
+      failureMessage: 'We could not read your missions.',
+      weight: SolarSystemStartupWeights.missions,
+      criticality: StartupCriticality.required,
+      execute: (context) => resolved.loadMissions(context),
+    ),
+    FunctionStartupTask(
+      id: SolarSystemStartupTaskId.companion,
+      message: StartupMessage.companion,
+      title: 'Waking the rocket buddy',
+      failureMessage: 'We could not wake your rocket buddy.',
+      weight: SolarSystemStartupWeights.companion,
+      criticality: StartupCriticality.required,
+      execute: (context) => resolved.primeCompanion(context),
+    ),
+    FunctionStartupTask(
+      id: SolarSystemStartupTaskId.sounds,
+      message: StartupMessage.sounds,
+      title: 'Tuning the space sounds',
+      failureMessage: 'We could not tune the space sounds.',
+      weight: SolarSystemStartupWeights.sounds,
+      criticality: StartupCriticality.required,
+      // The players are created before the session is configured only if the
+      // two race, which would undo what `main` used to guarantee by awaiting
+      // the session first. One edge in `dependsOn` keeps that order written
+      // down instead of assumed.
+      dependsOn: const {SolarSystemStartupTaskId.core},
+      execute: (context) => resolved.prepareSounds(context),
+    ),
+    FunctionStartupTask(
+      id: SolarSystemStartupTaskId.moons,
+      message: StartupMessage.moons,
+      title: 'Painting the moons',
+      failureMessage: 'We could not paint the moons.',
+      weight: SolarSystemStartupWeights.moons,
+      criticality: StartupCriticality.required,
+      dependsOn: const {SolarSystemStartupTaskId.solarSystem},
+      execute: (context) => resolved.buildMoons(context),
+    ),
+  ];
+}
+
+/// The seam between the startup table and the real feature work.
+///
+/// Default hooks report completion and nothing else, so unit tests can run the
+/// whole table (ordering, weights, retry, copy) without a GPU, a
+/// platform-channel audio session, or the app's Riverpod container. The
+/// composition root passes the real hooks (see `startup_hooks.dart`), which
+/// call into the scene controller, the audio DI and the catalogue use case.
+class SolarSystemStartupHooks {
+  const SolarSystemStartupHooks();
+
+  Future<void> configureSession(StartupTaskContext context) async {
+    context.reportProgress(1.0, message: StartupMessage.preparing);
+  }
+
+  Future<void> buildSolarSystem(StartupTaskContext context) async {
+    context.reportProgress(1.0, message: StartupMessage.planets);
+  }
+
+  Future<void> loadMissions(StartupTaskContext context) async {
+    context.reportProgress(1.0, message: StartupMessage.missions);
+  }
+
+  Future<void> primeCompanion(StartupTaskContext context) async {
+    context.reportProgress(1.0, message: StartupMessage.companion);
+  }
+
+  Future<void> prepareSounds(StartupTaskContext context) async {
+    context.reportProgress(1.0, message: StartupMessage.sounds);
+  }
+
+  Future<void> buildMoons(StartupTaskContext context) async {
+    context.reportProgress(1.0, message: StartupMessage.moons);
+  }
+}
+
+/// Frame yields a long task inserts so the intro animation keeps its cadence.
+///
+/// Texture decodes and catalogue loops run on the UI isolate; without a yield
+/// the rocket's float timer cannot fire until the whole task returns, which is
+/// the freeze this screen exists to prevent.
+Future<void> yieldToIntro() async {
+  // Awaiting a zero timer posts to the event queue behind the vsync callback,
+  // which is what lets a frame land between two chunks of work.
+  await Future<void>.delayed(Duration.zero);
+}
+
+/// Reports one slice of a task's progress and yields to the intro.
+///
+/// Wraps the two lines every staged task repeats (`reportProgress` + yield)
+/// so a task reads as its stages rather than as its plumbing.
+void reportStage(
+  StartupTaskContext context,
+  double fraction, {
+  StartupMessage? message,
+}) {
+  context.reportProgress(fraction, message: message);
+  // `unawaited` on purpose: the stage is done, and the next stage must not
+  // wait for the frame it just made room for.
+  unawaited(yieldToIntro());
+}

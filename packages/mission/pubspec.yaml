@@ -1,0 +1,24 @@
+name: mission
+description: >-
+  Mission definitions, the mission engine, validation, hints, progress,
+  feedback and mission sound effects. Depends on core only; it reaches planets
+  and avatar through abstractions supplied by the app composition root.
+version: 1.0.0+1
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  core:
+  equatable: ^2.0.7
+  flutter_riverpod: ^2.6.1
+  flutter_scene: ^0.23.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

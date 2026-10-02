@@ -1,0 +1,244 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:core/l10n.dart';
+import 'package:core/theme.dart';
+import 'package:planets/data.dart';
+import 'package:planets/domain.dart';
+import 'package:planets/state.dart';
+
+class PlanetsGridPanel extends ConsumerWidget {
+  const PlanetsGridPanel({super.key, this.onDismiss});
+
+  /// Switches back to the explore tab.
+  ///
+  /// A callback rather than a provider read because the tab belongs to the
+  /// application shell, not to this feature. The shell passes the call in.
+  final VoidCallback? onDismiss;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final planets = ref.watch(planetsProvider);
+    final ui = ref.watch(explorerControllerProvider);
+    final others = planets.where((p) => !p.isSun && !p.isMoon).toList();
+    final moons = planets.where((p) => p.isMoon).toList();
+    final t = AppLocalizations.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.space900.withValues(alpha: 0.96),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border(
+          top: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 44,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      t.exploreWorlds,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => onDismiss?.call(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white10,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        t.close,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 10),
+                    child: Text(
+                      t.sectionPlanets,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white54,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 1.35,
+                        ),
+                    itemCount: others.length,
+                    itemBuilder: (context, i) => _PlanetCard(
+                      planet: others[i],
+                      selected: ui.selectedPlanetId == others[i].id,
+                      onDismiss: onDismiss,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 10),
+                    child: Text(
+                      t.sectionMoons,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white54,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 1.35,
+                        ),
+                    itemCount: moons.length,
+                    itemBuilder: (context, i) => _PlanetCard(
+                      planet: moons[i],
+                      selected: ui.selectedPlanetId == moons[i].id,
+                      onDismiss: onDismiss,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanetCard extends ConsumerWidget {
+  const _PlanetCard({
+    required this.planet,
+    required this.selected,
+    this.onDismiss,
+  });
+
+  final Planet planet;
+  final bool selected;
+  final VoidCallback? onDismiss;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final body = localizedPlanet(planet, Localizations.localeOf(context));
+    return GestureDetector(
+      onTap: () {
+        onDismiss?.call();
+        ref.read(explorerControllerProvider.notifier).selectPlanet(planet.id);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(planet.colorValue).withValues(alpha: 0.34),
+              AppTheme.space800,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected
+                ? AppTheme.accentAmber
+                : Colors.white.withValues(alpha: 0.14),
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [
+                        Color(planet.colorValue),
+                        Color(planet.colorValue).withValues(alpha: 0.55),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    body.name,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text(
+              body.tag,
+              style: const TextStyle(fontSize: 11, color: Colors.white70),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 3),
+            Text(
+              planet.diameter,
+              style: const TextStyle(fontSize: 10, color: Colors.white38),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

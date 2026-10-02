@@ -1,59 +1,77 @@
-name: kidz_planets
-description: An interactive 3D solar system for young explorers.
+name: kidz_planets_workspace
+description: >-
+  Melos workspace root for Kidz Planets, an interactive 3D solar system for
+  young explorers. The app composes feature packages; feature packages depend
+  on core only. This package holds no source: it exists so the workspace can be
+  bootstrapped, analyzed, formatted and tested as a single unit.
+
 publish_to: none
 version: 1.0.0+1
 
 environment:
   sdk: ^3.13.2
 
-dependencies:
-  flutter:
-    sdk: flutter
-  flutter_localizations:
-    sdk: flutter
-  cupertino_icons: ^1.0.8
-  flutter_riverpod: ^2.6.1
-  flutter_scene: ^0.23.0
-  vector_math: ^2.4.2
-  equatable: ^2.0.7
-  collection: ^1.19.1
-  just_audio: ^0.10.6
-  # Declared rather than relied on through just_audio: the companion's bounce is
-  # given its own Android audio attributes, so it mixes with the planetary bed
-  # and the narration instead of competing with them for the session.
-  audio_session: ^0.2.4
-  # Required by the generated AppLocalizations, and by the ARB date/number
-  # formatters the planet facts use for locale-correct digit grouping.
-  intl: ^0.20.2
-  # Imported directly by hook/build.dart. It arrives transitively through
-  # flutter_scene, but a direct import needs its own declaration. Declared as a
-  # regular dependency rather than a dev one because the analyzer does not
-  # accept a dev_dependency for an import outside test/, and the build hook runs
-  # during `flutter build`, which reads this section.
-  hooks: ^2.2.0
+# Pub workspace: one dependency resolution for the whole monorepo, so a version
+# is bumped once here rather than repeated across seven manifests. Every member
+# sets `resolution: workspace` and inherits this graph.
+workspace:
+  - apps/*
+  - packages/*
 
 dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^6.0.0
-  # Used directly by the controller tests to drive the toast, spin-hint and
-  # flight-style timers without waiting in real time.
-  fake_async: ^1.3.3
+  melos: ^8.9.0
 
-flutter:
-  uses-material-design: true
-  generate: true
-  assets:
-    - flutter_scene_generated/
-    - assets/textures/
-    - assets/textures/moons/
-    - assets/audio/narration/planets/
-    - assets/audio/narration/hotspots/
-    # Indonesian narration. The folders ship empty until the recordings land;
-    # the catalog falls back to the English files above until then.
-    - assets/audio/narration/id/planets/
-    - assets/audio/narration/id/hotspots/
-    - assets/audio/sfx/planets/
-    - assets/audio/sfx/missions/
-    - assets/audio/sfx/avatar/
-    - assets/models/avatar/
+melos:
+  # Only the members below are part of the workspace. The generated
+  # flutter_scene_generated/ tree is build output and must never be a package.
+  packages:
+    - apps/*
+    - packages/*
+
+  ide:
+    intellij:
+      enabled: true
+      moduleNamePrefix: kidz_
+
+  scripts:
+    analyze:
+      description: Analyze every package for errors and lints.
+      run: melos exec --fail-fast --concurrency=1 -- "flutter analyze"
+
+    # Serial, because `flutter` takes a single startup lock per SDK and a
+    # parallel run fails five packages at once on "waiting for another flutter
+    # command to release the startup lock" rather than on anything in the code.
+    test:
+      description: Run the unit and widget tests of every package.
+      run: melos exec --fail-fast --concurrency=1 -- "flutter test"
+
+    format:
+      description: Format every package.
+      run: melos exec -- "dart format ."
+
+    format:check:
+      description: Fail if any package is not formatted.
+      run: melos exec --fail-fast -- "dart format --output=none --set-exit-if-changed ."
+
+    # The ARB sources and l10n.yaml live in core, because every feature package
+    # resolves copy and the generated delegate has to sit downstream of them all.
+    # flutter_scene compiles GLB and scene assets through a build hook that runs
+    # on the app, so there is nothing to invoke for assets.
+    gen:
+      description: Run Flutter code generation (localizations).
+      run: melos exec --scope=core -- "flutter gen-l10n"
+
+    # Guards the dependency direction the architecture depends on. A feature
+    # package importing another feature package, or any package importing an
+    # app package, is an architecture violation and fails this check.
+    check:deps:
+      description: Verify no feature package imports another feature package.
+      run: dart run tool/check_package_deps.dart
+
+    check:
+      description: Dependency rules, format check, analyze and test.
+      run: melos run check:deps && melos run format:check && melos run analyze && melos run test
+
+    upgrade:
+      description: Upgrade every dependency in every package.
+      run: melos exec -- "flutter pub upgrade"
