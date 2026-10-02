@@ -289,6 +289,31 @@ void main() {
 
       expect(task.runs, 2);
     });
+
+    test('retry runs the levels a failure prevented from starting', () async {
+      // With dependencies the pipeline has levels, and a failure in the first
+      // one means the second never ran. A retry that only re-attempted what
+      // failed would skip it and still emit ready — a bar at 100% for work
+      // that never happened.
+      final early = _FakeTask('early', failureMessage: 'nope')
+        ..shouldFail = true;
+      final late = _FakeTask('late', dependsOn: {'early'});
+      final coordinator = StartupCoordinatorImpl(tasks: [early, late]);
+      addTearDown(coordinator.dispose);
+
+      await coordinator.start();
+
+      expect(late.runs, 0, reason: 'the dependency gate held');
+
+      early.shouldFail = false;
+      await coordinator.retry();
+
+      expect(early.runs, 2);
+      expect(late.runs, 1, reason: 'never-reached work must still run');
+      expect(coordinator.progress.status, StartupStatus.ready);
+      expect(coordinator.progress.progress, 1.0);
+      expect(coordinator.progress.errorMessage, isNull);
+    });
   });
 
   group('StartupCoordinatorImpl lazy tasks', () {
@@ -308,28 +333,27 @@ void main() {
       expect(coordinator.progress.progress, 1.0);
     });
 
-    test('warmLater runs a lazy task once and reports nothing to the child',
-        () async {
-      final moons = _FakeTask(
-        'moons',
-        criticality: StartupCriticality.lazy,
-      );
-      final log = <String>[];
-      final coordinator = StartupCoordinatorImpl(
-        tasks: [moons],
-        onDiagnostic: log.add,
-      );
-      addTearDown(coordinator.dispose);
+    test(
+      'warmLater runs a lazy task once and reports nothing to the child',
+      () async {
+        final moons = _FakeTask('moons', criticality: StartupCriticality.lazy);
+        final log = <String>[];
+        final coordinator = StartupCoordinatorImpl(
+          tasks: [moons],
+          onDiagnostic: log.add,
+        );
+        addTearDown(coordinator.dispose);
 
-      await coordinator.start();
-      coordinator.warmLater('moons');
-      coordinator.warmLater('moons');
-      await Future<void>.delayed(Duration.zero);
+        await coordinator.start();
+        coordinator.warmLater('moons');
+        coordinator.warmLater('moons');
+        await Future<void>.delayed(Duration.zero);
 
-      expect(moons.runs, 1);
-      expect(coordinator.progress.status, StartupStatus.ready);
-      expect(log.join('\n'), contains('moons'));
-    });
+        expect(moons.runs, 1);
+        expect(coordinator.progress.status, StartupStatus.ready);
+        expect(log.join('\n'), contains('moons'));
+      },
+    );
 
     test('a lazy failure is logged and never blocks', () async {
       final log = <String>[];

@@ -82,9 +82,6 @@ class StartupCoordinatorImpl implements StartupCoordinator {
   /// Required tasks already finished, kept across retries.
   final Set<String> _succeeded = {};
 
-  /// Tasks that failed and are worth another attempt.
-  final Set<String> _retryable = {};
-
   final Map<String, double> _reported = {};
 
   /// Tasks currently running, so a duplicate request joins instead of racing.
@@ -104,13 +101,20 @@ class StartupCoordinatorImpl implements StartupCoordinator {
       developer.log(message, name: 'startup');
 
   @override
-  Future<void> start() => _run(retryOnly: false);
+  Future<void> start() => _run();
 
   @override
-  Future<void> retry() => _run(retryOnly: true);
+  Future<void> retry() => _run();
 
   /// Runs the pipeline, collapsing concurrent callers onto one run.
-  Future<void> _run({required bool retryOnly}) {
+  ///
+  /// `start` and `retry` are the same operation on purpose: "run everything
+  /// that has not succeeded". Tasks that finished are excluded by the level
+  /// filter below, tasks that failed are re-attempted, and tasks a failure in
+  /// an earlier level prevented from ever starting are run for the first
+  /// time — skipping those would let the final emit claim 100% for work that
+  /// never happened, which is the one thing this pipeline must never do.
+  Future<void> _run() {
     if (_disposed) return Future<void>.value();
     final inFlight = _running;
     if (inFlight != null) return inFlight;
@@ -126,21 +130,17 @@ class StartupCoordinatorImpl implements StartupCoordinator {
       ),
     );
 
-    final run = _execute(retryOnly: retryOnly);
+    final run = _execute();
     _running = run;
     return run.whenComplete(() => _running = null);
   }
 
-  Future<void> _execute({required bool retryOnly}) async {
+  Future<void> _execute() async {
     for (final level in _levels) {
       final pending = level
           .where((task) => !_succeeded.contains(task.id))
           .toList(growable: false);
       if (pending.isEmpty) continue;
-
-      // Retry runs only what failed. Without this a second press on "Try Again"
-      // would re-run the four tasks that already worked.
-      if (retryOnly && !_retryable.contains(pending.first.id)) continue;
 
       for (final task in pending) {
         _emit(
@@ -155,9 +155,7 @@ class StartupCoordinatorImpl implements StartupCoordinator {
       // Every task in a level is independent by construction, so they overlap.
       // `wait` is used rather than `waitAny` because one level failing must not
       // silently orphan the others that are already running.
-      final results = await Future.wait(
-        pending.map((task) => _runTask(task)),
-      );
+      final results = await Future.wait(pending.map((task) => _runTask(task)));
 
       for (final result in results) {
         if (result == null) continue;
@@ -218,16 +216,12 @@ class StartupCoordinatorImpl implements StartupCoordinator {
       );
       _reported[task.id] = 1.0;
       _succeeded.add(task.id);
-      _retryable.remove(task.id);
       _emitProgressOnly();
       return null;
     } catch (error, stackTrace) {
       // The child never sees this. It goes to the log for whoever is debugging
       // a device, and the screen gets a sentence instead.
-      _onDiagnostic(
-        'StartupTask ${task.id} failed:\n$error\n$stackTrace',
-      );
-      _retryable.add(task.id);
+      _onDiagnostic('StartupTask ${task.id} failed:\n$error\n$stackTrace');
       return _TaskFailure(task);
     }
   }

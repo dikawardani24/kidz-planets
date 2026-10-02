@@ -7,7 +7,7 @@ import 'package:core/theme.dart';
 import 'package:planets/audio.dart';
 
 import 'dependency_injection/injection.dart';
-import 'presentation/screens/explorer_screen.dart';
+import 'presentation/screens/startup_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,11 +21,10 @@ Future<void> main() async {
     DeviceOrientation.landscapeRight,
   ]);
 
-  // Before the first frame: the audio session has to be configured before
-  // anything can make a sound, and the players below are created once here
-  // rather than by whichever feature happens to reach them first.
-  await configureDependencies();
-
+  // The audio session and players are configured by the `core.session` and
+  // `core.sounds` startup tasks, after the first intro frame — not here. The
+  // gate keeps the Explorer (and its narration/sound reads) out of the tree
+  // until those tasks finish, so nothing can reach an unregistered service.
   runApp(
     ProviderScope(
       // The features ship their own providers for these, which is right for a
@@ -61,7 +60,7 @@ class KidzPlanetsApp extends ConsumerWidget {
       ),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: kSupportedLocales,
-      home: const ExplorerScreen(),
+      home: const StartupGate(),
     );
   }
 }

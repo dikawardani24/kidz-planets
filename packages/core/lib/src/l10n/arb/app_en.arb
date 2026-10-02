@@ -178,5 +178,159 @@
   "companionCold": "Brrrr! So freezing cold here! 🥶",
   "companionHot": "Phew! It is scorching hot! ☀️",
   "companionThinking": "Hmm... exploring ideas!",
-  "toastSandboxReady": "Sandbox Ready! Run interactive NASA 3D experiments below."
+  "toastSandboxReady": "Sandbox Ready! Run interactive NASA 3D experiments below.",
+  "introBrandTag": "Kidz Planets Adventure",
+  "@introBrandTag": {
+    "description": "Small pill above the intro title."
+  },
+  "introTitle": "SPACE ADVENTURE",
+  "@introTitle": {
+    "description": "Big intro heading while the universe loads."
+  },
+  "introSubtitle": "Preparing your universe...",
+  "@introSubtitle": {
+    "description": "Caption under the intro title."
+  },
+  "introPhasePreparing": "Starting your spaceship...",
+  "@introPhasePreparing": {
+    "description": "Phase label: launch-pad task."
+  },
+  "introPhaseSolarSystem": "Waking up the Sun... ☀️",
+  "@introPhaseSolarSystem": {
+    "description": "Phase label: solar-system task."
+  },
+  "introPhaseSun": "Waking up the Sun... ☀️",
+  "@introPhaseSun": {
+    "description": "Phase label: sun stage of the scene build."
+  },
+  "introPhasePlanets": "Checking the planets... 🌎",
+  "@introPhasePlanets": {
+    "description": "Phase label: planet stages of the scene build."
+  },
+  "introPhaseMoons": "Moon is getting ready... 🌕",
+  "@introPhaseMoons": {
+    "description": "Phase label: moon task."
+  },
+  "introPhaseCompanion": "Waking up your rocket buddy... 🚀",
+  "@introPhaseCompanion": {
+    "description": "Phase label: companion task."
+  },
+  "introPhaseMissions": "Planning your missions... 🗺️",
+  "@introPhaseMissions": {
+    "description": "Phase label: mission catalogue task."
+  },
+  "introPhaseSounds": "Tuning the space sounds... 🔊",
+  "@introPhaseSounds": {
+    "description": "Phase label: audio task."
+  },
+  "introPhaseReady": "✨ YOUR UNIVERSE IS READY! ✨",
+  "@introPhaseReady": {
+    "description": "Phase label: everything finished."
+  },
+  "introMessage": "\"{message}\"",
+  "@introMessage": {
+    "description": "",
+    "placeholders": {
+      "message": {
+        "type": "String",
+        "example": "Waking up the Sun..."
+      }
+    }
+  },
+  "introStageSolarSystem": "Lighting up the galaxy...",
+  "@introStageSolarSystem": {
+    "description": "Subtitle: scene lighting stage."
+  },
+  "introStageSun": "Calibrating solar energy...",
+  "@introStageSun": {
+    "description": "Subtitle: sun stage."
+  },
+  "introStagePlanets": "Mapping orbits & gravity...",
+  "@introStagePlanets": {
+    "description": "Subtitle: planet stages."
+  },
+  "introStageMoons": "Positioning lunar satellites...",
+  "@introStageMoons": {
+    "description": "Subtitle: moon task."
+  },
+  "introStageCompanion": "Teaching it to fly...",
+  "@introStageCompanion": {
+    "description": "Subtitle: companion task."
+  },
+  "introStageMissions": "Charting the mission map...",
+  "@introStageMissions": {
+    "description": "Subtitle: mission catalogue task."
+  },
+  "introStageSounds": "Testing the speakers...",
+  "@introStageSounds": {
+    "description": "Subtitle: audio task."
+  },
+  "introStagePreparing": "Igniting main boosters...",
+  "@introStagePreparing": {
+    "description": "Subtitle: launch-pad task."
+  },
+  "introStageReady": "Welcome aboard, Explorer!",
+  "@introStageReady": {
+    "description": "Subtitle: everything finished."
+  },
+  "introPercent": "{percent}%",
+  "@introPercent": {
+    "description": "",
+    "placeholders": {
+      "percent": {
+        "type": "String",
+        "example": "42"
+      }
+    }
+  },
+  "introFactLabel": "SPACE FACT",
+  "@introFactLabel": {
+    "description": "Corner tab of the rotating fact card."
+  },
+  "introFact": "{fact}",
+  "@introFact": {
+    "description": "",
+    "placeholders": {
+      "fact": {
+        "type": "String",
+        "example": "Jupiter is the biggest planet!"
+      }
+    }
+  },
+  "introMilestoneEarth": "Earth",
+  "@introMilestoneEarth": {
+    "description": "Label of the Earth milestone badge."
+  },
+  "introMilestoneMoon": "Moon",
+  "@introMilestoneMoon": {
+    "description": "Label of the Moon milestone badge."
+  },
+  "introMilestoneSaturn": "Saturn",
+  "@introMilestoneSaturn": {
+    "description": "Label of the Saturn milestone badge."
+  },
+  "introCompleteTitle": "✨ YOUR UNIVERSE IS READY! ✨",
+  "@introCompleteTitle": {
+    "description": "Message card text once loading completes."
+  },
+  "introCompleteSubtitle": "Galaxy fully unlocked!",
+  "@introCompleteSubtitle": {
+    "description": "Subtitle once loading completes."
+  },
+  "introEnterCta": "LET'S EXPLORE!",
+  "@introEnterCta": {
+    "description": "Button that enters the explorer."
+  },
+  "introErrorTitle": "Oh no!",
+  "@introErrorTitle": {
+    "description": "Heading of the kid-friendly startup error."
+  },
+  "introErrorBody": "Something went wrong while preparing your space adventure.",
+  "@introErrorBody": {
+    "description": "Body of the kid-friendly startup error."
+  },
+  "introRetry": "TRY AGAIN",
+  "@introRetry": {
+    "description": "Retry button on the startup error."
+  }
 }

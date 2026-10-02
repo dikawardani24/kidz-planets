@@ -159,6 +159,22 @@ void main() {
       expect(() => makeSceneBuilder().setOrbitsVisible(false), returnsNormally);
     });
   });
+
+  group('UnusableTextureProvider', () {
+    test('reports an empty cache instead of loading anything', () {
+      // The startup pipeline asks the scene how many textures are resident
+      // (for diagnostics and for the "a warm start did not decode the sky
+      // twice" assertion). A stand-in that answered by loading a texture, or
+      // that threw on the getter, would turn a scene test into a GPU test.
+      final provider = UnusableTextureProvider();
+
+      expect(provider.cachedCount, 0);
+      expect(
+        () => provider.get('assets/textures/earth.jpg'),
+        throwsA(isA<StateError>()),
+      );
+    });
+  });
 }
 
 /// Unsigned rotation magnitude in radians, independent of the axis.

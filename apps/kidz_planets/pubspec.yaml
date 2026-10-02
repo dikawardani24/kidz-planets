@@ -60,6 +60,21 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # Fredoka, the prototype's font (`font-family: 'Fredoka'` in intro.html).
+  # Scoped to the intro screen's DefaultTextStyle: the Explorer keeps the
+  # default type ramp, so the loading screen reads like the mock without
+  # re-skinning everything else.
+  fonts:
+    - family: Fredoka
+      fonts:
+        - asset: assets/fonts/Fredoka-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Fredoka-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Fredoka-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Fredoka-Bold.ttf
+          weight: 700
   # The runnable app is the only package that bundles assets, so the tree lives
   # here. Every entry is package-relative on purpose: a path written as
   # `../../assets/...` keeps the `../../` in the bundle key, and nothing that
