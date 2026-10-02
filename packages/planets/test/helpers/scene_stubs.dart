@@ -16,6 +16,9 @@ class UnusableTextureProvider implements TextureProvider {
 
   @override
   void dispose() {}
+
+  @override
+  int get cachedCount => 0;
 }
 
 SolarSystemSceneBuilder makeSceneBuilder() => SolarSystemSceneBuilder(

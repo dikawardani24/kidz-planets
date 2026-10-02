@@ -19,6 +19,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   bool _buildStarted = false;
   bool _ready = false;
   String _loadingLabel = 'Warming up the rockets...';
+  double _buildFraction = 0.0;
   PerspectiveCamera? _lastCamera;
   List<PlanetLabelFrame> _labelFrames = const [];
   double _lastScale = 1.0;
@@ -40,8 +41,13 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     try {
       await controller.ensureBuilt(
         planets: planets,
-        onProgress: (label) {
-          if (mounted) setState(() => _loadingLabel = label);
+        onProgress: (fraction, label) {
+          if (mounted) {
+            setState(() {
+              _buildFraction = fraction;
+              _loadingLabel = label;
+            });
+          }
         },
       );
       controller.setOrbitsVisible(
@@ -60,7 +66,13 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     final controller = ref.watch(solarSystemSceneControllerProvider);
     final ui = ref.watch(explorerControllerProvider);
     final planets = ref.watch(planetsProvider);
-    if (!_ready) return _LoadingView(label: _loadingLabel);
+    // Startup normally gets here with the scene already built, so this branch
+    // is a fallback for a feature package used on its own. The fraction is only
+    // drawn because it is free: the real progress reporting lives in the app's
+    // startup pipeline, not in a widget that cannot know what else is loading.
+    if (!_ready) {
+      return _LoadingView(label: _loadingLabel, fraction: _buildFraction);
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
@@ -258,8 +270,11 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
 }
 
 class _LoadingView extends StatelessWidget {
-  const _LoadingView({required this.label});
+  const _LoadingView({required this.label, required this.fraction});
+
   final String label;
+  final double fraction;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -281,6 +296,19 @@ class _LoadingView extends StatelessWidget {
               label,
               style: Theme.of(context).textTheme.bodyMedium
                   ?.copyWith(color: Colors.white70),
+            ),
+            const SizedBox(height: 14),
+            // Sized to the parent rather than to a phone: the explorer already
+            // supports landscape and tablets, and a fixed width here is the
+            // kind of thing that only shows up on a device nobody tests on.
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: LinearProgressIndicator(
+                value: fraction,
+                minHeight: 4,
+                backgroundColor: Colors.white12,
+                color: AppTheme.accentAmber,
+              ),
             ),
           ],
         ),

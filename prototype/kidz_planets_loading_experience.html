@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kidz Planets - Preparing Space Adventure</title>
+    <!-- Tailwind CSS for modern responsive layout and styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for friendly icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Font: Fredoka for playful children's UX -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Fredoka', 'sans-serif'],
+                    },
+                    colors: {
+                        space: {
+                            950: '#060417',
+                            900: '#0e0b3b',
+                            800: '#1a145c',
+                            700: '#2d238c',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Fredoka', sans-serif;
+            background-color: #060417;
+            color: #ffffff;
+            overflow-x: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        /* Glassmorphism Cards */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        /* Background Starfield & Nebula */
+        .space-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background: radial-gradient(circle at 50% 30%, #1e155c 0%, #0e0b3b 50%, #060417 100%);
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .nebula {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(120, 50, 255, 0.15) 0%, rgba(50, 150, 255, 0.05) 50%, transparent 70%);
+            border-radius: 50%;
+            animation: pulseNebula 10s ease-in-out infinite alternate;
+        }
+
+        @keyframes pulseNebula {
+            0% { transform: scale(1) translate(0, 0); opacity: 0.6; }
+            100% { transform: scale(1.2) translate(30px, -20px); opacity: 0.9; }
+        }
+
+        /* Twinkling Stars */
+        .star {
+            position: absolute;
+            background: #ffffff;
+            border-radius: 50%;
+            animation: twinkle var(--duration) ease-in-out infinite alternate;
+        }
+
+        @keyframes twinkle {
+            0% { opacity: 0.2; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1.2); box-shadow: 0 0 8px #ffffff, 0 0 15px #70d6ff; }
+        }
+
+        /* Rocket Floating Animation */
+        @keyframes rocketFloat {
+            0%, 100% { transform: translateY(0px) rotate(-2deg); }
+            50% { transform: translateY(-12px) rotate(2deg); }
+        }
+
+        .animate-rocket {
+            animation: rocketFloat 3.5s ease-in-out infinite;
+        }
+
+        /* Flame flickering */
+        @keyframes flameFlicker {
+            0%, 100% { transform: scaleY(1) scaleX(1); opacity: 0.9; }
+            50% { transform: scaleY(1.25) scaleX(0.9); opacity: 1; filter: drop-shadow(0 0 10px #ffaa00); }
+        }
+
+        .animate-flame {
+            animation: flameFlicker 0.15s ease-in-out infinite alternate;
+        }
+
+        /* Orbiting Milestone Planets */
+        @keyframes orbit {
+            from { transform: rotate(0deg) translateX(var(--orbit-radius)) rotate(0deg); }
+            to { transform: rotate(360deg) translateX(var(--orbit-radius)) rotate(-360deg); }
+        }
+
+        .orbit-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            pointer-events: none;
+        }
+
+        .orbiting-planet {
+            position: absolute;
+            animation: orbit var(--orbit-speed) linear infinite;
+        }
+
+        /* Pop-in animation for milestone discovery */
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            70% { transform: scale(1.15); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .animate-pop-in {
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        /* Screen views */
+        .screen-view {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.4s ease-in-out;
+        }
+        .screen-view.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="min-h-screen relative flex flex-col items-center justify-center selection:bg-purple-500 selection:text-white">
+
+    <!-- Deep Space Animated Background -->
+    <div class="space-bg" id="space-bg-container">
+        <div class="nebula" style="top: -100px; left: -100px;"></div>
+        <div class="nebula" style="bottom: -150px; right: -100px; animation-delay: -5s;"></div>
+    </div>
+
+    <!-- MAIN APP CONTAINER (Mobile-First 414x896 Target & Responsive) -->
+    <main class="relative z-10 w-full max-w-md min-h-screen sm:min-h-[844px] flex flex-col justify-between p-6 sm:rounded-3xl sm:my-6 sm:border sm:border-white/10 sm:shadow-2xl sm:bg-space-950/60 backdrop-blur-xl overflow-hidden">
+
+        <!-- ================= LOADING SCREEN VIEW ================= -->
+        <section id="view-loading" class="screen-view active flex-col flex-1 justify-between py-4">
+            
+            <!-- Top Branding -->
+            <div class="text-center space-y-1 pt-2">
+                <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 text-xs font-semibold border border-purple-500/30">
+                    <i class="fa-solid fa-sparkles text-yellow-400"></i>
+                    <span>Kidz Planets Adventure</span>
+                </div>
+                <h1 class="text-2xl sm:text-3xl font-extrabold tracking-wide text-white">SPACE ADVENTURE</h1>
+                <p id="loading-subtitle" class="text-xs sm:text-sm text-purple-200">Preparing your universe...</p>
+            </div>
+
+            <!-- Centerpiece: Rocket & Milestone Orbiting Planets -->
+            <div class="relative flex items-center justify-center my-6 h-56 sm:h-64">
+                
+                <!-- Subtle Orbit Path Ring -->
+                <div class="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full border border-white/10 border-dashed pointer-events-none"></div>
+                <div class="absolute w-72 h-72 sm:w-80 sm:h-80 rounded-full border border-white/5 pointer-events-none"></div>
+
+                <!-- Milestone Orbiting Planets (Injected dynamically or revealed by progress) -->
+                <div id="orbiting-planets-stage" class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <!-- Earth (Unlocked at 25%) -->
+                    <div id="milestone-earth" class="absolute hidden transform -translate-x-1/2 -translate-y-1/2 transition-all duration-500" style="top: 20%; left: 75%;">
+                        <div class="glass-card p-2 rounded-2xl flex items-center space-x-1.5 shadow-lg animate-pop-in border-blue-400/40">
+                            <span class="text-xl">🌍</span>
+                            <span class="text-[10px] font-bold text-blue-200">Earth</span>
+                        </div>
+                    </div>
+
+                    <!-- Moon (Unlocked at 45%) -->
+                    <div id="milestone-moon" class="absolute hidden transform -translate-x-1/2 -translate-y-1/2 transition-all duration-500" style="top: 75%; left: 20%;">
+                        <div class="glass-card p-2 rounded-2xl flex items-center space-x-1.5 shadow-lg animate-pop-in border-gray-300/40">
+                            <span class="text-lg">🌕</span>
+                            <span class="text-[10px] font-bold text-gray-200">Moon</span>
+                        </div>
+                    </div>
+
+                    <!-- Saturn (Unlocked at 65%) -->
+                    <div id="milestone-saturn" class="absolute hidden transform -translate-x-1/2 -translate-y-1/2 transition-all duration-500" style="top: 15%; left: 25%;">
+                        <div class="glass-card p-2 rounded-2xl flex items-center space-x-1.5 shadow-lg animate-pop-in border-yellow-400/40">
+                            <span class="text-xl">🪐</span>
+                            <span class="text-[10px] font-bold text-yellow-200">Saturn</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cute 2D Cartoon Rocket -->
+                <div class="relative z-20 flex flex-col items-center animate-rocket">
+                    <div class="relative text-7xl sm:text-8xl filter drop-shadow-[0_10px_20px_rgba(112,0,255,0.6)]">
+                        🚀
+                        <!-- Animated Flame & Exhaust Particles -->
+                        <div class="absolute -bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center">
+                            <div class="w-3 h-6 bg-gradient-to-t from-orange-500 via-yellow-400 to-transparent rounded-full animate-flame"></div>
+                            <div class="w-1.5 h-3 bg-blue-400 rounded-full opacity-60 animate-bounce mt-0.5"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading Progress & Status -->
+            <div class="space-y-3 px-2">
+                <div class="flex justify-between items-center text-xs font-bold">
+                    <span id="loading-phase-label" class="text-purple-300">Starting your spaceship...</span>
+                    <span id="loading-percent-label" class="text-yellow-300 font-extrabold text-sm">0%</span>
+                </div>
+
+                <!-- Playful Progress Bar -->
+                <div class="w-full h-4 bg-black/50 rounded-full overflow-hidden p-1 border border-white/10 relative shadow-inner">
+                    <div id="loading-bar-fill" class="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-yellow-400 rounded-full transition-all duration-300 shadow-[0_0_15px_rgba(255,187,0,0.6)] relative" style="width: 0%">
+                        <!-- Tiny traveling star light inside bar -->
+                        <div class="absolute right-0 top-0 bottom-0 w-3 bg-white rounded-full animate-pulse shadow-[0_0_8px_white]"></div>
+                    </div>
+                </div>
+
+                <!-- Dynamic Status Message / Milestone Banner -->
+                <div id="loading-message-box" class="glass-card rounded-2xl p-3 text-center border-purple-500/30 transition-all duration-300">
+                    <p id="loading-message-text" class="text-xs sm:text-sm font-bold text-purple-100">
+                        "Waking up the Sun... ☀️"
+                    </p>
+                </div>
+            </div>
+
+            <!-- Space Fact Card (Rotating) -->
+            <div class="glass-card rounded-3xl p-4 mt-4 border-yellow-500/20 bg-gradient-to-r from-purple-900/30 to-indigo-900/30 relative overflow-hidden">
+                <div class="absolute top-0 right-0 bg-yellow-500/20 text-yellow-300 text-[10px] px-3 py-1 rounded-bl-xl font-bold border-l border-b border-yellow-500/30 flex items-center space-x-1">
+                    <i class="fa-solid fa-lightbulb text-yellow-400"></i>
+                    <span>SPACE FACT</span>
+                </div>
+                <p id="space-fact-text" class="text-xs sm:text-sm text-purple-200 leading-relaxed pr-4 transition-opacity duration-500">
+                    "Jupiter is the biggest planet in our Solar System!"
+                </p>
+            </div>
+
+            <!-- Completion Action Area (Hidden until 100%) -->
+            <div id="completion-container" class="pt-2 hidden animate-pop-in">
+                <button onclick="enterExplorer()" class="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 text-slate-950 font-extrabold text-lg shadow-[0_10px_30px_rgba(255,165,0,0.5)] border-2 border-white/40 flex items-center justify-center space-x-3 transform hover:scale-105 active:scale-95 transition animate-bounce">
+                    <span class="text-2xl">🚀</span>
+                    <span>LET'S EXPLORE!</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+
+        </section>
+
+        <!-- ================= EXPLORER SCREEN SIMULATION VIEW ================= -->
+        <section id="view-explorer" class="screen-view flex-col flex-1 justify-between py-6 items-center text-center">
+            <div class="w-full space-y-2">
+                <div class="inline-block px-3 py-1 rounded-full bg-green-500/20 text-green-300 text-xs font-semibold border border-green-500/30">
+                    ✨ UNIVERSE ONLINE
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-extrabold text-white">KIDZ PLANETS EXPLORER</h2>
+                <p class="text-xs text-purple-200">Welcome, Space Explorer! Your spaceship is ready.</p>
+            </div>
+
+            <!-- Mini Simulated Solar System UI -->
+            <div class="relative w-full h-64 sm:h-72 glass-card rounded-3xl flex items-center justify-center my-6 overflow-hidden border-purple-500/40">
+                <div class="absolute text-5xl animate-pulse">☀️</div>
+                <div class="absolute text-2xl transform -translate-x-20 -translate-y-10 animate-bounce">🌍</div>
+                <div class="absolute text-2xl transform translate-x-24 translate-y-8">🪐</div>
+                <div class="absolute text-xl transform translate-x-12 -translate-y-20">🌕</div>
+                <div class="absolute bottom-4 text-xs font-bold text-yellow-300 bg-black/40 px-4 py-1.5 rounded-full border border-white/10">
+                    🚀 Orbiting Active Galaxy
+                </div>
+            </div>
+
+            <div class="w-full space-y-3">
+                <div class="glass-card p-4 rounded-2xl text-left border-purple-500/30 flex items-center space-x-3">
+                    <span class="text-3xl">🧑‍🚀</span>
+                    <div>
+                        <div class="text-xs text-purple-300 font-bold">Space Guide Ready</div>
+                        <div class="text-sm font-extrabold">"Let's visit Mars next!"</div>
+                    </div>
+                </div>
+
+                <button onclick="restartPrototype()" class="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm border border-white/20 transition flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span>Restart Loading Prototype</span>
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ================= DEVELOPER PROTOTYPE CONTROL PANEL (Unobtrusive) ================= -->
+    <div class="fixed bottom-3 right-3 z-50 glass-card px-3 py-2 rounded-xl text-[10px] flex items-center space-x-2 border-white/20 shadow-2xl bg-space-950/90">
+        <span class="text-purple-300 font-bold hidden sm:inline">Dev Controls:</span>
+        <button onclick="devRestart()" class="px-2 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-white transition font-bold" title="Restart">Restart</button>
+        <button onclick="devSkip50()" class="px-2 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-white transition font-bold" title="Skip to 50%">50%</button>
+        <button onclick="devComplete()" class="px-2 py-1 bg-yellow-500/30 text-yellow-300 hover:bg-yellow-500/40 rounded-lg transition font-bold" title="Complete 100%">Complete</button>
+    </div>
+
+    <!-- ================= JAVASCRIPT LOGIC ================= -->
+    <script>
+        // Starfield Generator
+        function generateStarfield() {
+            const container = document.getElementById('space-bg-container');
+            const starCount = 75;
+            for (let i = 0; i < starCount; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                const size = Math.random() * 2.5 + 1;
+                star.style.width = `${size}px`;
+                star.style.height = `${size}px`;
+                star.style.top = `${Math.random() * 100}%`;
+                star.style.left = `${Math.random() * 100}%`;
+                star.style.setProperty('--duration', `${Math.random() * 3 + 1.5}s`);
+                star.style.animationDelay = `${Math.random() * 3}s`;
+                container.appendChild(star);
+            }
+        }
+
+        // Space Facts Rotation List
+        const spaceFacts = [
+            "Jupiter is the biggest planet in our Solar System! 🪐",
+            "Mars is called the Red Planet because of rusty iron soil! 🔴",
+            "The Sun is actually a giant glowing star! ☀️",
+            "Earth has one natural moon orbiting around it! 🌕",
+            "Saturn has beautiful ice and rock rings! 🪐",
+            "Neptune has the strongest winds in the solar system! 🔵"
+        ];
+        let factIndex = 0;
+        let factInterval = null;
+
+        function rotateSpaceFacts() {
+            const factEl = document.getElementById('space-fact-text');
+            factEl.style.opacity = '0';
+            setTimeout(() => {
+                factIndex = (factIndex + 1) % spaceFacts.length;
+                factEl.innerText = `"${spaceFacts[factIndex]}"`;
+                factEl.style.opacity = '1';
+            }, 300);
+        }
+
+        // Initialization Simulation Phases
+        const initPhases = [
+            { min: 0, max: 15, msg: "Starting your spaceship...", sub: "Igniting main boosters..." },
+            { min: 15, max: 30, msg: "Waking up the Sun... ☀️", sub: "Calibrating solar energy..." },
+            { min: 30, max: 50, msg: "Checking the planets... 🌎", sub: "Mapping orbits & gravity..." },
+            { min: 50, max: 70, msg: "Moon is getting ready... 🌕", sub: "Positioning lunar satellites..." },
+            { min: 70, max: 88, msg: "Saturn is getting its rings ready! 🪐", sub: "Assembling ice crystals..." },
+            { min: 88, max: 99, msg: "Almost ready, space explorer! 🚀", sub: "Finalizing warp drive..." },
+            { min: 100, max: 100, msg: "✨ YOUR UNIVERSE IS READY! ✨", sub: "Galaxy fully unlocked!" }
+        ];
+
+        let currentProgress = 0;
+        let loadingTimer = null;
+        let isCompleted = false;
+
+        function startLoadingSimulation() {
+            currentProgress = 0;
+            isCompleted = false;
+            document.getElementById('completion-container').classList.add('hidden');
+            document.getElementById('loading-bar-fill').style.width = '0%';
+            document.getElementById('loading-percent-label').innerText = '0%';
+            
+            document.getElementById('milestone-earth').classList.add('hidden');
+            document.getElementById('milestone-moon').classList.add('hidden');
+            document.getElementById('milestone-saturn').classList.add('hidden');
+
+            if (loadingTimer) clearInterval(loadingTimer);
+
+            loadingTimer = setInterval(() => {
+                if (currentProgress < 100) {
+                    // Random increment for organic loading feel
+                    const increment = Math.floor(Math.random() * 3) + 1;
+                    currentProgress = Math.min(100, currentProgress + increment);
+                    updateLoadingUI(currentProgress);
+                } else {
+                    clearInterval(loadingTimer);
+                    triggerCompletionState();
+                }
+            }, 60);
+        }
+
+        function updateLoadingUI(progress) {
+            document.getElementById('loading-bar-fill').style.width = `${progress}%`;
+            document.getElementById('loading-percent-label').innerText = `${progress}%`;
+
+            // Find matching phase
+            const phase = initPhases.find(p => progress >= p.min && progress <= p.max) || initPhases[0];
+            document.getElementById('loading-message-text').innerText = `"${phase.msg}"`;
+            document.getElementById('loading-subtitle').innerText = phase.sub;
+            document.getElementById('loading-phase-label').innerText = phase.msg.split('...')[0];
+
+            // Milestone Planet Trigger Points
+            if (progress >= 25 && progress < 28) {
+                document.getElementById('milestone-earth').classList.remove('hidden');
+            }
+            if (progress >= 48 && progress < 52) {
+                document.getElementById('milestone-moon').classList.remove('hidden');
+            }
+            if (progress >= 68 && progress < 72) {
+                document.getElementById('milestone-saturn').classList.remove('hidden');
+            }
+        }
+
+        function triggerCompletionState() {
+            isCompleted = true;
+            document.getElementById('loading-bar-fill').style.width = '100%';
+            document.getElementById('loading-percent-label').innerText = '100%';
+            document.getElementById('loading-message-text').innerText = '✨ YOUR UNIVERSE IS READY! ✨';
+            document.getElementById('loading-subtitle').innerText = 'Welcome aboard, Explorer!';
+            document.getElementById('completion-container').classList.remove('hidden');
+            
+            // Show all milestones if missed
+            document.getElementById('milestone-earth').classList.remove('hidden');
+            document.getElementById('milestone-moon').classList.remove('hidden');
+            document.getElementById('milestone-saturn').classList.remove('hidden');
+        }
+
+        function enterExplorer() {
+            // Transition simulation to Explorer screen
+            document.getElementById('view-loading').classList.remove('active');
+            document.getElementById('view-explorer').classList.add('active');
+        }
+
+        function restartPrototype() {
+            document.getElementById('view-explorer').classList.remove('active');
+            document.getElementById('view-loading').classList.add('active');
+            startLoadingSimulation();
+        }
+
+        // Developer Controls
+        function devRestart() {
+            startLoadingSimulation();
+        }
+
+        function devSkip50() {
+            if (loadingTimer) clearInterval(loadingTimer);
+            currentProgress = 50;
+            updateLoadingUI(50);
+            document.getElementById('milestone-earth').classList.remove('hidden');
+            document.getElementById('milestone-moon').classList.remove('hidden');
+        }
+
+        function devComplete() {
+            if (loadingTimer) clearInterval(loadingTimer);
+            currentProgress = 100;
+            triggerCompletionState();
+        }
+
+        // Initialize on window load
+        window.onload = function() {
+            generateStarfield();
+            startLoadingSimulation();
+            factInterval = setInterval(rotateSpaceFacts, 4500);
+        };
+    </script>
+</body>
+</html>

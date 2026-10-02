@@ -22,10 +22,36 @@ abstract class SolarSystemSceneController {
   CameraRigState get rigState;
   bool get isReady;
 
+  /// Builds the Sun, the planets and the orbits. Safe to call repeatedly.
+  ///
+  /// Startup calls this before the Explorer exists, so the first frame the
+  /// child sees is a finished solar system instead of a spinner over a scene
+  /// that is still decoding.
   Future<void> ensureBuilt({
     required List<Planet> planets,
-    required void Function(String label) onProgress,
+    required void Function(double fraction, String label) onProgress,
   });
+
+  /// Adds the moons, which is deliberately not part of [ensureBuilt].
+  ///
+  /// Safe to call repeatedly and from a lazy warm: the second call is a no-op
+  /// rather than a second copy of every moon.
+  Future<void> ensureMoonsBuilt({
+    required List<Planet> moons,
+    required void Function(double fraction, String label) onProgress,
+  });
+
+  /// Whether the moons are in the scene yet.
+  ///
+  /// Exposed so the startup code can tell a lazy warm apart from a second full
+  /// build, and so a test can assert the moons really did arrive later.
+  bool get areMoonsBuilt;
+
+  /// How many textures are already decoded and resident.
+  ///
+  /// Reported on the loading screen's diagnostics and asserted in tests: it is
+  /// the one number that proves a warm start did not decode the sky twice.
+  int get cachedTextureCount;
 
   PerspectiveCamera buildCamera(ExplorerState ui);
   void tick(double deltaSeconds, ExplorerState ui);
@@ -82,6 +108,7 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   LabelProjector? _projector;
   bool _built = false;
   Future<void>? _buildFuture;
+  Future<void>? _moonsFuture;
   double _rotationVelocityX = 0.0;
   double _rotationVelocityY = 0.0;
   String? _rotationVelocityPlanetId;
@@ -99,9 +126,13 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   @override
   Future<void> ensureBuilt({
     required List<Planet> planets,
-    required void Function(String label) onProgress,
+    required void Function(double fraction, String label) onProgress,
   }) {
     _buildFuture ??= () async {
+      // The full catalogue, moons included, goes to the animator and the label
+      // projector even though only the planets are built here: both read the
+      // builder's state map per frame and pick the moons up the moment the lazy
+      // build adds them.
       await _builder.build(
         scene: _scene,
         planets: planets,
@@ -123,6 +154,20 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
     }();
     return _buildFuture!;
   }
+
+  @override
+  Future<void> ensureMoonsBuilt({
+    required List<Planet> moons,
+    required void Function(double fraction, String label) onProgress,
+  }) => _moonsFuture ??= () async {
+    await _builder.buildMoons(moons: moons, onProgress: onProgress);
+  }();
+
+  @override
+  bool get areMoonsBuilt => _moonsFuture != null;
+
+  @override
+  int get cachedTextureCount => _textures.cachedCount;
 
   @override
   PerspectiveCamera buildCamera(ExplorerState ui) => _rig.buildCamera(ui: ui);

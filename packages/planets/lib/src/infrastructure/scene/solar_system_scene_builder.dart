@@ -28,15 +28,30 @@ class SolarSystemSceneBuilder {
   final PlanetMaterialFactory _materials;
 
   final Map<String, PlanetRenderState> states = {};
+
+  /// Whether [buildMoons] has finished, so a second call is a no-op.
+  bool _moonsBuilt = false;
   final Map<String, Node> orbitNodes = {};
   Node? starNode;
   final Node solarSystemRoot = Node(name: 'solar-system-root');
 
-  /// Builds the full graph under [scene]; awaits all texture uploads.
+  /// Builds the Sun, the starfield and the planets; awaits every texture upload.
+  ///
+  /// Moons are *not* built here. They are eighteen more textures and about
+  /// 2.4MB of decoding for bodies a child cannot see until they zoom into a
+  /// planet, and a child staring at a progress bar does not need them. They go
+  /// through [buildMoons] instead, which runs after the app is already
+  /// interactive. Nothing has to be rearranged for that: the animator recomputes
+  /// every body's orbit position from the clock on each frame, so a moon built
+  /// later lands where it would have landed anyway.
+  ///
+  /// [onProgress] receives a `0..1` fraction and a label, because a loading
+  /// screen that only knows it is "loading" is the thing this whole exercise is
+  /// trying to get rid of.
   Future<void> build({
     required Scene scene,
     required List<Planet> planets,
-    required void Function(String label) onProgress,
+    required void Function(double fraction, String label) onProgress,
   }) async {
     // Match the prototype's space lighting: the Sun is the primary light
     // source, while only a small amount of ambient IBL keeps the shadow side
@@ -47,26 +62,55 @@ class SolarSystemSceneBuilder {
     scene.add(solarSystemRoot);
     _buildSunLight(scene);
 
-    onProgress('Painting stars…');
-    await _buildStars(scene);
     final primaryBodies = planets.where((p) => !p.isMoon).toList();
-    final moons = planets.where((p) => p.isMoon).toList();
+
+    // One step for the starfield plus one per body. Stepping through a
+    // precomputed count rather than counting as we go is what keeps the
+    // denominator honest: the bar's last notch is the last body, not a guess
+    // made halfway through.
+    final steps = primaryBodies.length + 1;
+    var step = 0;
+
+    onProgress(step / steps, 'Painting stars…');
+    await _buildStars(scene);
+    step++;
 
     for (final planet in primaryBodies) {
-      onProgress('Painting ${planet.name}…');
-      await _buildPlanet(scene, planet);
+      onProgress(step / steps, 'Painting ${planet.name}…');
+      await _buildPlanet(planet);
       if (planet.hasRing) {
         await _buildSaturnRing(planet);
       }
       if (!planet.isSun) {
         _buildOrbit(scene, planet);
       }
+      step++;
+    }
+  }
+
+  /// Adds the moons to a scene that [build] has already started.
+  ///
+  /// Idempotent: calling it twice adds nothing twice, so a retry or a second
+  /// lazy warm cannot end up with two of every moon stacked on the same orbit.
+  Future<void> buildMoons({
+    required List<Planet> moons,
+    required void Function(double fraction, String label) onProgress,
+  }) async {
+    if (_moonsBuilt) return;
+    final pending = moons.where((m) => !states.containsKey(m.id)).toList();
+    if (pending.isEmpty) {
+      _moonsBuilt = true;
+      return;
     }
 
-    for (final moon in moons) {
-      onProgress('Painting ${moon.name}…');
-      await _buildPlanet(scene, moon);
+    final steps = pending.length;
+    for (var i = 0; i < pending.length; i++) {
+      final moon = pending[i];
+      onProgress(i / steps, 'Painting ${moon.name}…');
+      await _buildPlanet(moon);
     }
+    _moonsBuilt = true;
+    onProgress(1.0, 'Moons ready');
   }
 
   void _buildSunLight(Scene scene) {
@@ -98,7 +142,12 @@ class SolarSystemSceneBuilder {
     starNode = node;
   }
 
-  Future<void> _buildPlanet(Scene scene, Planet planet) async {
+  /// Adds one body under [solarSystemRoot].
+  ///
+  /// No [Scene] parameter: every celestial body hangs off the one transform
+  /// root, which is what lets [buildMoons] add moons long after [build] has
+  /// returned and the scene is already on screen.
+  Future<void> _buildPlanet(Planet planet) async {
     final texture = await _safeLoad(planet.textureAsset);
 
     final spinNode = Node()..name = '${planet.id}:spin';
