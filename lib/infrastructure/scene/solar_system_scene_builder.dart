@@ -48,6 +48,10 @@ class SolarSystemSceneBuilder {
 
     onProgress('Painting stars…');
     await _buildStars(scene);
+    // Let Flutter present the loading animation before the first expensive
+    // planet/material batch starts. Texture uploads and scene graph mutation
+    // can otherwise consume the next frame budget in one uninterrupted turn.
+    await _yieldToUi();
     final primaryBodies = planets.where((p) => !p.isMoon).toList();
     final moons = planets.where((p) => p.isMoon).toList();
 
@@ -60,13 +64,19 @@ class SolarSystemSceneBuilder {
       if (!planet.isSun) {
         _buildOrbit(scene, planet);
       }
+      // Build one body per event-loop turn so progress UI and the renderer
+      // get a chance to run between texture/mesh/material batches.
+      await _yieldToUi();
     }
 
     for (final moon in moons) {
       onProgress('Painting ${moon.name}…');
       await _buildPlanet(scene, moon);
+      await _yieldToUi();
     }
   }
+
+  Future<void> _yieldToUi() => Future<void>.delayed(Duration.zero);
 
   void _buildSunLight(Scene scene) {
     // The planets orbit around world origin, so a point light at the Sun gives
