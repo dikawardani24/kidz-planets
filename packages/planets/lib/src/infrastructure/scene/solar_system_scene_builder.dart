@@ -73,6 +73,9 @@ class SolarSystemSceneBuilder {
 
     onProgress(step / steps, 'Painting stars…');
     await _buildStars(scene);
+    // Let Flutter present the loading animation before the first expensive
+    // planet/material batch starts.
+    await _yieldToUi();
     step++;
 
     for (final planet in primaryBodies) {
@@ -84,6 +87,9 @@ class SolarSystemSceneBuilder {
       if (!planet.isSun) {
         _buildOrbit(scene, planet);
       }
+      // Build one body per event-loop turn so progress UI and the renderer
+      // can run between texture/mesh/material batches.
+      await _yieldToUi();
       step++;
     }
   }
@@ -108,6 +114,9 @@ class SolarSystemSceneBuilder {
       final moon = pending[i];
       onProgress(i / steps, 'Painting ${moon.name}…');
       await _buildPlanet(moon);
+      // Keep lazy moon loading responsive as each additional texture/mesh
+      // is added after the main scene is already interactive.
+      await _yieldToUi();
     }
     _moonsBuilt = true;
     onProgress(1.0, 'Moons ready');
@@ -330,6 +339,9 @@ class SolarSystemSceneBuilder {
         rotation:
             tilt * vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), -edgeAngle),
       );
+      if (i % 4 == 3) {
+        await _yieldToUi();
+      }
     }
 
     // Flat bands have zero projected area at an exact edge-on angle.
@@ -439,6 +451,8 @@ class SolarSystemSceneBuilder {
       node.visible = visible;
     }
   }
+
+  Future<void> _yieldToUi() => Future<void>.delayed(Duration.zero);
 
   Future<TextureSource?> _safeLoad(String asset) async {
     try {
