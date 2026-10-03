@@ -159,6 +159,26 @@ class ExplorerScreen extends ConsumerWidget {
       }
     });
 
+    // Approach narration: the marked body "introduces itself" once the zoom
+    // passes 90% toward it. Independent from the marker icon (purely visual)
+    // and from detail entry (which keeps its own narration): this only speaks
+    // while approaching, once per zoom session, and never for a detail that
+    // was opened directly without approaching.
+    ref.listen<ExplorerState>(explorerControllerProvider, (prev, next) {
+      final explorer = ref.read(explorerControllerProvider.notifier);
+      if (!explorer.isMarkNarrationDue) return;
+      if (!canStartPlanetAudio(
+        celebrationVisible: ref.read(missionProgressProvider).celebrationVisible,
+      )) {
+        return;
+      }
+      final markedId = ref.read(explorerControllerProvider).markedTargetId;
+      if (markedId == null) return;
+      final planet = ref.read(planetByIdProvider(markedId));
+      ref.read(planetNarrationServiceProvider).speakPlanet(planet);
+      explorer.acknowledgeMarkNarration();
+    });
+
     return Scaffold(
       backgroundColor: AppTheme.space950,
       resizeToAvoidBottomInset: false,

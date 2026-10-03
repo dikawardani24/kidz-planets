@@ -100,14 +100,23 @@ void main() {
       expect(state.targetZ, 0);
     });
 
-    test('pinchToward leaves the target alone on zoom-out', () {
+    test('pinchToward moves the eye away from the focal body on zoom-out', () {
       state
         ..targetX = 0
         ..targetY = 0
-        ..targetZ = 0;
-      rig.pinchToward(0.5, focalWorldPoint: vm.Vector3(12, 0, 0));
+        ..targetZ = 0
+        ..radius = 46;
+      final focal = vm.Vector3(12, 0, 0);
+      final beforeDist =
+          (rig.buildCamera(ui: const ExplorerState()).position - focal).length;
+      rig.pinchToward(0.5, focalWorldPoint: focal);
+      final afterDist =
+          (rig.buildCamera(ui: const ExplorerState()).position - focal).length;
+      // Away from the marked body, while the anchor never moves.
+      expect(afterDist, greaterThan(beforeDist));
       expect(state.targetX, 0);
-      expect(state.radius, closeTo(92, 1e-12));
+      expect(state.targetY, 0);
+      expect(state.targetZ, 0);
     });
 
     test('repeated focal pinches never drift the anchor off-screen', () {
@@ -151,6 +160,126 @@ void main() {
       rig.pinch(2.0);
       expect(state.theta, closeTo(0.5, 1e-12));
       expect(state.phi, closeTo(0.2, 1e-12));
+    });
+
+    test('approach progress is 1 exactly at the enter distance', () {
+      // Earth: 0.95 * 7 = 6.65 units is the detail-entry threshold.
+      expect(
+        OrbitCameraRig.approachProgress(distance: 6.65, worldRadius: 0.95),
+        closeTo(1.0, 1e-9),
+      );
+    });
+
+    test('approach progress passes 90% just outside entry', () {
+      expect(
+        OrbitCameraRig.approachProgress(distance: 7.0, worldRadius: 0.95),
+        greaterThan(0.90),
+      );
+      expect(
+        OrbitCameraRig.approachProgress(distance: 8.0, worldRadius: 0.95),
+        lessThan(0.90),
+      );
+    });
+
+    test('approach progress degrades safely on degenerate input', () {
+      expect(
+        OrbitCameraRig.approachProgress(distance: double.infinity, worldRadius: 1.0),
+        0.0,
+      );
+      expect(
+        OrbitCameraRig.approachProgress(distance: 5.0, worldRadius: 0.0),
+        0.0,
+      );
+      expect(
+        OrbitCameraRig.approachProgress(distance: 0.0, worldRadius: 1.0),
+        greaterThan(1.0),
+      );
+    });
+
+    test('manual pinch cancels a running zoom flight', () {
+      state.radius = 46;
+      final eye = rig.buildCamera(ui: const ExplorerState()).position.clone();
+      rig.beginZoomToBody(worldRadius: 0.95, eye: eye);
+      expect(rig.zoomFlightActive, isTrue);
+      rig.pinchToward(1.2, focalWorldPoint: vm.Vector3(12, 0, 0));
+      expect(rig.zoomFlightActive, isFalse);
+    });
+
+    test('zoom flight converges to the entry distance', () {
+      state
+        ..theta = 0.3
+        ..phi = 0.25
+        ..radius = 40;
+      final body = vm.Vector3(12, 0, 0);
+      final startEye =
+          rig.buildCamera(ui: const ExplorerState()).position.clone();
+      final startDist = (startEye - body).length;
+      rig.beginZoomToBody(worldRadius: 0.95, eye: startEye);
+      var done = false;
+      var progress = 0.0;
+      var lastDist = startDist;
+      var crossedNarration = false;
+      var doneAtCross = false;
+      for (var i = 0; i < 600 && !done; i++) {
+        final step = rig.stepZoomFlight(
+          deltaSeconds: 1 / 60,
+          bodyPos: body,
+        );
+        done = step.done;
+        progress = step.progress;
+        if (progress > 0.90 && !crossedNarration) {
+          crossedNarration = true;
+          doneAtCross = done;
+        }
+        final dist =
+            (rig.buildCamera(ui: const ExplorerState()).position - body)
+                .length;
+        expect(dist, lessThanOrEqualTo(lastDist + 1e-6));
+        lastDist = dist;
+      }
+      expect(done, isTrue);
+      // The >90% narration point is crossed before arrival, never after.
+      expect(crossedNarration, isTrue);
+      expect(doneAtCross, isFalse);
+      expect(progress, greaterThan(0.9));
+      expect(lastDist, closeTo(0.95 * 7, 0.95 * 7 * 0.05));
+      // Anchor untouched throughout the flight.
+      expect(state.targetX, 0);
+      expect(state.targetY, 0);
+      expect(state.targetZ, 0);
+      expect(rig.zoomFlightActive, isFalse);
+    });
+
+    test('zoom flight tracks a moving body', () {
+      state.radius = 30;
+      final eye = rig.buildCamera(ui: const ExplorerState()).position.clone();
+      rig.beginZoomToBody(worldRadius: 1.0, eye: eye);
+      final body = vm.Vector3(10, 0, 0);
+      var done = false;
+      for (var i = 0; i < 600 && !done; i++) {
+        // The body drifts sideways while the camera flies.
+        body.x += 0.005;
+        done = rig
+            .stepZoomFlight(deltaSeconds: 1 / 60, bodyPos: body)
+            .done;
+      }
+      expect(done, isTrue);
+      final endDist =
+          (rig.buildCamera(ui: const ExplorerState()).position - body).length;
+      expect(endDist, closeTo(7.0, 7.0 * 0.05));
+    });
+
+    test('cancelled flight reports done with zero progress', () {
+      state.radius = 46;
+      final eye = rig.buildCamera(ui: const ExplorerState()).position.clone();
+      rig.beginZoomToBody(worldRadius: 0.95, eye: eye);
+      rig.cancelZoomFlight();
+      final step = rig.stepZoomFlight(
+        deltaSeconds: 1 / 60,
+        bodyPos: vm.Vector3(12, 0, 0),
+      );
+      expect(step.done, isTrue);
+      expect(step.progress, 0.0);
     });
 
     test('reanchor keeps the eye and restores the system anchor', () {

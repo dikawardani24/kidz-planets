@@ -24,6 +24,8 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   double _buildFraction = 0.0;
   PerspectiveCamera? _lastCamera;
   List<PlanetLabelFrame> _labelFrames = const [];
+  Offset? _markedCenter;
+  double _markedDiameter = 64.0;
   double _lastScale = 1.0;
   double _angularVelocityX = 0.0;
   double _angularVelocityY = 0.0;
@@ -131,6 +133,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
                     ref.read(explorerScenePresentedProvider.notifier).state =
                         true;
                   }
+                  _driveZoomFlight(controller, deltaSeconds);
                   _refreshLabels(controller, size);
                 },
               ),
@@ -139,12 +142,63 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
                 planets: planets,
                 showLabels: ui.showLabels && _zoomLabelsVisible,
                 selectedId: ui.selectedPlanetId,
+                markedId: ui.markedTargetId,
+                onMarkedTap: () {
+                  // Label taps mirror 3D taps: a marked chip starts the
+                  // smooth zoom-to-detail flight.
+                  final markedId =
+                      ref.read(explorerControllerProvider).markedTargetId;
+                  final cam = _lastCamera;
+                  if (markedId == null || cam == null) return;
+                  controller.cancelZoomFlight();
+                  controller.startZoomToDetail(markedId, cam);
+                },
               ),
+              if (_markedCenter != null &&
+                  ui.markedTargetId != null &&
+                  !ui.hasSelection)
+                _TargetMarker(
+                  center: _markedCenter!,
+                  diameter: _markedDiameter,
+                ),
             ],
           ),
         );
       },
     );
+  }
+
+  /// Advances a running "zoom to Detail" flight ("second tap on the marked
+  /// object") and finishes it by opening detail at the reached distance.
+  ///
+  /// Progress is reported every frame so the >90% narration fires while
+  /// passing it, exactly as with manual zoom. A manual pinch, a new tap, or
+  /// a cleared/switched mark cancels the flight elsewhere; the guards here
+  /// are the safety net for state that changed between frames.
+  void _driveZoomFlight(
+    SolarSystemSceneController controller,
+    double deltaSeconds,
+  ) {
+    if (!controller.zoomFlightActive) return;
+    final ui = ref.read(explorerControllerProvider);
+    final flightId = ui.markedTargetId;
+    if (flightId == null || ui.hasSelection) {
+      controller.cancelZoomFlight();
+      return;
+    }
+    final step = controller.stepZoomFlight(deltaSeconds, flightId);
+    ref
+        .read(explorerControllerProvider.notifier)
+        .reportMarkProgress(step.progress, approaching: true);
+    if (!step.done) return;
+    final camera = controller.buildCamera(
+      ref.read(explorerControllerProvider),
+    );
+    _lastCamera = camera;
+    final zoom = controller.prepareSeamlessSelection(flightId, camera);
+    ref
+        .read(explorerControllerProvider.notifier)
+        .selectPlanet(flightId, initialDetailZoom: zoom);
   }
 
   void _refreshLabels(SolarSystemSceneController controller, Size size) {
@@ -153,15 +207,64 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     final frames = controller.projectLabels(camera, size);
     final ui = ref.read(explorerControllerProvider);
     final shouldShow = _shouldShowLabelsForZoom(ui);
+    final marker = _markerFor(controller, ui, camera, size);
     if (_framesEqual(frames, _labelFrames) &&
-        shouldShow == _zoomLabelsVisible) {
+        shouldShow == _zoomLabelsVisible &&
+        _sameOffset(marker?.center, _markedCenter) &&
+        (marker == null ||
+            (marker.diameter - _markedDiameter).abs() <= 2.0)) {
       return;
     }
     if (!mounted) return;
     setState(() {
       _labelFrames = frames;
       _zoomLabelsVisible = shouldShow;
+      _markedCenter = marker?.center;
+      if (marker != null) _markedDiameter = marker.diameter;
     });
+  }
+
+  /// Screen anchor of the marked target: its world centre plus a reticle
+  /// diameter derived from its apparent size (world radius, camera distance,
+  /// and field of view), so the ring hugs the body near or far. Null when
+  /// there is no mark, detail is open (detail UI takes over), or the body is
+  /// off-screen. The marker is purely visual: [IgnorePointer] in
+  /// [_TargetMarker].
+  ({Offset center, double diameter})? _markerFor(
+    SolarSystemSceneController controller,
+    ExplorerState ui,
+    PerspectiveCamera camera,
+    Size size,
+  ) {
+    final markedId = ui.markedTargetId;
+    if (markedId == null || ui.hasSelection || size.isEmpty) return null;
+    final center = controller.projectBodyCenter(markedId, camera, size);
+    if (center == null) return null;
+    const margin = 80.0;
+    if (center.dx < -margin ||
+        center.dx > size.width + margin ||
+        center.dy < -margin ||
+        center.dy > size.height + margin) {
+      return null;
+    }
+    final worldRadius = controller.bodyWorldRadius(markedId);
+    final bodyPos = controller.bodyWorldPosition(markedId);
+    var diameter = 64.0;
+    if (worldRadius != null && bodyPos != null && worldRadius > 0) {
+      final distance = camera.position
+          .distanceTo(bodyPos)
+          .clamp(1e-6, 1e9);
+      final apparentPx =
+          worldRadius / distance / math.tan(camera.fovRadiansY / 2) *
+          (size.height / 2);
+      diameter = (apparentPx * 2 * 1.3).clamp(44.0, 200.0);
+    }
+    return (center: center, diameter: diameter);
+  }
+
+  bool _sameOffset(Offset? a, Offset? b) {
+    if (a == null || b == null) return a == b;
+    return (a.dx - b.dx).abs() <= 1.5 && (a.dy - b.dy).abs() <= 1.5;
   }
 
   bool _shouldShowLabelsForZoom(ExplorerState ui) {
@@ -244,42 +347,75 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
             ref.read(explorerControllerProvider.notifier).closeDetail();
           }
         } else {
-          // Resolve the focal body with the pre-pinch camera so the zoom
-          // moves toward what is under the fingers (Earth, Jupiter, ...),
-          // not always toward the origin/Sun. Then check auto-select with a
-          // freshly built camera (not a one-frame-stale _lastCamera).
-          final beforeCamera = controller.buildCamera(
-            ref.read(explorerControllerProvider),
-          );
-          controller.pinchWithFocalPoint(
-            incrementalScale,
-            focalScreenPoint: details.localFocalPoint,
-            viewSize: viewSize,
-            camera: _lastCamera ?? beforeCamera,
-          );
-          final camera = controller.buildCamera(
-            ref.read(explorerControllerProvider),
-          );
-          _lastCamera = camera;
-          final pickedId = controller.pickPlanetForAutoFocus(
-            details.localFocalPoint,
-            viewSize,
-            camera,
-          );
-          if (pickedId != null) {
-            // Preserve the exact pinch distance: no snap to a default.
-            final initialZoom = controller.prepareSeamlessSelection(
-              pickedId,
+          // A marked target owns the zoom: any pinch approaches it, and
+          // detail opens once the camera is close enough. Otherwise fall
+          // back to the focal body under the fingers.
+          final markedId = ref.read(explorerControllerProvider).markedTargetId;
+          if (markedId != null) {
+            controller.pinchTowardBody(incrementalScale, markedId);
+            final camera = controller.buildCamera(
+              ref.read(explorerControllerProvider),
+            );
+            _lastCamera = camera;
+            // Track the approach for the >90% voice narration. The app shell
+            // plays it (once per zoom session) from this progress; the marker
+            // and the detail transition read the same state independently.
+            ref
+                .read(explorerControllerProvider.notifier)
+                .reportMarkProgress(
+                  controller.markZoomProgress(markedId, camera),
+                  approaching: incrementalScale > 1.0,
+                );
+            if (controller.shouldAutoEnterDetail(markedId, camera)) {
+              // Preserve the exact pinch distance: no snap to a default.
+              final initialZoom = controller.prepareSeamlessSelection(
+                markedId,
+                camera,
+              );
+              if (!ref.read(explorerControllerProvider).hasSelection) {
+                ref
+                    .read(explorerControllerProvider.notifier)
+                    .selectPlanet(markedId, initialDetailZoom: initialZoom);
+              }
+            }
+          } else {
+            // Resolve the focal body with the pre-pinch camera so the zoom
+            // moves toward what is under the fingers (Earth, Jupiter, ...),
+            // not always toward the origin/Sun. Then check auto-select with a
+            // freshly built camera (not a one-frame-stale _lastCamera).
+            final beforeCamera = controller.buildCamera(
+              ref.read(explorerControllerProvider),
+            );
+            controller.pinchWithFocalPoint(
+              incrementalScale,
+              focalScreenPoint: details.localFocalPoint,
+              viewSize: viewSize,
+              camera: _lastCamera ?? beforeCamera,
+            );
+            final camera = controller.buildCamera(
+              ref.read(explorerControllerProvider),
+            );
+            _lastCamera = camera;
+            final pickedId = controller.pickPlanetForAutoFocus(
+              details.localFocalPoint,
+              viewSize,
               camera,
             );
-            void select() => ref
-                .read(explorerControllerProvider.notifier)
-                .selectPlanet(pickedId, initialDetailZoom: initialZoom);
-            // prepareSeamlessSelection snaps the rig only when the explorer is
-            // still unselected; guard against a race where selection landed
-            // between the pick and now.
-            if (!ref.read(explorerControllerProvider).hasSelection) {
-              select();
+            if (pickedId != null) {
+              // Preserve the exact pinch distance: no snap to a default.
+              final initialZoom = controller.prepareSeamlessSelection(
+                pickedId,
+                camera,
+              );
+              void select() => ref
+                  .read(explorerControllerProvider.notifier)
+                  .selectPlanet(pickedId, initialDetailZoom: initialZoom);
+              // prepareSeamlessSelection snaps the rig only when the explorer is
+              // still unselected; guard against a race where selection landed
+              // between the pick and now.
+              if (!ref.read(explorerControllerProvider).hasSelection) {
+                select();
+              }
             }
           }
         }
@@ -321,35 +457,49 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
 
   void _onTapUp(TapUpDetails details, Size size) {
     final controller = ref.read(solarSystemSceneControllerProvider);
+    final explorer = ref.read(explorerControllerProvider.notifier);
+    // A new tap always takes over from a running zoom-to-detail flight.
+    controller.cancelZoomFlight();
+    String? pickedId;
     final camera = _lastCamera;
     if (camera != null) {
-      final pickedId = controller.pickPlanet(
-        details.localPosition,
-        size,
-        camera,
-      );
-      if (pickedId != null) {
-        ref.read(explorerControllerProvider.notifier).selectPlanet(pickedId);
-        return;
-      }
+      pickedId = controller.pickPlanet(details.localPosition, size, camera);
     }
-
-    // Keep labels as a forgiving secondary target, matching the prototype's
-    // tappable planet labels without requiring an exact mesh hit.
-    PlanetLabelFrame? best;
-    var bestDistSq = 48.0 * 48.0;
-    for (final frame in _labelFrames) {
-      if (!frame.visible) continue;
-      final dx = frame.screenX - details.localPosition.dx;
-      final dy = frame.screenY - details.localPosition.dy;
-      final distSq = dx * dx + dy * dy;
-      if (distSq < bestDistSq) {
-        bestDistSq = distSq;
-        best = frame;
+    if (pickedId == null) {
+      // Keep labels as a forgiving secondary target, matching the prototype's
+      // tappable planet labels without requiring an exact mesh hit.
+      PlanetLabelFrame? best;
+      var bestDistSq = 48.0 * 48.0;
+      for (final frame in _labelFrames) {
+        if (!frame.visible) continue;
+        final dx = frame.screenX - details.localPosition.dx;
+        final dy = frame.screenY - details.localPosition.dy;
+        final distSq = dx * dx + dy * dy;
+        if (distSq < bestDistSq) {
+          bestDistSq = distSq;
+          best = frame;
+        }
       }
+      pickedId = best?.id;
     }
-    if (best != null) {
-      ref.read(explorerControllerProvider.notifier).selectPlanet(best.id);
+    final ui = ref.read(explorerControllerProvider);
+    if (pickedId == null) {
+      // Tapping empty space clears the mark (zoom focus) and its session,
+      // returning to free exploration without touching detail.
+      if (!ui.hasSelection) explorer.clearMarkedTarget();
+      return;
+    }
+    if (ui.hasSelection) {
+      // In detail mode a tap switches straight to the new body, as before.
+      explorer.selectPlanet(pickedId);
+    } else if (pickedId == ui.markedTargetId) {
+      // Second tap on the marked object: smoothly zoom to 100% detail.
+      // Marking itself never zooms; only this shortcut and pinches move
+      // the camera, so the first tap cannot jump the view.
+      if (camera != null) controller.startZoomToDetail(pickedId, camera);
+    } else {
+      // First tap: mark as the zoom focus, keep the current zoom level.
+      explorer.markTarget(pickedId);
     }
   }
 }
@@ -403,17 +553,64 @@ class _LoadingView extends StatelessWidget {
 }
 
 /// Floating tappable planet name chips projected from 3D.
+/// Non-interactive reticle drawn over the marked target's world centre.
+///
+/// Purely visual ([IgnorePointer]): marking adds no buttons or controls, it
+/// only shows which body pinch zoom is currently approaching. Hidden once
+/// detail opens, where the detail UI takes over.
+class _TargetMarker extends StatelessWidget {
+  const _TargetMarker({required this.center, required this.diameter});
+  final Offset center;
+  final double diameter;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Stack(
+        children: [
+          Positioned(
+            left: center.dx - diameter / 2,
+            top: center.dy - diameter / 2,
+            width: diameter,
+            height: diameter,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppTheme.accentAmber,
+                  width: 2.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.accentAmber.withValues(alpha: 0.35),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PlanetLabelsOverlay extends StatelessWidget {
   const _PlanetLabelsOverlay({
     required this.frames,
     required this.planets,
     required this.showLabels,
     required this.selectedId,
+    required this.markedId,
+    required this.onMarkedTap,
   });
   final List<PlanetLabelFrame> frames;
   final List<Planet> planets;
   final bool showLabels;
   final String? selectedId;
+  final String? markedId;
+  final VoidCallback onMarkedTap;
   @override
   Widget build(BuildContext context) {
     final byId = {for (final p in planets) p.id: p};
@@ -437,7 +634,9 @@ class _PlanetLabelsOverlay extends StatelessWidget {
                     name: byId[frame.id]!.name,
                     colorValue: byId[frame.id]!.colorValue,
                     selected: frame.id == selectedId,
+                    marked: frame.id == markedId,
                     planetId: frame.id,
+                    onMarkedTap: onMarkedTap,
                   ),
                 ),
           ],
@@ -452,27 +651,42 @@ class _LabelChip extends ConsumerWidget {
     required this.name,
     required this.colorValue,
     required this.selected,
+    required this.marked,
     required this.planetId,
+    required this.onMarkedTap,
   });
   final String name;
   final int colorValue;
   final bool selected;
+  final bool marked;
   final String planetId;
+  final VoidCallback onMarkedTap;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
-      onTap: () =>
-          ref.read(explorerControllerProvider.notifier).selectPlanet(planetId),
+      onTap: () {
+        final explorer = ref.read(explorerControllerProvider.notifier);
+        // Labels follow the same model as 3D taps: mark in exploration mode
+        // (a marked chip starts the zoom-to-detail flight), switch detail
+        // directly while a detail is already open.
+        if (ref.read(explorerControllerProvider).hasSelection) {
+          explorer.selectPlanet(planetId);
+        } else if (marked) {
+          onMarkedTap();
+        } else {
+          explorer.markTarget(planetId);
+        }
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: AppTheme.space700.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: selected
+            color: selected || marked
                 ? AppTheme.accentAmber
                 : Colors.white.withValues(alpha: 0.18),
-            width: selected ? 2 : 1,
+            width: selected || marked ? 2 : 1,
           ),
         ),
         child: Row(

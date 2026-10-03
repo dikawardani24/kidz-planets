@@ -59,6 +59,7 @@ class OrbitCameraRig {
 
   void pinch(double scaleFactor) {
     if (!scaleFactor.isFinite || scaleFactor <= 0) return;
+    cancelZoomFlight();
     final next = _state.radius / scaleFactor;
     if (!next.isFinite) return;
     // Physical safety only: keep the camera transform valid without imposing
@@ -66,30 +67,34 @@ class OrbitCameraRig {
     _state.radius = next.clamp(1e-4, 1e9);
   }
 
-  /// Free-exploration pinch that can move toward a focal world point.
+  /// Free-exploration pinch around a focal world point.
   ///
   /// [scaleFactor] follows the same convention as [pinch] (>1 zooms in).
-  /// When [focalWorldPoint] is given and the gesture zooms in, the camera
-  /// eye moves toward that point so pinching over Jupiter approaches
-  /// Jupiter instead of always dollying toward the solar-system origin
-  /// (which is why the Sun used to be the only body with usable zoom).
+  /// When [focalWorldPoint] is given, the camera eye moves toward it on
+  /// zoom-in and away from it on zoom-out, so a marked body stays the zoom
+  /// focus in both directions instead of always dollying toward the
+  /// solar-system origin (which is why the Sun used to be the only body
+  /// with usable zoom).
   ///
   /// Crucially, the orbit target is NOT rewritten: it is re-pinned to
   /// [kExploreAnchor] every focal pinch. The focal point is a temporary zoom
   /// intent for the current gesture, not a new permanent anchor, so repeated
   /// pinches can never accumulate target drift and push the solar system
   /// off-screen. Rotation therefore always stays centered on the system.
-  /// Zoom-out (and a missing focal point) is a pure dolly via [pinch].
+  /// A missing focal point is a pure dolly via [pinch].
   void pinchToward(double scaleFactor, {vm.Vector3? focalWorldPoint}) {
     if (!scaleFactor.isFinite || scaleFactor <= 0) return;
-    if (focalWorldPoint == null || scaleFactor <= 1.0) {
+    cancelZoomFlight();
+    if (focalWorldPoint == null || scaleFactor == 1.0) {
       pinch(scaleFactor);
       return;
     }
-    final pull = (1.0 - 1.0 / scaleFactor).clamp(0.0, 1.0);
-    // Move strongly toward the focal area so repeated frames converge.
+    // Positive toward the focus on zoom-in, negative (away) on zoom-out.
+    final pull = (1.0 - 1.0 / scaleFactor).clamp(-1.0, 1.0);
+    // Move strongly so repeated frames converge; ease off at the extremes
+    // so a single frame can never fling the camera.
     const kPull = 0.9;
-    final t = (pull * kPull).clamp(0.0, 1.0);
+    final t = (pull * kPull).clamp(-0.9, 0.9);
     final cosPhi = math.cos(_state.phi);
     final eyeX =
         _state.targetX + _state.radius * cosPhi * math.sin(_state.theta);
@@ -133,6 +138,20 @@ class OrbitCameraRig {
     required bool isSun,
   }) =>
       worldRadius * (isSun ? 3.4 : 3.6);
+
+  /// Zoom progress toward a body: its enter-threshold distance divided by the
+  /// current camera distance, so 1.0 is exactly "close enough to enter
+  /// detail" and larger values mean deeper approach. Pure math, no scene
+  /// access, so the narration threshold stays unit-testable.
+  static double approachProgress({
+    required double distance,
+    required double worldRadius,
+  }) {
+    if (worldRadius <= 0) return 0.0;
+    if (!distance.isFinite) return 0.0;
+    if (distance <= 1e-9) return 10.0;
+    return math.min(10.0, (worldRadius * 7.0) / distance);
+  }
 
   /// Camera distance for [zoom] around a body. No UI clamp: only a tiny
   /// physical floor so the camera never collapses onto the object.
@@ -180,6 +199,100 @@ class OrbitCameraRig {
     _state.targetY = kExploreAnchor.y;
     _state.targetZ = kExploreAnchor.z;
     preserveEye(eye);
+  }
+
+  /// "Zoom to Detail" flight state ("second tap on the marked object").
+  ///
+  /// The flight eases the camera eye toward the marked body's entry distance
+  /// while the orbit anchor stays pinned to [kExploreAnchor]. The destination
+  /// is re-resolved every step so an orbiting body is tracked rather than
+  /// chased to a stale point. Any manual pinch cancels the flight and hands
+  /// control back to the fingers.
+  bool _flightActive = false;
+  double _flightElapsed = 0.0;
+  double _flightWorldRadius = 1.0;
+  final vm.Vector3 _flightStartEye = vm.Vector3.zero();
+
+  static const double kFlightDuration = 1.1;
+
+  /// Failsafe so a body that keeps outrunning the flight still settles.
+  static const double kFlightTimeout = kFlightDuration + 1.5;
+
+  bool get zoomFlightActive => _flightActive;
+
+  void beginZoomToBody({
+    required double worldRadius,
+    required vm.Vector3 eye,
+  }) {
+    _flightActive = true;
+    _flightElapsed = 0.0;
+    _flightWorldRadius = worldRadius;
+    _flightStartEye
+      ..x = eye.x
+      ..y = eye.y
+      ..z = eye.z;
+  }
+
+  void cancelZoomFlight() {
+    _flightActive = false;
+    _flightElapsed = 0.0;
+  }
+
+  /// Advances the flight by [deltaSeconds] toward [bodyPos]' current location.
+  ///
+  /// Returns the flight state and the current approach progress (see
+  /// [approachProgress]): the view reports progress for the >90% narration
+  /// and opens detail once [done]. Never snaps: the eye always eases.
+  ({bool done, double progress}) stepZoomFlight({
+    required double deltaSeconds,
+    required vm.Vector3 bodyPos,
+  }) {
+    if (!_flightActive) return (done: true, progress: 0.0);
+    _flightElapsed += deltaSeconds.clamp(0.0, 0.1);
+    final t = (_flightElapsed / kFlightDuration).clamp(0.0, 1.0);
+    // Ease-in-out cubic: gentle departure and arrival, brisk middle.
+    final eased = t < 0.5
+        ? 4 * t * t * t
+        : 1 - math.pow(-2 * t + 2, 3).toDouble() / 2;
+    final enter = _flightWorldRadius * 7.0;
+    final eye = _currentEye();
+    final ox = eye.x - bodyPos.x;
+    final oy = eye.y - bodyPos.y;
+    final oz = eye.z - bodyPos.z;
+    final dist = math.max(1e-9, math.sqrt(ox * ox + oy * oy + oz * oz));
+    final dest = vm.Vector3(
+      bodyPos.x + ox / dist * enter,
+      bodyPos.y + oy / dist * enter,
+      bodyPos.z + oz / dist * enter,
+    );
+    _state.targetX = kExploreAnchor.x;
+    _state.targetY = kExploreAnchor.y;
+    _state.targetZ = kExploreAnchor.z;
+    preserveEye(
+      vm.Vector3(
+        _flightStartEye.x + (dest.x - _flightStartEye.x) * eased,
+        _flightStartEye.y + (dest.y - _flightStartEye.y) * eased,
+        _flightStartEye.z + (dest.z - _flightStartEye.z) * eased,
+      ),
+    );
+    final arrived = _currentEye().distanceTo(bodyPos);
+    final progress = approachProgress(
+      distance: arrived,
+      worldRadius: _flightWorldRadius,
+    );
+    final done =
+        arrived <= enter * 1.02 || _flightElapsed >= kFlightTimeout;
+    if (done) _flightActive = false;
+    return (done: done, progress: progress);
+  }
+
+  vm.Vector3 _currentEye() {
+    final cosPhi = math.cos(_state.phi);
+    return vm.Vector3(
+      _state.targetX + _state.radius * cosPhi * math.sin(_state.theta),
+      _state.targetY + _state.radius * math.sin(_state.phi),
+      _state.targetZ + _state.radius * cosPhi * math.cos(_state.theta),
+    );
   }
 
   double snapToBodyPreservingEye({

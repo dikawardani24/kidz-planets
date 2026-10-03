@@ -101,9 +101,50 @@ abstract class SolarSystemSceneController {
     PerspectiveCamera? camera,
   });
 
+  /// Free pinch that zooms toward a known body (the marked target) without
+  /// needing a raycast hit under the fingers.
+  ///
+  /// Unknown ids fall back to a plain dolly, so a stale mark can never throw.
+  void pinchTowardBody(double scale, String planetId);
+
+  /// True when the camera is close enough to [planetId] to enter detail
+  /// (world-radius hysteresis: enter = 7x, the mirror of
+  /// [shouldAutoReleaseFocus]).
+  bool shouldAutoEnterDetail(String planetId, PerspectiveCamera camera);
+
+  /// Zoom progress toward [planetId] for the marked-target narration, or 0
+  /// when the body is unknown. See [OrbitCameraRig.approachProgress].
+  double markZoomProgress(String planetId, PerspectiveCamera camera);
+
+  /// Screen position of [planetId]'s world centre, or null when unknown,
+  /// behind the camera, or outside [viewSize].
+  Offset? projectBodyCenter(
+    String planetId,
+    PerspectiveCamera camera,
+    Size viewSize,
+  );
+
   /// Snap the rig onto [planetId] keeping the given camera eye fixed.
   /// Returns the detail zoom reproducing that distance.
   double prepareSeamlessSelection(String planetId, PerspectiveCamera camera);
+
+  /// Whether a "zoom to Detail" flight is currently running.
+  bool get zoomFlightActive;
+
+  /// Starts the smooth zoom-to-detail flight toward [planetId] from [camera]'s
+  /// eye ("second tap on the marked object"). Unknown ids are ignored.
+  /// Marking itself never zooms; only this call (or a pinch) moves the eye.
+  void startZoomToDetail(String planetId, PerspectiveCamera camera);
+
+  /// Stops a running flight (manual pinch, retap, or mark switch).
+  void cancelZoomFlight();
+
+  /// Advances the flight and returns its state plus approach progress.
+  /// Unknown bodies end the flight as done with zero progress.
+  ({bool done, double progress}) stepZoomFlight(
+    double deltaSeconds,
+    String planetId,
+  );
 
   /// Freeze [camera]'s eye into the orbit state so the following deselection
   /// keeps the exact camera position for free exploration, and restore the
@@ -437,6 +478,39 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   }
 
   @override
+  double markZoomProgress(String planetId, PerspectiveCamera camera) {
+    final worldR = bodyWorldRadius(planetId);
+    if (worldR == null) return 0.0;
+    return OrbitCameraRig.approachProgress(
+      distance: _distanceToBody(planetId, camera),
+      worldRadius: worldR,
+    );
+  }
+
+  @override
+  void pinchTowardBody(double scale, String planetId) {
+    _rig.pinchToward(scale, focalWorldPoint: bodyWorldPosition(planetId));
+  }
+
+  @override
+  bool shouldAutoEnterDetail(String planetId, PerspectiveCamera camera) {
+    final distance = _distanceToBody(planetId, camera);
+    return distance <= _enterThreshold(planetId);
+  }
+
+  @override
+  Offset? projectBodyCenter(
+    String planetId,
+    PerspectiveCamera camera,
+    Size viewSize,
+  ) {
+    if (viewSize.isEmpty) return null;
+    final pos = bodyWorldPosition(planetId);
+    if (pos == null) return null;
+    return camera.worldToScreen(pos, viewSize);
+  }
+
+  @override
   double prepareSeamlessSelection(
     String planetId,
     PerspectiveCamera camera,
@@ -452,6 +526,35 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
       isSun: render.isSun,
       eye: camera.position.clone(),
     );
+  }
+
+  @override
+  bool get zoomFlightActive => _rig.zoomFlightActive;
+
+  @override
+  void startZoomToDetail(String planetId, PerspectiveCamera camera) {
+    final render = _builder.states[planetId];
+    if (render == null) return;
+    _rig.beginZoomToBody(
+      worldRadius: OrbitCameraRig.worldRadiusOf(render),
+      eye: camera.position.clone(),
+    );
+  }
+
+  @override
+  void cancelZoomFlight() => _rig.cancelZoomFlight();
+
+  @override
+  ({bool done, double progress}) stepZoomFlight(
+    double deltaSeconds,
+    String planetId,
+  ) {
+    final pos = bodyWorldPosition(planetId);
+    if (pos == null) {
+      _rig.cancelZoomFlight();
+      return (done: true, progress: 0.0);
+    }
+    return _rig.stepZoomFlight(deltaSeconds: deltaSeconds, bodyPos: pos);
   }
 
   @override
