@@ -54,12 +54,70 @@ void main() {
 
       await tester.tap(find.text("LET'S EXPLORE!"));
       await tester.pump();
+      // The launch beat: the Explorer is already built underneath the intro,
+      // but the intro is still the one on screen.
       await tester.pump(const Duration(milliseconds: 700));
+      expect(find.text('explorer-ready'), findsOneWidget);
+      expect(find.text('SPACE ADVENTURE'), findsOneWidget);
+
+      // The handover: both pages alive and crossfading, neither snapped away.
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('explorer-ready'), findsOneWidget);
+      expect(find.text('SPACE ADVENTURE'), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 400));
+      // One more frame for the gate to drop the finished intro from the tree.
+      await tester.pump();
 
       expect(find.text('explorer-ready'), findsOneWidget);
       expect(find.text('SPACE ADVENTURE'), findsNothing);
     },
   );
+
+  testWidgets('the handover is one animated zoom, not a cut: the CTA is dead on the way '
+      'out and the Explorer settles to full size', (tester) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final hooks = FakeStartupHooks();
+    await tester.pumpWidget(
+      localizedApp(
+        const StartupGate(explorerBuilder: _StubExplorer.new),
+        overrides: [startupWith(hooks)],
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    hooks.openGate(SolarSystemStartupTaskId.solarSystem);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text("LET'S EXPLORE!"));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Mid-flight the intro is still hit-testable-looking but must not respond:
+    // a second tap during the handover cannot restart the swap.
+    await tester.tap(find.text("LET'S EXPLORE!"), warnIfMissed: false);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump();
+
+    // Straight through: still the Explorer, no bounce back to the intro.
+    expect(find.text('explorer-ready'), findsOneWidget);
+    expect(find.text('SPACE ADVENTURE'), findsNothing);
+
+    final scale = tester
+        .widgetList<ScaleTransition>(find.byType(ScaleTransition))
+        .map((t) => t.scale.value)
+        .toList();
+    expect(
+      scale.where((s) => s > 1.0),
+      isEmpty,
+      reason: 'every page has settled back to full size by now',
+    );
+  });
 
   testWidgets('a failed startup keeps the child on the intro, never a blank '
       'screen', (tester) async {
