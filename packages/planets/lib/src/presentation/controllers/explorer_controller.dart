@@ -5,6 +5,7 @@
 // ignore_for_file: prefer_initializing_formals
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -99,8 +100,10 @@ class ExplorerController extends StateNotifier<ExplorerState> {
 
   void adjustDetailZoom(double delta) {
     if (!state.hasSelection) return;
+    // Detail zoom is intentionally unbounded. The scene camera owns the
+    // physical safety floor; the UI must not impose a user-facing zoom limit.
     state = state.copyWith(
-      detailZoom: (state.detailZoom + delta).clamp(0.4, 2.6),
+      detailZoom: math.max(0.001, state.detailZoom + delta),
     );
   }
 
