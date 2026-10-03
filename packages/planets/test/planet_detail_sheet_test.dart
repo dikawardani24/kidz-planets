@@ -116,4 +116,95 @@ void main() {
       reason: 're-expanding the card must not overflow',
     );
   });
+
+  group('focus side rails', () {
+    // The rails only exist while a body is focused, so the container is used to
+    // put the explorer into that state rather than a tap on the scene, which a
+    // widget test has no way to aim.
+    Future<ProviderContainer> pumpRails(
+      WidgetTester tester, {
+      String? selectedPlanetId,
+    }) async {
+      await tester.pumpWidget(
+        localizedApp(
+          const Scaffold(
+            backgroundColor: Colors.black,
+            body: DetailSideRails(),
+          ),
+        ),
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(DetailSideRails)),
+      );
+      if (selectedPlanetId != null) {
+        container
+            .read(explorerControllerProvider.notifier)
+            .selectPlanet(selectedPlanetId);
+        await tester.pumpAndSettle();
+      }
+      return container;
+    }
+
+    testWidgets('the rails stay hidden until a body is focused', (
+      tester,
+    ) async {
+      await pumpRails(tester);
+      expect(find.byType(DetailSideRails), findsOneWidget);
+      expect(find.byIcon(Icons.close), findsNothing);
+      expect(find.byIcon(Icons.refresh), findsNothing);
+      expect(find.byIcon(Icons.add), findsNothing);
+    });
+
+    testWidgets('focusing a body offers a way back out', (tester) async {
+      final container = await pumpRails(tester, selectedPlanetId: 'jupiter');
+
+      // In, out and back to the default framing, all on the one rail.
+      expect(find.byIcon(Icons.add), findsOneWidget);
+      expect(find.byIcon(Icons.remove), findsOneWidget);
+      expect(find.byIcon(Icons.refresh), findsOneWidget);
+      expect(find.byIcon(Icons.close), findsOneWidget);
+      expect(container.read(explorerControllerProvider).hasSelection, isTrue);
+
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+
+      expect(
+        container.read(explorerControllerProvider).selectedPlanetId,
+        isNull,
+      );
+      expect(
+        container.read(explorerControllerProvider).focusedPlanetId,
+        isNull,
+      );
+      // The rail leaves with the focus, so there is nothing left to tap twice.
+      expect(find.byIcon(Icons.close), findsNothing);
+    });
+
+    testWidgets('resetting the framing keeps the body focused', (tester) async {
+      // The distinction that matters: the refresh button only puts the camera
+      // back, so it must not read as the way out.
+      final container = await pumpRails(tester, selectedPlanetId: 'jupiter');
+      final notifier = container.read(explorerControllerProvider.notifier);
+
+      notifier.adjustDetailZoom(-1.5);
+      await tester.pumpAndSettle();
+      expect(
+        container.read(explorerControllerProvider).detailZoom,
+        lessThan(1),
+      );
+
+      await tester.tap(find.byIcon(Icons.refresh));
+      await tester.pumpAndSettle();
+
+      expect(container.read(explorerControllerProvider).detailZoom, 1.0);
+      expect(
+        container.read(explorerControllerProvider).selectedPlanetId,
+        'jupiter',
+      );
+
+      // `selectPlanet` arms a hint timer; let it fire so the test ends clean.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+    });
+  });
 }

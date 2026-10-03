@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:avatar/state.dart';
 import 'package:avatar/audio.dart';
 import 'package:planets/audio.dart';
+import 'package:planets/data.dart';
 
 /// Sample rates MPEG-2 defines, indexed by the header's 2-bit rate field.
 /// The cues are 24 kHz, so only that entry is expected to be referenced.
@@ -291,6 +292,96 @@ void main() {
           lessThanOrEqualTo(const Duration(seconds: 2)),
           reason: path,
         );
+      }
+    });
+  });
+
+  group('planet ambience beds', () {
+    // This group exists because the folder used to ship empty. Every selection
+    // resolved `assets/audio/sfx/planets/<id>`, the file was never in the tree,
+    // and `PlanetSoundService` catches and logs the failure, so the app was
+    // silent on every body with nothing but a log line to show for it.
+
+    test('every body in the catalogue has a bed in the source tree', () {
+      for (final body in PlanetCatalog.planets) {
+        final path = PlanetSoundCatalog.body(body.id);
+        expect(
+          path,
+          'assets/audio/sfx/planets/${body.id}.mp3',
+          reason: '${body.id} resolves outside the bed folder',
+        );
+        final file = File(path);
+        expect(
+          file.existsSync(),
+          isTrue,
+          reason: '$path is missing; run python3 tool/generate_planet_sfx.py',
+        );
+        // Past the header, and past the size of the `.gitkeep` that used to be
+        // the only thing in the folder.
+        expect(file.lengthSync(), greaterThan(4096), reason: path);
+      }
+    });
+
+    test('every bed is bundled and decodable', () async {
+      for (final body in PlanetCatalog.planets) {
+        final path = PlanetSoundCatalog.body(body.id);
+        // RootBundle is exactly what `setAsset` reads, so this also proves the
+        // folder is a declared asset rather than merely present on disk.
+        final data = await rootBundle.load(path);
+        final bytes = data.buffer.asUint8List(
+          data.offsetInBytes,
+          data.lengthInBytes,
+        );
+        final stream = _readMp3(bytes);
+        expect(stream.sampleRate, 24000, reason: path);
+        expect(stream.channels, 1, reason: path);
+        // Long enough to establish itself as a bed rather than read as a cue,
+        // and short enough that the loop does not feel stuck.
+        expect(
+          stream.duration,
+          greaterThanOrEqualTo(const Duration(seconds: 3)),
+          reason: path,
+        );
+        expect(
+          stream.duration,
+          lessThanOrEqualTo(const Duration(seconds: 6)),
+          reason: path,
+        );
+      }
+    });
+  });
+
+  group('narration coverage', () {
+    test('every body has its narration bundled', () async {
+      for (final body in PlanetCatalog.planets) {
+        final path = NarrationAudioCatalog.planet(body.id);
+        expect(
+          File(path).existsSync(),
+          isTrue,
+          reason: '$path is missing from the source tree',
+        );
+        expect((await rootBundle.load(path)).lengthInBytes, greaterThan(1024));
+      }
+    });
+
+    test('every hotspot has its narration bundled', () async {
+      // Driven through the same call the detail sheet makes, so a change to how
+      // the catalog turns a hotspot into a path is covered here too.
+      for (final body in PlanetCatalog.planets) {
+        for (final hotspot in body.hotspots) {
+          final path = NarrationAudioCatalog.hotspot(hotspot.title);
+          expect(
+            File(path).existsSync(),
+            isTrue,
+            reason:
+                '$path is missing; ${body.id}/${hotspot.slug} has no '
+                'recording',
+          );
+          expect(
+            (await rootBundle.load(path)).lengthInBytes,
+            greaterThan(1024),
+          );
+        }
       }
     });
   });

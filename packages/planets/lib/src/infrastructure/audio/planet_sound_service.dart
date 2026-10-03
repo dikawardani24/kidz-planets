@@ -134,13 +134,20 @@ class PlanetSoundService {
 }
 
 abstract final class PlanetSoundCatalog {
-  static String body(String id) => 'assets/audio/sfx/planets/$id.wav';
+  /// The looping bed for the focused body.
+  ///
+  /// MP3 to match the narration, the mission cues and the avatar cues, which
+  /// are all MP3. `tool/generate_planet_sfx.py` renders one bed per body and the
+  /// files are committed, so a clone can build without running the generator
+  /// first. They used to ship as an empty directory behind a `.gitkeep`, and
+  /// every selection then failed with "Planet sound unavailable" while the cause
+  /// looked like a container problem.
+  /// `apps/kidz_planets/test/mission_sfx_assets_test.dart` now fails if a body
+  /// has no bed, so that cannot come back silently.
+  static String body(String id) => 'assets/audio/sfx/planets/$id.mp3';
 
-  /// MP3 rather than WAV, matching the narration in
-  /// `assets/audio/narration`, which is the only audio path confirmed to play
-  /// on every target. The cues were authored as 24 kHz mono PCM WAV and match
-  /// the narration's rate and channel count; the container was the only
-  /// difference, so WAV was the thing to rule out and it is now ruled out.
+  /// The celebration cues are hand-authored, so they are MP3 to match the
+  /// narration and to keep the bundle small.
   static const missionSuccess = 'assets/audio/sfx/missions/mission_success.mp3';
   static const missionFailure = 'assets/audio/sfx/missions/mission_failure.mp3';
 }

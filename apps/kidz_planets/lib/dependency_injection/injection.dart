@@ -53,6 +53,20 @@ Future<void> configureDependencies() async {
 /// top instead of stopping their audio the moment the solar system opens, and
 /// the speech attributes keep a planet description intelligible over a
 /// background track rather than competing with it as music would.
+///
+/// Android has no `mixWithOthers`, so the intent has to be expressed through
+/// audio focus instead, and the two halves have to agree:
+///
+/// * `USAGE_MEDIA` with `CONTENT_TYPE_SPEECH` is what Android expects for
+///   spoken content. This used to be `USAGE_ASSISTANCE_SONIFICATION`, which
+///   describes a short UI beep: the platform routes it into the system-sound
+///   group and tags it `FLAG_HINT_CONTENT_TYPE_SONIFICATION`, so the narration
+///   was subject to the system-sounds volume and to system-sound muting rather
+///   than to the media volume the child actually controls.
+/// * Transient ducking rather than `AUDIOFOCUS_GAIN`, because `GAIN` pauses
+///   the other app outright, which is the opposite of mixing over it.
+///   `androidWillPauseWhenDucked: false` then leaves the other app playing
+///   quietly instead of pausing it during the duck.
 const AudioSessionConfiguration _mixWithOthersSpeech =
     AudioSessionConfiguration(
       avAudioSessionCategory: AVAudioSessionCategory.playback,
@@ -64,9 +78,10 @@ const AudioSessionConfiguration _mixWithOthersSpeech =
       avAudioSessionSetActiveOptions: AVAudioSessionSetActiveOptions.none,
       androidAudioAttributes: AndroidAudioAttributes(
         contentType: AndroidAudioContentType.speech,
-        usage: AndroidAudioUsage.assistanceSonification,
+        usage: AndroidAudioUsage.media,
       ),
-      androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
+      androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransientMayDuck,
+      androidWillPauseWhenDucked: false,
     );
 
 /// Releases everything [configureDependencies] created.
