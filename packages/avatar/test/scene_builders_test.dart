@@ -80,16 +80,18 @@ void main() {
     double bank() => avatar.bodyRoot.rotation.z;
     double hover() => avatar.bodyRoot.position.y;
 
-    test('flying banks the rocket forward', () {
+    test('flying flies the circuit upright', () {
+      // It used to bank 0.35 rad, which is a permanent lean: the companion
+      // spends nearly all of its time flying, so the toy sat tipped over.
       tickAtZero(action: AvatarIdleAction.flying);
 
-      expect(bank(), closeTo(math.sin(0.35 / 2), 1e-6));
+      expect(bank(), 0);
     });
 
-    test('thinking tips the rocket back', () {
+    test('thinking stays upright', () {
       tickAtZero(action: AvatarIdleAction.thinking);
 
-      expect(bank(), closeTo(math.sin(-0.15 / 2), 1e-6));
+      expect(bank(), 0);
     });
 
     test('sitting drops the rocket and levels the wings', () {
@@ -114,10 +116,14 @@ void main() {
       }
     });
 
-    test('a hot world overrides the idle action', () {
+    test('a hot world overrides the idle action without leaning on it', () {
+      // The planet used to win the idle action *and* add a 0.15 rad bank on top,
+      // so leaving a hot planet selected left the companion tipped over even
+      // while it was sitting still. It still wins the hover.
       tickAtZero(action: AvatarIdleAction.sitting, planetId: 'sun');
 
-      expect(bank(), closeTo(math.sin(0.15 / 2), 1e-6));
+      expect(bank(), 0);
+      expect(hover(), isNot(closeTo(-0.12, 1e-6)));
     });
 
     test('a rocky world keeps the idle action animation', () {
@@ -289,6 +295,122 @@ void main() {
         reason: 'the second sad starts from zero again',
       );
       expect(settled, lessThan(settledHover));
+    });
+  });
+
+  group('AvatarSceneBuilder body scale', () {
+    late AvatarSceneBuilder avatar;
+
+    setUp(
+      () => avatar = AvatarSceneBuilder(
+        geometries: AvatarGeometryFactory(),
+        materials: AvatarMaterialFactory(),
+      ),
+    );
+
+    test('the body is drawn larger than it was tuned at', () {
+      // The face is painted at a fixed size, so this is the only lever that
+      // makes the rocket read as a body rather than a face on a toy. Pinned
+      // because the painted porthole anchor is expressed as a multiple of it.
+      expect(avatar.bodyScale, closeTo(0.714, 1e-9));
+      expect(avatar.bodyScale, greaterThan(AvatarBodyScale.tuned));
+    });
+  });
+
+  group('AvatarSceneBuilder.idlePose', () {
+    // The rocket is a friend standing next to the child, so it stands upright.
+    // These pin the invariant that a *resting* pose never leans, because the
+    // lean used to be permanent: flying banked 0.35 rad into every circuit and
+    // a hot planet added 0.15 rad on top of it, which parked the toy off-plumb
+    // for the whole session.
+    const planets = [
+      'mercury',
+      'venus',
+      'earth',
+      'mars',
+      'jupiter',
+      'saturn',
+      'uranus',
+      'neptune',
+      'pluto',
+    ];
+
+    test('no idle action rests off-plumb', () {
+      for (final action in AvatarIdleAction.values) {
+        // The wobble is the dance, and it is symmetric about vertical.
+        if (action == AvatarIdleAction.dancing) {
+          continue;
+        }
+        for (var i = 0; i < 40; i++) {
+          final pose = AvatarSceneBuilder.idlePose(
+            t: i / 7,
+            idleAction: action,
+            selectedPlanetId: null,
+          );
+          expect(pose.tilt, 0, reason: '$action leaned at t=${i / 7}');
+        }
+      }
+    });
+
+    test('no planet selection leaves the companion leaning while it flies', () {
+      for (final planet in planets) {
+        for (var i = 0; i < 40; i++) {
+          final pose = AvatarSceneBuilder.idlePose(
+            t: i / 7,
+            idleAction: AvatarIdleAction.flying,
+            selectedPlanetId: planet,
+          );
+          expect(
+            pose.tilt,
+            0,
+            reason: 'flying over $planet leaned at t=${i / 7}',
+          );
+        }
+      }
+    });
+
+    test('the dance wobbles about vertical instead of leaning off it', () {
+      var min = double.infinity;
+      var max = -double.infinity;
+      for (var i = 0; i < 200; i++) {
+        final tilt = AvatarSceneBuilder.idlePose(
+          t: i / 20,
+          idleAction: AvatarIdleAction.dancing,
+          selectedPlanetId: null,
+        ).tilt;
+        min = tilt < min ? tilt : min;
+        max = tilt > max ? tilt : max;
+      }
+      expect(min, lessThan(0), reason: 'swings one way');
+      expect(max, greaterThan(0), reason: 'and the other');
+      expect(
+        (min + max).abs(),
+        lessThan(0.02),
+        reason: 'and passes back through upright rather than resting over',
+      );
+    });
+
+    test('a hot or icy world is told apart by its hover, not its lean', () {
+      final hot = AvatarSceneBuilder.idlePose(
+        t: 1.0,
+        idleAction: AvatarIdleAction.flying,
+        selectedPlanetId: 'venus',
+      );
+      final ice = AvatarSceneBuilder.idlePose(
+        t: 1.0,
+        idleAction: AvatarIdleAction.flying,
+        selectedPlanetId: 'neptune',
+      );
+      final calm = AvatarSceneBuilder.idlePose(
+        t: 1.0,
+        idleAction: AvatarIdleAction.flying,
+        selectedPlanetId: 'earth',
+      );
+      expect(
+        hot.hover.abs() + ice.hover.abs(),
+        greaterThan(calm.hover.abs() + 0.01),
+      );
+      expect({hot.hover, ice.hover}, isNot(equals(calm.hover)));
     });
   });
 }

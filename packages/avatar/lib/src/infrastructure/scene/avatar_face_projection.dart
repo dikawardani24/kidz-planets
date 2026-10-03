@@ -101,7 +101,7 @@ class AvatarFaceProjection {
       AvatarPorthole.depth,
     );
     final windowInWorld = avatarRotation.rotated(
-      bodyRotation.rotated(windowInBody) + vm.Vector3(0, motion.hover, 0),
+      bodyRotation.rotated(windowInBody),
     );
 
     // The face looks down the rocket's nose, so it is the window normal - not
@@ -129,10 +129,21 @@ class AvatarFaceProjection {
     final focalLength = (box.height / 2) / math.tan(cameraFovRadiansY / 2);
     final scale = focalLength / depth;
 
+    // The body rises and falls in the plane of its own centre, which is a
+    // cameraDistance in front of the camera, so that is the plane whose
+    // pixels-per-unit the face has to travel in. Adding the hover to the
+    // window instead - where it would be projected with the window's own,
+    // closer depth - slid the face further than the body it is painted on every
+    // time the companion hovered, sat down or was dropped, and walked it off
+    // the window by a pixel per three.
+    final bodyScale = focalLength / cameraDistance;
+    final vertical =
+        (windowInWorld.y - cameraTargetY) * scale + motion.hover * bodyScale;
+
     return AvatarFaceProjection(
       centre: Offset(
         box.width / 2 + windowInWorld.x * scale,
-        box.height / 2 - (windowInWorld.y - cameraTargetY) * scale,
+        box.height / 2 - vertical,
       ),
       radius: AvatarPorthole.radius * scale,
       facing: facing,
