@@ -199,8 +199,11 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
           // Zooming out far enough automatically exits detail mode. This is
           // based on real camera/body distance rather than a UI percentage.
           final updatedUi = ref.read(explorerControllerProvider);
-          final camera = controller.buildCamera(ui: updatedUi);
-          if (controller.shouldAutoReleaseFocus(selectedId, camera)) {
+          final camera = _lastCamera;
+          final selectedId = updatedUi.selectedPlanetId;
+          if (camera != null &&
+              selectedId != null &&
+              controller.shouldAutoReleaseFocus(selectedId, camera)) {
             ref.read(explorerControllerProvider.notifier).closeDetail();
           }
         } else {
@@ -209,14 +212,14 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
           // Overview zoom is not just a radial slider. Once the body under the
           // pinch focal point is physically close enough, promote it to detail
           // mode so the child can keep zooming naturally into that object.
-          final camera = controller.buildCamera(
-            ui: ref.read(explorerControllerProvider),
-          );
-          final pickedId = controller.pickPlanetForAutoFocus(
-            details.focalPoint,
-            size,
-            camera,
-          );
+          final camera = _lastCamera;
+          final pickedId = camera == null
+              ? null
+              : controller.pickPlanetForAutoFocus(
+                  details.focalPoint,
+                  context.size ?? Size.zero,
+                  camera,
+                );
           if (pickedId != null) {
             ref
                 .read(explorerControllerProvider.notifier)
