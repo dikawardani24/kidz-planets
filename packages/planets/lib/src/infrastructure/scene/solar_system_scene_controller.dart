@@ -77,7 +77,10 @@ abstract class SolarSystemSceneController {
   /// Converts the current camera distance into the detail zoom value used by
   /// the selected-body camera. This lets automatic selection preserve the
   /// exact zoom level instead of snapping back to 1.0.
-  double detailZoomForPlanetAtCameraDistance(String planetId, double cameraDistance);
+  double detailZoomForPlanetAtCameraDistance(
+    String planetId,
+    PerspectiveCamera camera,
+  );
 
   /// Returns true when a focused body has been zoomed far enough away that
   /// detail mode should hand control back to free exploration.
@@ -304,10 +307,13 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   @override
   double detailZoomForPlanetAtCameraDistance(
     String planetId,
-    double cameraDistance,
+    PerspectiveCamera camera,
   ) {
     final render = _builder.states[planetId];
-    if (render == null || !cameraDistance.isFinite) return 1.0;
+    if (render == null) return 1.0;
+    final world = render.node.globalTransform.getTranslation();
+    final cameraDistance = camera.position.distanceTo(world);
+    if (!cameraDistance.isFinite) return 1.0;
     final baseDistance = render.radius * (render.isSun ? 3.4 : 3.6);
     return math.max(cameraDistance / baseDistance, 0.001);
   }
