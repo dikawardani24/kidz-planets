@@ -37,6 +37,7 @@ void main() {
       closeDetail: explorer.closeDetail,
       startSuccessCue: () => effects.add('cue:start'),
       stopSuccessCue: () => effects.add('cue:stop'),
+      playPlanetSound: (_) {},
       lightHaptic: () => effects.add('haptic:light'),
       mediumHaptic: () => effects.add('haptic:medium'),
     );

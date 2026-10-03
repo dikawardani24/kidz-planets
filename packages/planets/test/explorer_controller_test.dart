@@ -198,13 +198,22 @@ void main() {
       expect(c.state.detailZoom, 1.0);
     });
 
-    test('adjustDetailZoom clamps at both ends', () {
+    test('adjustDetailZoom continues past the old 2.6 ceiling', () {
       c.selectPlanet('mars');
       c.adjustDetailZoom(99);
-      expect(c.state.detailZoom, 2.6);
+      expect(c.state.detailZoom, closeTo(100.0, 1e-9));
+    });
 
+    test('adjustDetailZoom continues past the old 0.4 floor', () {
+      c.selectPlanet('mars');
       c.adjustDetailZoom(-99);
-      expect(c.state.detailZoom, 0.4);
+      expect(c.state.detailZoom, closeTo(0.001, 1e-9));
+    });
+
+    test('selectPlanet preserves the pinch distance instead of snapping', () {
+      c.selectPlanet('earth', initialDetailZoom: 0.146);
+      expect(c.state.detailZoom, closeTo(0.146, 1e-9));
+      expect(c.state.selectedPlanetId, 'earth');
     });
 
     test('resetDetailView does nothing without a selection', () {

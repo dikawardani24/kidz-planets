@@ -5,6 +5,7 @@
 // ignore_for_file: prefer_initializing_formals
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -49,7 +50,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
 
   void toggleLabels() => state = state.copyWith(showLabels: !state.showLabels);
 
-  void selectPlanet(String id) {
+  void selectPlanet(String id, {double initialDetailZoom = 1.0}) {
     // Tapping the already-focused body exits detail mode. Facts are never
     // required to leave the focused view.
     if (state.selectedPlanetId == id) {
@@ -60,7 +61,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     state = state.copyWith(
       selectedPlanetId: id,
       focusedPlanetId: id,
-      detailZoom: 1.0,
+      detailZoom: math.max(0.001, initialDetailZoom),
       detailTheta: 0.65,
       detailPhi: 0.28,
       detailHotspot: null,
@@ -100,7 +101,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   void adjustDetailZoom(double delta) {
     if (!state.hasSelection) return;
     state = state.copyWith(
-      detailZoom: (state.detailZoom + delta).clamp(0.4, 2.6),
+      detailZoom: math.max(0.001, state.detailZoom + delta),
     );
   }
 

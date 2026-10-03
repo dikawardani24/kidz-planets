@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scene/scene.dart';
@@ -80,7 +82,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
           // Scale handles both one-finger drag and two-finger pinch.
           // A separate Pan recognizer competes with Scale in Flutter's gesture arena.
           onScaleStart: _onScaleStart,
-          onScaleUpdate: _onScaleUpdate,
+          onScaleUpdate: (details) => _onScaleUpdate(details, size),
           onScaleEnd: _onScaleEnd,
           onDoubleTap: () {
             ref.read(explorerControllerProvider.notifier).resetDetailView();
@@ -175,7 +177,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     // rendered frame, giving the globe/model a natural inertial finish.
   }
 
-  void _onScaleUpdate(ScaleUpdateDetails details) {
+  void _onScaleUpdate(ScaleUpdateDetails details, Size viewSize) {
     final controller = ref.read(solarSystemSceneControllerProvider);
     final ui = ref.read(explorerControllerProvider);
 
@@ -192,11 +194,63 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
           // Pinch zoom is persistent: releasing the gesture must not
           // leave detail mode or reset the current zoom. Leaving detail is
           // handled explicitly, not as a side effect of ScaleEnd.
+          // No clamp: detail zoom is unbounded (only a tiny physical floor).
           ref
               .read(explorerControllerProvider.notifier)
-              .updateDetailCamera(zoom: nextZoom.clamp(0.4, 2.6));
+              .updateDetailCamera(zoom: math.max(0.001, nextZoom));
+
+          // Deselect only on real world-space distance (hysteresis), keeping
+          // the exact camera position for free exploration. The eye is
+          // frozen synchronously here: the scene tick must not do it, since
+          // it can run with a stale frame's UI and snap back to 100%.
+          final updatedUi = ref.read(explorerControllerProvider);
+          final camera = controller.buildCamera(updatedUi);
+          _lastCamera = camera;
+          final selectedId = updatedUi.selectedPlanetId;
+          if (selectedId != null &&
+              controller.shouldAutoReleaseFocus(selectedId, camera)) {
+            controller.preserveReleaseEye(camera);
+            ref.read(explorerControllerProvider.notifier).closeDetail();
+          }
         } else {
-          controller.pinch(incrementalScale);
+          // Resolve the focal body with the pre-pinch camera so the zoom
+          // moves toward what is under the fingers (Earth, Jupiter, ...),
+          // not always toward the origin/Sun. Then check auto-select with a
+          // freshly built camera (not a one-frame-stale _lastCamera).
+          final beforeCamera = controller.buildCamera(
+            ref.read(explorerControllerProvider),
+          );
+          controller.pinchWithFocalPoint(
+            incrementalScale,
+            focalScreenPoint: details.localFocalPoint,
+            viewSize: viewSize,
+            camera: _lastCamera ?? beforeCamera,
+          );
+          final camera = controller.buildCamera(
+            ref.read(explorerControllerProvider),
+          );
+          _lastCamera = camera;
+          final pickedId = controller.pickPlanetForAutoFocus(
+            details.localFocalPoint,
+            viewSize,
+            camera,
+          );
+          if (pickedId != null) {
+            // Preserve the exact pinch distance: no snap to a default.
+            final initialZoom = controller.prepareSeamlessSelection(
+              pickedId,
+              camera,
+            );
+            void select() => ref
+                .read(explorerControllerProvider.notifier)
+                .selectPlanet(pickedId, initialDetailZoom: initialZoom);
+            // prepareSeamlessSelection snaps the rig only when the explorer is
+            // still unselected; guard against a race where selection landed
+            // between the pick and now.
+            if (!ref.read(explorerControllerProvider).hasSelection) {
+              select();
+            }
+          }
         }
         _lastScale = details.scale;
       }

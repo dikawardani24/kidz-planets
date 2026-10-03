@@ -30,8 +30,8 @@ class OrbitCameraRig {
   CameraRigState get state => _state;
 
   static const double kOverviewRadius = 46.0;
-  static const double kMaxRadius = 90.0;
-  static const double kMinRadius = 8.0;
+  static const double kMaxRadius = 10e9;
+  static const double kMinRadius = 1e-4;
 
   void resetOverview() {
     _state
@@ -49,7 +49,122 @@ class OrbitCameraRig {
   }
 
   void pinch(double scaleFactor) {
-    _state.radius = (_state.radius / scaleFactor).clamp(kMinRadius, kMaxRadius);
+    if (!scaleFactor.isFinite || scaleFactor <= 0) return;
+    final next = _state.radius / scaleFactor;
+    if (!next.isFinite) return;
+    // Physical safety only: keep the camera transform valid without imposing
+    // a user-facing zoom limit.
+    _state.radius = next.clamp(1e-4, 1e9);
+  }
+
+  /// Free-exploration pinch that can move toward a focal world point.
+  ///
+  /// [scaleFactor] follows the same convention as [pinch] (>1 zooms in).
+  /// When [focalWorldPoint] is given and the gesture zooms in, the orbit
+  /// target is pulled toward that point so pinching over Jupiter moves toward
+  /// Jupiter instead of always dollying toward the solar-system origin
+  /// (which is why the Sun used to be the only body with usable zoom).
+  /// Zoom-out leaves the target alone so the user keeps their anchor.
+  void pinchToward(double scaleFactor, {vm.Vector3? focalWorldPoint}) {
+    if (!scaleFactor.isFinite || scaleFactor <= 0) return;
+    if (focalWorldPoint != null && scaleFactor > 1.0) {
+      final pull = (1.0 - 1.0 / scaleFactor).clamp(0.0, 1.0);
+      // Pull strongly toward the focal body so repeated pinch frames converge.
+      const kPull = 0.9;
+      final t = (pull * kPull).clamp(0.0, 1.0);
+      _state.targetX += (focalWorldPoint.x - _state.targetX) * t;
+      _state.targetY += (focalWorldPoint.y - _state.targetY) * t;
+      _state.targetZ += (focalWorldPoint.z - _state.targetZ) * t;
+    }
+    pinch(scaleFactor);
+  }
+
+  /// World-space radius of a body (logical radius scaled by node transform).
+  ///
+  /// Meshes are built with `sphere(planet.radius)` and nodes carry no manual
+  /// scale in the normal pipeline, so this usually equals [PlanetRenderState.radius].
+  /// Deriving it from the global transform keeps the camera correct even if a
+  /// body is rescaled later (the Sun's large scale is what accidentally made
+  /// old origin-based zoom feel right for the Sun only).
+  static double worldRadiusOf(PlanetRenderState render) {
+    try {
+      final scale = render.node.globalTransform.getMaxScaleOnAxis();
+      if (scale.isFinite && scale > 0) return render.radius * scale;
+    } catch (_) {
+      // Fall through to logical radius.
+    }
+    return render.radius;
+  }
+
+  static vm.Vector3 worldPositionOf(PlanetRenderState render) =>
+      render.node.globalTransform.getTranslation().clone();
+
+  static double baseDistanceFor({
+    required double worldRadius,
+    required bool isSun,
+  }) =>
+      worldRadius * (isSun ? 3.4 : 3.6);
+
+  /// Camera distance for [zoom] around a body. No UI clamp: only a tiny
+  /// physical floor so the camera never collapses onto the object.
+  double detailRadiusForZoom(
+    double zoom, {
+    double? worldRadius,
+    bool? isSun,
+  }) {
+    final r = worldRadius ?? _focusedPlanetRadius;
+    final sun = isSun ?? _focusedPlanetIsSun;
+    return math.max(0.001, baseDistanceFor(worldRadius: r, isSun: sun) * zoom);
+  }
+
+  /// Instantly adopt [bodyPos] as the orbit target while keeping the current
+  /// camera eye fixed. Returns the detail zoom that reproduces [distance].
+  ///
+  /// Used for automatic pinch selection so `selectedPlanetId = Earth` does not
+  /// move the camera: distance stays exactly where the pinch left it instead of
+  /// snapping to the default focus distance.
+  /// Freeze [eye] into the orbit state exactly: the next frame renders the
+  /// same camera position. The target is left alone, so this is also what
+  /// keeps the eye fixed when detail mode hands back to free exploration.
+  void preserveEye(vm.Vector3 eye) {
+    final ox = eye.x - _state.targetX;
+    final oy = eye.y - _state.targetY;
+    final oz = eye.z - _state.targetZ;
+    final distance = math.max(
+      1e-4,
+      math.sqrt(ox * ox + oy * oy + oz * oz),
+    );
+    _state
+      ..theta = math.atan2(ox, oz)
+      ..phi = math.asin((oy / distance).clamp(-1.0, 1.0))
+      ..radius = distance.clamp(1e-4, 1e9);
+  }
+
+  double snapToBodyPreservingEye({
+    required String planetId,
+    required vm.Vector3 bodyPos,
+    required double worldRadius,
+    required bool isSun,
+    required vm.Vector3 eye,
+  }) {
+    _state
+      ..targetX = bodyPos.x
+      ..targetY = bodyPos.y
+      ..targetZ = bodyPos.z;
+    preserveEye(eye);
+    final distance = _state.radius;
+    _activeFocusId = planetId;
+    _focusProgress = 1.0;
+    _focusElapsed = 0.0;
+    _focusStartTarget = bodyPos.clone();
+    _focusTarget = bodyPos.clone();
+    _focusStartRadius = distance;
+    _focusTargetRadius = distance;
+    _focusedPlanetRadius = worldRadius;
+    _focusedPlanetIsSun = isSun;
+    final base = baseDistanceFor(worldRadius: worldRadius, isSun: isSun);
+    _displayDetailZoom = distance / base;
+    return _displayDetailZoom;
   }
 
   /// Automatic readability rule for object labels.
@@ -67,19 +182,26 @@ class OrbitCameraRig {
   }
 
   /// Eases the focus target toward a planet's current world position.
+  ///
+  /// [detailZoom] is the user's current detail zoom: the flight lands on the
+  /// exact distance the user already reached instead of snapping back to the
+  /// default 100% framing. Tap selection passes 1.0, so its cinematic flight
+  /// is unchanged; pinch auto-selection passes the preserved zoom.
   void focusOn(
     String planetId,
     SolarSystemSceneBuilder builder, {
     double deltaSeconds = 1 / 60,
+    double detailZoom = 1.0,
   }) {
     final render = builder.states[planetId];
     if (render == null) return;
 
-    final p = render.node.globalTransform.getTranslation();
+    final p = worldPositionOf(render);
     final destination = p.clone();
+    final worldR = worldRadiusOf(render);
     final destinationRadius = _detailRadius(
-      1.0,
-      radius: render.radius,
+      detailZoom,
+      radius: worldR,
       isSun: render.isSun,
     );
 
@@ -93,12 +215,12 @@ class OrbitCameraRig {
         _state.targetZ,
       );
       _focusStartRadius = _state.radius;
-      _displayDetailZoom = 1.0;
+      _displayDetailZoom = detailZoom;
     }
 
     _focusTarget = destination;
     _focusTargetRadius = destinationRadius;
-    _focusedPlanetRadius = render.radius;
+    _focusedPlanetRadius = worldR;
     _focusedPlanetIsSun = render.isSun;
 
     // A short eased camera flight is much more stable than chasing a moving
@@ -123,18 +245,16 @@ class OrbitCameraRig {
   }
 
   void releaseFocus() {
+    // Pure tracking reset: the radius/target handover now happens
+    // synchronously in the gesture handler ([preserveEye]) before the
+    // selection state changes, so a scene tick running with a stale frame's
+    // UI can never overwrite the preserved camera distance with a default.
+    // The target stays on the body instead of recentering on the Sun/origin.
     _activeFocusId = null;
     _focusProgress = 1.0;
     _focusElapsed = 0.0;
-    const k = 0.08;
-    _state.targetX *= (1 - k);
-    _state.targetY *= (1 - k);
-    _state.targetZ *= (1 - k);
     _focusedPlanetRadius = 1.0;
     _focusedPlanetIsSun = false;
-    if (_state.radius < kOverviewRadius) {
-      _state.radius += (kOverviewRadius - _state.radius) * 0.05;
-    }
   }
 
   /// Builds the camera for this frame.
@@ -185,15 +305,12 @@ class OrbitCameraRig {
   }
 
   double _detailRadius(double zoom, {double? radius, bool? isSun}) {
-    final focusedRadius = radius ?? _focusedPlanetRadius;
-    final focusedIsSun = isSun ?? _focusedPlanetIsSun;
-    // Moons are tiny (0.10–0.42 units) and orbit close to bright parents.
-    // A floor of 2.5 buries them behind the parent/zoom math that was tuned
-    // for full-size planets — so clamp relative to the focused body size.
-    final bodyMin = (focusedRadius * 3.0).clamp(0.45, 2.5);
-    final bodyMax = (focusedRadius * 22.0).clamp(6.0, 30.0);
-    final baseDistance = focusedRadius * (focusedIsSun ? 3.4 : 3.6);
-    return (baseDistance * zoom).clamp(bodyMin, bodyMax);
+    final worldR = radius ?? _focusedPlanetRadius;
+    final sun = isSun ?? _focusedPlanetIsSun;
+    return math.max(
+      0.001,
+      baseDistanceFor(worldRadius: worldR, isSun: sun) * zoom,
+    );
   }
 }
 

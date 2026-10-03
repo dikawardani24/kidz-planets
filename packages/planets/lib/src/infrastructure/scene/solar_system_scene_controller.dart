@@ -65,6 +65,52 @@ abstract class SolarSystemSceneController {
     Size viewSize,
     PerspectiveCamera camera,
   );
+
+  /// Body under [screenPosition] only when the camera is already close enough
+  /// for automatic detail selection (world-radius hysteresis: enter = 7x).
+  String? pickPlanetForAutoFocus(
+    Offset screenPosition,
+    Size viewSize,
+    PerspectiveCamera camera,
+  );
+
+  /// Detail zoom reproducing the current camera distance to [planetId], so
+  /// auto-selection preserves the exact pinch distance instead of snapping to
+  /// the default focus distance.
+  double detailZoomForPlanetAtCameraDistance(
+    String planetId,
+    PerspectiveCamera camera,
+  );
+
+  /// True when a focused body has been zoomed far enough away (world-radius
+  /// hysteresis: exit = 12x) that detail mode should hand back to free explore.
+  bool shouldAutoReleaseFocus(String planetId, PerspectiveCamera camera);
+
+  /// World-space centre of [planetId], or null when unknown.
+  vm.Vector3? bodyWorldPosition(String planetId);
+
+  /// World-space rendered radius of [planetId] (logical radius × node scale).
+  double? bodyWorldRadius(String planetId);
+
+  /// Free pinch that zooms toward whatever is under the focal screen point
+  /// instead of always dollying toward the origin/Sun.
+  void pinchWithFocalPoint(
+    double scale, {
+    Offset? focalScreenPoint,
+    Size? viewSize,
+    PerspectiveCamera? camera,
+  });
+
+  /// Snap the rig onto [planetId] keeping the given camera eye fixed.
+  /// Returns the detail zoom reproducing that distance.
+  double prepareSeamlessSelection(String planetId, PerspectiveCamera camera);
+
+  /// Freeze [camera]'s eye into the orbit state so the following deselection
+  /// keeps the exact camera position for free exploration. Call synchronously
+  /// before clearing the selection: the per-frame tick must never do this
+  /// itself, because it can run with a stale frame's UI and would then
+  /// overwrite the preserved distance with a default.
+  void preserveReleaseEye(PerspectiveCamera camera);
   void spinPlanet(String planetId, double delta);
   void rotatePlanet(String planetId, double dx, double dy);
   void rotateSolarSystem(double dx, double dy);
@@ -210,7 +256,15 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
 
     _animator?.tick(deltaSeconds);
     if (focused != null) {
-      _rig.focusOn(focused, _builder, deltaSeconds: deltaSeconds);
+      // Land the focus flight on the user's current zoom, not on a default:
+      // otherwise a fresh/restarted flight drags the camera back to 100%
+      // framing while the user is pinching out toward deselection.
+      _rig.focusOn(
+        focused,
+        _builder,
+        deltaSeconds: deltaSeconds,
+        detailZoom: ui.detailZoom,
+      );
     } else {
       _rig.releaseFocus();
     }
@@ -297,11 +351,139 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   void pinch(double scale) => _rig.pinch(scale);
 
   @override
+  vm.Vector3? bodyWorldPosition(String planetId) {
+    final render = _builder.states[planetId];
+    if (render == null) return null;
+    return OrbitCameraRig.worldPositionOf(render);
+  }
+
+  @override
+  double? bodyWorldRadius(String planetId) {
+    final render = _builder.states[planetId];
+    if (render == null) return null;
+    return OrbitCameraRig.worldRadiusOf(render);
+  }
+
+  double _enterThreshold(String planetId) {
+    final worldR = bodyWorldRadius(planetId);
+    if (worldR == null) return double.infinity;
+    return worldR * 7.0;
+  }
+
+  double _exitThreshold(String planetId) {
+    final worldR = bodyWorldRadius(planetId);
+    if (worldR == null) return double.infinity;
+    return worldR * 12.0;
+  }
+
+  double _distanceToBody(String planetId, PerspectiveCamera camera) {
+    final pos = bodyWorldPosition(planetId);
+    if (pos == null) return double.infinity;
+    return camera.position.distanceTo(pos);
+  }
+
+  @override
+  String? pickPlanetForAutoFocus(
+    Offset screenPosition,
+    Size viewSize,
+    PerspectiveCamera camera,
+  ) {
+    final picked = pickPlanet(screenPosition, viewSize, camera);
+    if (picked == null) return null;
+    final distance = _distanceToBody(picked, camera);
+    if (distance <= _enterThreshold(picked)) return picked;
+    return null;
+  }
+
+  @override
+  double detailZoomForPlanetAtCameraDistance(
+    String planetId,
+    PerspectiveCamera camera,
+  ) {
+    final render = _builder.states[planetId];
+    final worldR = bodyWorldRadius(planetId) ?? render?.radius ?? 1.0;
+    final isSun = render?.isSun ?? false;
+    final distance = _distanceToBody(planetId, camera);
+    if (!distance.isFinite) return 1.0;
+    final base = OrbitCameraRig.baseDistanceFor(
+      worldRadius: worldR,
+      isSun: isSun,
+    );
+    if (base <= 0) return 1.0;
+    return math.max(0.001, distance / base);
+  }
+
+  @override
+  bool shouldAutoReleaseFocus(String planetId, PerspectiveCamera camera) {
+    final distance = _distanceToBody(planetId, camera);
+    return distance >= _exitThreshold(planetId);
+  }
+
+  @override
+  void pinchWithFocalPoint(
+    double scale, {
+    Offset? focalScreenPoint,
+    Size? viewSize,
+    PerspectiveCamera? camera,
+  }) {
+    vm.Vector3? focalWorld;
+    if (focalScreenPoint != null && viewSize != null && camera != null) {
+      final picked = pickPlanet(focalScreenPoint, viewSize, camera);
+      if (picked != null) focalWorld = bodyWorldPosition(picked);
+    }
+    _rig.pinchToward(scale, focalWorldPoint: focalWorld);
+  }
+
+  @override
+  double prepareSeamlessSelection(
+    String planetId,
+    PerspectiveCamera camera,
+  ) {
+    final render = _builder.states[planetId];
+    final pos = bodyWorldPosition(planetId);
+    if (render == null || pos == null) return 1.0;
+    final worldR = OrbitCameraRig.worldRadiusOf(render);
+    return _rig.snapToBodyPreservingEye(
+      planetId: planetId,
+      bodyPos: pos,
+      worldRadius: worldR,
+      isSun: render.isSun,
+      eye: camera.position.clone(),
+    );
+  }
+
+  @override
+  void preserveReleaseEye(PerspectiveCamera camera) {
+    _rig.preserveEye(camera.position.clone());
+  }
+
+  @override
   void dispose() {
     _rotationVelocityX = 0.0;
     _rotationVelocityY = 0.0;
     _animator?.detach();
     _textures.dispose();
     _geometries.dispose();
+  }
+
+  /// Test-only hook: registers a bare transform node so distance/threshold
+  /// math can be exercised without a GPU or texture decode.
+  @visibleForTesting
+  void debugRegisterBody({
+    required String id,
+    required vm.Vector3 position,
+    required double radius,
+    required bool isSun,
+  }) {
+    final node = Node(name: id)..position = position.clone();
+    final spin = Node(name: '$id:spin');
+    node.add(spin);
+    _builder.states[id] = PlanetRenderState(
+      id: id,
+      node: node,
+      spinNode: spin,
+      radius: radius,
+      isSun: isSun,
+    );
   }
 }
