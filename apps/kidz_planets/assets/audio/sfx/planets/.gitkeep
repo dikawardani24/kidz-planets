@@ -1,0 +1,4 @@
+Declared in pubspec.yaml and filled by `python3 tool/generate_planet_sfx.py`.
+The generated `.wav` beds are gitignored, so this file only exists to keep the
+directory in git: an asset entry pointing at a missing directory fails
+`flutter build`.
