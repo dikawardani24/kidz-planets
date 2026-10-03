@@ -59,6 +59,7 @@ class AppShellController extends StateNotifier<AppShellState> {
     required void Function() closeDetail,
     required void Function() startSuccessCue,
     required void Function() stopSuccessCue,
+    required void Function(String planetId) playPlanetSound,
     void Function()? lightHaptic,
     void Function()? mediumHaptic,
   }) : _missions = missions,
@@ -66,6 +67,7 @@ class AppShellController extends StateNotifier<AppShellState> {
        _closeDetail = closeDetail,
        _startSuccessCue = startSuccessCue,
        _stopSuccessCue = stopSuccessCue,
+       _playPlanetSound = playPlanetSound,
        _lightHaptic = lightHaptic ?? HapticFeedback.lightImpact,
        _mediumHaptic = mediumHaptic ?? HapticFeedback.mediumImpact,
        super(const AppShellState());
@@ -75,6 +77,7 @@ class AppShellController extends StateNotifier<AppShellState> {
   final void Function(AppMessage message) _showToast;
   final void Function() _startSuccessCue;
   final void Function() _stopSuccessCue;
+  final void Function(String planetId) _playPlanetSound;
   final void Function() _lightHaptic;
   final void Function() _mediumHaptic;
 
@@ -90,6 +93,11 @@ class AppShellController extends StateNotifier<AppShellState> {
   /// both features at once. Called from [appShellProvider], which watches the
   /// explorer's selection.
   void handlePlanetSelected(String planetId) {
+    // Selection is the moment the child enters a body's detail world. Start
+    // its ambient identity here so both explicit taps and automatic pinch
+    // selection get exactly the same sound behavior.
+    _playPlanetSound(planetId);
+
     final completedBefore = _missions.state.missions
         .where((m) => m.completed)
         .map((m) => m.id)
