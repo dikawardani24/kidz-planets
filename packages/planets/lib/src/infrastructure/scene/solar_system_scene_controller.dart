@@ -300,7 +300,7 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
     // Hysteresis is intentional: selection only happens once the body is
     // clearly close, avoiding accidental selection while merely passing over
     // a planet during overview zoom.
-    final threshold = math.max(render.radius * 10.0, render.isSun ? 8.0 : 1.5);
+    final threshold = render.radius * 7.0;
     return distance <= threshold ? id : null;
   }
 
