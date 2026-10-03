@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scene/scene.dart';
-import 'package:vector_math/vector_math.dart' as vm;
 
 import 'package:planets/state.dart';
 import 'package:planets/domain.dart';
@@ -226,14 +225,9 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
             // physical camera distance. The selected camera will now orbit
             // that body, but it starts from the exact zoom level reached by
             // the user rather than snapping back to 1.0.
-            final renderDistance = camera.position.distanceTo(
-              // pickPlanetForAutoFocus already proved this body is the ray hit;
-              // use the current camera radius as the stable distance estimate.
-              vm.Vector3.zero(),
-            );
             final initialZoom = controller.detailZoomForPlanetAtCameraDistance(
               pickedId,
-              renderDistance,
+              camera,
             );
             ref
                 .read(explorerControllerProvider.notifier)
