@@ -70,7 +70,7 @@ void main() {
       expect(find.text('explorer-ready'), findsOneWidget);
       expect(find.text('SPACE ADVENTURE'), findsOneWidget);
 
-      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(const Duration(milliseconds: 700));
       // One more frame for the gate to drop the finished intro from the tree.
       await tester.pump();
 
@@ -106,7 +106,7 @@ void main() {
     // Mid-flight the intro is still hit-testable-looking but must not respond:
     // a second tap during the handover cannot restart the swap.
     await tester.tap(find.text("LET'S EXPLORE!"), warnIfMissed: false);
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 700));
     await tester.pump();
 
     // Straight through: still the Explorer, no bounce back to the intro.
@@ -186,7 +186,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('explorer-ready'), findsOneWidget);
     expect(find.text('SPACE ADVENTURE'), findsOneWidget);
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 700));
     await tester.pump();
 
     expect(find.text('explorer-ready'), findsOneWidget);

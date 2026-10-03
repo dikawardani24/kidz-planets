@@ -42,17 +42,20 @@ class StartupGate extends ConsumerStatefulWidget {
 
 class _StartupGateState extends ConsumerState<StartupGate>
     with SingleTickerProviderStateMixin {
-  /// How long the two pages crossfade once the rocket has launched.
+  /// How long the flight from intro to Explorer lasts once the rocket beat
+  /// and the first scene frame are both in.
   ///
-  /// Long enough to read as a camera flying forward rather than a cut, short
-  /// enough that a child who taps twice is not waiting on an animation.
-  static const Duration handover = Duration(milliseconds: 600);
+  /// Long enough to read as flying forward into space rather than a cut,
+  /// short enough that a child who taps twice is not waiting on an animation.
+  static const Duration handover = Duration(milliseconds: 900);
 
-  /// The intro pushes past the camera as it fades, and the Explorer settles
-  /// back from slightly further away — one continuous zoom rather than a
-  /// dissolve between two static pages.
-  static const double _introZoom = 1.14;
-  static const double _explorerZoom = 1.05;
+  /// The journey, in one continuous camera move: the intro accelerates past
+  /// the lens while staying solid, then dissolves mid-rush; the solar system
+  /// fades in small and far away, then flies toward the viewer and settles
+  /// to full size exactly as the intro is gone — the system coming to meet
+  /// the rocket.
+  static const double _introZoom = 1.7;
+  static const double _explorerZoom = 0.72;
 
   late final AnimationController _swap = AnimationController(
     vsync: this,
@@ -60,11 +63,15 @@ class _StartupGateState extends ConsumerState<StartupGate>
   );
   late final Animation<double> _fadeIn = CurvedAnimation(
     parent: _swap,
-    curve: Curves.easeOutCubic,
+    curve: const Interval(0.15, 0.7, curve: Curves.easeOut),
   );
   late final Animation<double> _zoomOut = CurvedAnimation(
     parent: _swap,
     curve: Curves.easeInCubic,
+  );
+  late final Animation<double> _introFade = CurvedAnimation(
+    parent: _swap,
+    curve: const Interval(0.4, 1.0, curve: Curves.easeInCubic),
   );
   late final Animation<double> _zoomIn = CurvedAnimation(
     parent: _swap,
@@ -187,10 +194,10 @@ class _StartupGateState extends ConsumerState<StartupGate>
       onEnterExplorer: _enterExplorer,
     );
     return FadeTransition(
-      // Shares the zoom's curve on purpose: the intro stays solid while it
-      // flies past the camera and is gone by the time it would have reached
-      // the lens, rather than dissolving away at its original size.
-      opacity: Tween(begin: 1.0, end: 0.0).animate(_zoomOut),
+      // Holds solid for the first stretch of the rush, then dissolves fast:
+      // the page flies past the camera and is gone by the time it would have
+      // reached the lens, rather than dissolving away at its original size.
+      opacity: Tween(begin: 1.0, end: 0.0).animate(_introFade),
       child: ScaleTransition(
         scale: Tween(begin: 1.0, end: _introZoom).animate(_zoomOut),
         child: TickerMode(

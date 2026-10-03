@@ -76,12 +76,13 @@ class OrbitCameraRig {
   /// solar-system origin (which is why the Sun used to be the only body
   /// with usable zoom).
   ///
-  /// Crucially, the orbit target is NOT rewritten: it is re-pinned to
-  /// [kExploreAnchor] every focal pinch. The focal point is a temporary zoom
-  /// intent for the current gesture, not a new permanent anchor, so repeated
-  /// pinches can never accumulate target drift and push the solar system
-  /// off-screen. Rotation therefore always stays centered on the system.
-  /// A missing focal point is a pure dolly via [pinch].
+  /// Crucially, only the eye moves — the orbit target is never touched here.
+  /// Rewriting the target every pinch frame would fight the marked-body
+  /// look-track (which owns the target) and whip the view back toward the
+  /// Sun mid-zoom, arriving at the body while staring past it. With the
+  /// target left alone there is also no drift to accumulate: repeated
+  /// pinches cannot push the solar system off-screen. A missing focal point
+  /// is a pure dolly via [pinch].
   void pinchToward(double scaleFactor, {vm.Vector3? focalWorldPoint}) {
     if (!scaleFactor.isFinite || scaleFactor <= 0) return;
     cancelZoomFlight();
@@ -95,20 +96,12 @@ class OrbitCameraRig {
     // so a single frame can never fling the camera.
     const kPull = 0.9;
     final t = (pull * kPull).clamp(-0.9, 0.9);
-    final cosPhi = math.cos(_state.phi);
-    final eyeX =
-        _state.targetX + _state.radius * cosPhi * math.sin(_state.theta);
-    final eyeY = _state.targetY + _state.radius * math.sin(_state.phi);
-    final eyeZ =
-        _state.targetZ + _state.radius * cosPhi * math.cos(_state.theta);
-    _state.targetX = kExploreAnchor.x;
-    _state.targetY = kExploreAnchor.y;
-    _state.targetZ = kExploreAnchor.z;
+    final eye = _currentEye();
     preserveEye(
       vm.Vector3(
-        eyeX + (focalWorldPoint.x - eyeX) * t,
-        eyeY + (focalWorldPoint.y - eyeY) * t,
-        eyeZ + (focalWorldPoint.z - eyeZ) * t,
+        eye.x + (focalWorldPoint.x - eye.x) * t,
+        eye.y + (focalWorldPoint.y - eye.y) * t,
+        eye.z + (focalWorldPoint.z - eye.z) * t,
       ),
     );
   }
@@ -212,6 +205,7 @@ class OrbitCameraRig {
   double _flightElapsed = 0.0;
   double _flightWorldRadius = 1.0;
   final vm.Vector3 _flightStartEye = vm.Vector3.zero();
+  final vm.Vector3 _flightStartTarget = vm.Vector3.zero();
 
   static const double kFlightDuration = 1.1;
 
@@ -231,6 +225,10 @@ class OrbitCameraRig {
       ..x = eye.x
       ..y = eye.y
       ..z = eye.z;
+    _flightStartTarget
+      ..x = _state.targetX
+      ..y = _state.targetY
+      ..z = _state.targetZ;
   }
 
   void cancelZoomFlight() {
@@ -265,9 +263,15 @@ class OrbitCameraRig {
       bodyPos.y + oy / dist * enter,
       bodyPos.z + oz / dist * enter,
     );
-    _state.targetX = kExploreAnchor.x;
-    _state.targetY = kExploreAnchor.y;
-    _state.targetZ = kExploreAnchor.z;
+    // Both ends ease: the eye flies to the entry distance while the look
+    // direction swings from the current anchor onto the body, so arrival
+    // already frames the body instead of staring past it at the origin.
+    _state.targetX =
+        _flightStartTarget.x + (bodyPos.x - _flightStartTarget.x) * eased;
+    _state.targetY =
+        _flightStartTarget.y + (bodyPos.y - _flightStartTarget.y) * eased;
+    _state.targetZ =
+        _flightStartTarget.z + (bodyPos.z - _flightStartTarget.z) * eased;
     preserveEye(
       vm.Vector3(
         _flightStartEye.x + (dest.x - _flightStartEye.x) * eased,
@@ -293,6 +297,27 @@ class OrbitCameraRig {
       _state.targetY + _state.radius * math.sin(_state.phi),
       _state.targetZ + _state.radius * cosPhi * math.cos(_state.theta),
     );
+  }
+
+  /// Eases the look direction toward [bodyPos] without moving the camera.
+  ///
+  /// This is what makes a marked body the view's center: the eye stays
+  /// exactly where it is (same distance, same position) while the orbit
+  /// target glides toward the body, so tapping Earth turns the camera to
+  /// face Earth instead of staring at the Sun. Called every frame while
+  /// marked, so an orbiting body is tracked instead of drifting out of
+  /// frame. Rotation and zoom are untouched and stay fully user-controlled.
+  void easeLookAt({
+    required vm.Vector3 bodyPos,
+    required double deltaSeconds,
+  }) {
+    final eye = _currentEye();
+    final t =
+        (1.0 - math.exp(-4.0 * deltaSeconds.clamp(0.0, 0.1))).clamp(0.0, 1.0);
+    _state.targetX += (bodyPos.x - _state.targetX) * t;
+    _state.targetY += (bodyPos.y - _state.targetY) * t;
+    _state.targetZ += (bodyPos.z - _state.targetZ) * t;
+    preserveEye(eye);
   }
 
   double snapToBodyPreservingEye({
@@ -507,6 +532,27 @@ class LabelProjector {
     // Far planets first so near labels paint on top.
     frames.sort((a, b) => b.worldDepth.compareTo(a.worldDepth));
     return frames;
+  }
+
+  /// Whether at least one projected frame is genuinely on screen.
+  ///
+  /// Stricter than [_isOnScreen] (which keeps a margin so labels slide out
+  /// gracefully): the jump-to-Sun recovery button appears only when no body
+  /// is actually visible, i.e. the solar system has left the viewport.
+  static bool anyFrameOnScreen(
+    List<PlanetLabelFrame> frames,
+    Size viewSize,
+  ) {
+    if (viewSize.isEmpty) return true;
+    for (final frame in frames) {
+      if (frame.screenX >= 0 &&
+          frame.screenX <= viewSize.width &&
+          frame.screenY >= 0 &&
+          frame.screenY <= viewSize.height) {
+        return true;
+      }
+    }
+    return false;
   }
 
   double _labelLift(double radius, double depth) =>

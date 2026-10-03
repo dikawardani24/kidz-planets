@@ -26,6 +26,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   List<PlanetLabelFrame> _labelFrames = const [];
   Offset? _markedCenter;
   double _markedDiameter = 64.0;
+  bool _systemVisible = true;
   double _lastScale = 1.0;
   double _angularVelocityX = 0.0;
   double _angularVelocityY = 0.0;
@@ -145,13 +146,15 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
                 markedId: ui.markedTargetId,
                 onMarkedTap: () {
                   // Label taps mirror 3D taps: a marked chip starts the
-                  // smooth zoom-to-detail flight.
+                  // smooth zoom-to-detail flight, unless it is already
+                  // running for this body.
                   final markedId =
                       ref.read(explorerControllerProvider).markedTargetId;
                   final cam = _lastCamera;
                   if (markedId == null || cam == null) return;
-                  controller.cancelZoomFlight();
-                  controller.startZoomToDetail(markedId, cam);
+                  if (!controller.zoomFlightActive) {
+                    controller.startZoomToDetail(markedId, cam);
+                  }
                 },
               ),
               if (_markedCenter != null &&
@@ -160,6 +163,25 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
                 _TargetMarker(
                   center: _markedCenter!,
                   diameter: _markedDiameter,
+                ),
+              // Recovery shortcut: only ever visible when no body is on
+              // screen at all (zoomed/panned out into empty space) and no
+              // detail is open. Tapping it restores the overview framing.
+              if (!_systemVisible && !ui.hasSelection)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 148,
+                  child: Center(
+                    child: _JumpToSunButton(
+                      onPressed: () {
+                        controller.resetOverview();
+                        ref
+                            .read(explorerControllerProvider.notifier)
+                            .clearMarkedTarget();
+                      },
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -208,8 +230,12 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     final ui = ref.read(explorerControllerProvider);
     final shouldShow = _shouldShowLabelsForZoom(ui);
     final marker = _markerFor(controller, ui, camera, size);
+    // Empty space on screen: no projected body inside the viewport means the
+    // solar system has drifted out of view and the recovery shortcut appears.
+    final systemVisible = LabelProjector.anyFrameOnScreen(frames, size);
     if (_framesEqual(frames, _labelFrames) &&
         shouldShow == _zoomLabelsVisible &&
+        systemVisible == _systemVisible &&
         _sameOffset(marker?.center, _markedCenter) &&
         (marker == null ||
             (marker.diameter - _markedDiameter).abs() <= 2.0)) {
@@ -219,6 +245,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     setState(() {
       _labelFrames = frames;
       _zoomLabelsVisible = shouldShow;
+      _systemVisible = systemVisible;
       _markedCenter = marker?.center;
       if (marker != null) _markedDiameter = marker.diameter;
     });
@@ -344,7 +371,12 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
           if (selectedId != null &&
               controller.shouldAutoReleaseFocus(selectedId, camera)) {
             controller.preserveReleaseEye(camera);
-            ref.read(explorerControllerProvider.notifier).closeDetail();
+            final explorer = ref.read(explorerControllerProvider.notifier);
+            explorer.closeDetail();
+            // Zooming far out means "done with this body": drop the mark too,
+            // or the look-track would swing the view straight back onto it.
+            // (Manual Close keeps the mark so the child can continue there.)
+            explorer.clearMarkedTarget();
           }
         } else {
           // A marked target owns the zoom: any pinch approaches it, and
@@ -458,8 +490,6 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   void _onTapUp(TapUpDetails details, Size size) {
     final controller = ref.read(solarSystemSceneControllerProvider);
     final explorer = ref.read(explorerControllerProvider.notifier);
-    // A new tap always takes over from a running zoom-to-detail flight.
-    controller.cancelZoomFlight();
     String? pickedId;
     final camera = _lastCamera;
     if (camera != null) {
@@ -486,19 +516,27 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     if (pickedId == null) {
       // Tapping empty space clears the mark (zoom focus) and its session,
       // returning to free exploration without touching detail.
+      controller.cancelZoomFlight();
       if (!ui.hasSelection) explorer.clearMarkedTarget();
       return;
     }
     if (ui.hasSelection) {
       // In detail mode a tap switches straight to the new body, as before.
+      controller.cancelZoomFlight();
       explorer.selectPlanet(pickedId);
     } else if (pickedId == ui.markedTargetId) {
       // Second tap on the marked object: smoothly zoom to 100% detail.
       // Marking itself never zooms; only this shortcut and pinches move
-      // the camera, so the first tap cannot jump the view.
-      if (camera != null) controller.startZoomToDetail(pickedId, camera);
+      // the camera, so the first tap cannot jump the view. A flight that is
+      // already running for this body is left alone — restarting it on every
+      // tap would keep pushing arrival away with each tap.
+      if (camera != null && !controller.zoomFlightActive) {
+        controller.startZoomToDetail(pickedId, camera);
+      }
     } else {
       // First tap: mark as the zoom focus, keep the current zoom level.
+      // Switching bodies takes over from any running flight.
+      controller.cancelZoomFlight();
       explorer.markTarget(pickedId);
     }
   }
@@ -591,6 +629,54 @@ class _TargetMarker extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Recovery shortcut back to the Sun/overview framing.
+///
+/// Rendered only when no projected body is inside the viewport at all (see
+/// [LabelProjector.anyFrameOnScreen]) and no detail is open. Tapping it
+/// restores the comfortable overview and drops the mark; it never appears
+/// during normal exploration or inside detail mode.
+class _JumpToSunButton extends StatelessWidget {
+  const _JumpToSunButton({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppTheme.space700.withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: AppTheme.accentAmber, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.accentAmber.withValues(alpha: 0.3),
+              blurRadius: 14,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('☀️', style: TextStyle(fontSize: 18)),
+            SizedBox(width: 8),
+            Text(
+              'Back to the Sun',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

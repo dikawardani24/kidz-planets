@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planets/state.dart';
 import 'package:planets/scene.dart';
@@ -196,6 +197,26 @@ void main() {
       );
     });
 
+    test('marked zoom keeps looking at the body, never back at the sun', () {
+      // Regression: pinchToward used to re-pin the target to the origin
+      // every frame, fighting the look-track — the eye arrived at the marked
+      // body while staring past it at the Sun.
+      state.radius = 46;
+      final body = vm.Vector3(12, 0, 0);
+      for (var i = 0; i < 300; i++) {
+        rig.easeLookAt(bodyPos: body, deltaSeconds: 1 / 60);
+      }
+      for (var i = 0; i < 50; i++) {
+        rig.pinchToward(1.1, focalWorldPoint: body);
+        rig.easeLookAt(bodyPos: body, deltaSeconds: 1 / 60);
+        // The view direction never swings back toward the origin mid-zoom.
+        expect(state.targetX, closeTo(12, 0.5));
+      }
+      final eye = rig.buildCamera(ui: const ExplorerState()).position;
+      expect((eye - body).length, lessThan(2.0));
+      expect(state.targetX, closeTo(12, 1e-3));
+    });
+
     test('manual pinch cancels a running zoom flight', () {
       state.radius = 46;
       final eye = rig.buildCamera(ui: const ExplorerState()).position.clone();
@@ -243,11 +264,47 @@ void main() {
       expect(doneAtCross, isFalse);
       expect(progress, greaterThan(0.9));
       expect(lastDist, closeTo(0.95 * 7, 0.95 * 7 * 0.05));
-      // Anchor untouched throughout the flight.
-      expect(state.targetX, 0);
-      expect(state.targetY, 0);
-      expect(state.targetZ, 0);
+      // Arrival already faces the body: no swing needed when detail opens.
+      expect(state.targetX, closeTo(12, 0.1));
+      expect(state.targetY, closeTo(0, 0.1));
+      expect(state.targetZ, closeTo(0, 0.1));
       expect(rig.zoomFlightActive, isFalse);
+    });
+
+    test('marking turns the camera to face the body without moving it', () {
+      state
+        ..theta = 0.0
+        ..phi = 0.32
+        ..radius = 46.0;
+      final eye = rig.buildCamera(ui: const ExplorerState()).position.clone();
+      final body = vm.Vector3(12, 0, 0);
+      for (var i = 0; i < 300; i++) {
+        rig.easeLookAt(bodyPos: body, deltaSeconds: 1 / 60);
+      }
+      // Eye (hence distance) untouched …
+      final after = rig.buildCamera(ui: const ExplorerState()).position;
+      expect((after - eye).length, lessThan(1e-6));
+      // … but the look direction now rests on the marked body.
+      expect(state.targetX, closeTo(12, 1e-3));
+      expect(state.targetY, closeTo(0, 1e-3));
+      expect(state.targetZ, closeTo(0, 1e-3));
+    });
+
+    test('look tracking follows an orbiting body with a fixed eye', () {
+      state.radius = 30;
+      final eye = rig.buildCamera(ui: const ExplorerState()).position.clone();
+      final body = vm.Vector3(12, 0, 0);
+      for (var i = 0; i < 120; i++) {
+        body.z += 0.02;
+        rig.easeLookAt(bodyPos: body, deltaSeconds: 1 / 60);
+      }
+      expect(
+        (rig.buildCamera(ui: const ExplorerState()).position - eye).length,
+        lessThan(1e-6),
+      );
+      // Still facing the body after it moved ~2.4 units.
+      expect(state.targetX, closeTo(body.x, 0.6));
+      expect(state.targetZ, closeTo(body.z, 0.6));
     });
 
     test('zoom flight tracks a moving body', () {
@@ -280,6 +337,62 @@ void main() {
       );
       expect(step.done, isTrue);
       expect(step.progress, 0.0);
+    });
+
+    test('anyFrameOnScreen is true when a body is inside the viewport', () {
+      const size = Size(800, 600);
+      expect(
+        LabelProjector.anyFrameOnScreen(
+          const [
+            PlanetLabelFrame(
+              id: 'earth',
+              screenX: 400,
+              screenY: 300,
+              worldDepth: 1,
+              visible: true,
+            ),
+          ],
+          size,
+        ),
+        isTrue,
+      );
+    });
+
+    test('anyFrameOnScreen is false when every body is outside', () {
+      const size = Size(800, 600);
+      expect(
+        LabelProjector.anyFrameOnScreen(
+          const [
+            PlanetLabelFrame(
+              id: 'earth',
+              screenX: -200,
+              screenY: 300,
+              worldDepth: 1,
+              visible: true,
+            ),
+            PlanetLabelFrame(
+              id: 'mars',
+              screenX: 900,
+              screenY: 700,
+              worldDepth: 2,
+              visible: false,
+            ),
+          ],
+          size,
+        ),
+        isFalse,
+      );
+    });
+
+    test('anyFrameOnScreen treats an empty frame list as lost', () {
+      expect(
+        LabelProjector.anyFrameOnScreen(const [], const Size(800, 600)),
+        isFalse,
+      );
+    });
+
+    test('anyFrameOnScreen ignores an empty viewport', () {
+      expect(LabelProjector.anyFrameOnScreen(const [], Size.zero), isTrue);
     });
 
     test('reanchor keeps the eye and restores the system anchor', () {

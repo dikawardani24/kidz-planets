@@ -164,6 +164,11 @@ abstract class SolarSystemSceneController {
   });
   void orbitBy(double dx, double dy);
   void pinch(double scale);
+
+  /// Restores the comfortable overview framing (system centered, default
+  /// distance/orientation) for the jump-to-Sun recovery button. Any running
+  /// zoom flight is cancelled first.
+  void resetOverview();
   void dispose();
 }
 
@@ -309,6 +314,17 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
         detailZoom: ui.detailZoom,
       );
     } else {
+      // A marked body steers the look direction (not the zoom): the eye
+      // stays put while the target eases onto the body, so tapping Earth
+      // turns the camera to face Earth instead of staring at the Sun. The
+      // zoom-to-detail flight owns the target while it runs.
+      final markedId = ui.markedTargetId;
+      if (markedId != null && !_rig.zoomFlightActive) {
+        final pos = bodyWorldPosition(markedId);
+        if (pos != null) {
+          _rig.easeLookAt(bodyPos: pos, deltaSeconds: deltaSeconds);
+        }
+      }
       _rig.releaseFocus();
     }
   }
@@ -392,6 +408,12 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
 
   @override
   void pinch(double scale) => _rig.pinch(scale);
+
+  @override
+  void resetOverview() {
+    _rig.cancelZoomFlight();
+    _rig.resetOverview();
+  }
 
   @override
   vm.Vector3? bodyWorldPosition(String planetId) {
