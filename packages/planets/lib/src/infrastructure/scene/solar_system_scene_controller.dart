@@ -65,6 +65,21 @@ abstract class SolarSystemSceneController {
     Size viewSize,
     PerspectiveCamera camera,
   );
+
+  /// Returns the body under the zoom focal point only when the camera is
+  /// already close enough to it for automatic detail selection.
+  String? pickPlanetForAutoFocus(
+    Offset screenPosition,
+    Size viewSize,
+    PerspectiveCamera camera,
+  );
+
+  /// Returns true when a focused body has been zoomed far enough away that
+  /// detail mode should hand control back to free exploration.
+  bool shouldAutoReleaseFocus(
+    String planetId,
+    PerspectiveCamera camera,
+  );
   void spinPlanet(String planetId, double delta);
   void rotatePlanet(String planetId, double dx, double dy);
   void rotateSolarSystem(double dx, double dy);
@@ -260,6 +275,37 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
       if (identical(entry.value.node, node)) return entry.key;
     }
     return null;
+  }
+
+  @override
+  String? pickPlanetForAutoFocus(
+    Offset screenPosition,
+    Size viewSize,
+    PerspectiveCamera camera,
+  ) {
+    final id = pickPlanet(screenPosition, viewSize, camera);
+    if (id == null) return null;
+    final render = _builder.states[id];
+    if (render == null) return null;
+    final world = render.node.globalTransform.getTranslation();
+    final distance = camera.position.distanceTo(world);
+    // Hysteresis is intentional: selection only happens once the body is
+    // clearly close, avoiding accidental selection while merely passing over
+    // a planet during overview zoom.
+    final threshold = math.max(render.radius * 10.0, render.isSun ? 8.0 : 1.5);
+    return distance <= threshold ? id : null;
+  }
+
+  @override
+  bool shouldAutoReleaseFocus(String planetId, PerspectiveCamera camera) {
+    final render = _builder.states[planetId];
+    if (render == null) return false;
+    final world = render.node.globalTransform.getTranslation();
+    final distance = camera.position.distanceTo(world);
+    // Keep detail mode while the selected body is reasonably close, then
+    // return to free exploration. This replaces the old normalized zoom cap.
+    final threshold = math.max(render.radius * 20.0, render.isSun ? 40.0 : 6.0);
+    return distance > threshold;
   }
 
   @override
