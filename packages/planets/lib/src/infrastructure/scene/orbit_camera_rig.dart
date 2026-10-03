@@ -57,6 +57,29 @@ class OrbitCameraRig {
     _state.phi = (_state.phi + dy * 0.005).clamp(-0.15, 1.25);
   }
 
+  /// Smoothed per-frame pinch factor for the current gesture.
+  ///
+  /// Raw gesture deltas jitter with the fingers; easing each sample ~35% of
+  /// the way from the running value keeps the camera from stuttering while
+  /// staying responsive. Reset per gesture via [resetPinchSmoothing].
+  double _smoothIncrement = 1.0;
+
+  void resetPinchSmoothing() {
+    _smoothIncrement = 1.0;
+  }
+
+  double smoothPinchFactor(double rawIncrementalScale) {
+    if (!rawIncrementalScale.isFinite || rawIncrementalScale <= 0) {
+      return 1.0;
+    }
+    _smoothIncrement += (rawIncrementalScale - _smoothIncrement) * 0.35;
+    if (!_smoothIncrement.isFinite || _smoothIncrement <= 0) {
+      _smoothIncrement = 1.0;
+      return 1.0;
+    }
+    return _smoothIncrement;
+  }
+
   void pinch(double scaleFactor) {
     if (!scaleFactor.isFinite || scaleFactor <= 0) return;
     cancelZoomFlight();

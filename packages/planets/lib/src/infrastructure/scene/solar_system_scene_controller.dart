@@ -165,6 +165,12 @@ abstract class SolarSystemSceneController {
   void orbitBy(double dx, double dy);
   void pinch(double scale);
 
+  /// Eases a raw per-frame pinch factor; see [OrbitCameraRig.smoothPinchFactor].
+  double smoothPinchFactor(double rawIncrementalScale);
+
+  /// Restarts pinch smoothing for a new gesture.
+  void resetPinchSmoothing();
+
   /// Restores the comfortable overview framing (system centered, default
   /// distance/orientation) for the jump-to-Sun recovery button. Any running
   /// zoom flight is cancelled first.
@@ -408,6 +414,13 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
 
   @override
   void pinch(double scale) => _rig.pinch(scale);
+
+  @override
+  double smoothPinchFactor(double rawIncrementalScale) =>
+      _rig.smoothPinchFactor(rawIncrementalScale);
+
+  @override
+  void resetPinchSmoothing() => _rig.resetPinchSmoothing();
 
   @override
   void resetOverview() {
