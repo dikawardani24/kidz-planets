@@ -22,6 +22,10 @@ class ExplorerState extends Equatable {
     this.showLabels = true,
     this.selectedPlanetId,
     this.focusedPlanetId,
+    this.markedTargetId,
+    this.markZoomProgress = 0.0,
+    this.markNarrationPlayed = false,
+    this.markZoomApproaching = false,
     this.detailZoom = 1.0,
     this.detailTheta = 0.65,
     this.detailPhi = 0.28,
@@ -47,6 +51,28 @@ class ExplorerState extends Equatable {
   final bool showLabels;
   final String? selectedPlanetId;
   final String? focusedPlanetId;
+
+  /// The body the child tapped as "the object I want to approach".
+  ///
+  /// Marking never enters detail on its own: the camera keeps exploring
+  /// freely with the marked body as its zoom target, and detail opens only
+  /// once the camera gets close enough. Kept separate from [selectedPlanetId]
+  /// so marking triggers no missions, sounds, or detail UI.
+  final String? markedTargetId;
+
+  /// Zoom progress toward the marked body: enter-threshold distance divided
+  /// by the current camera distance, so 1.0 means "close enough to enter
+  /// detail". Values above 1 mean the camera kept approaching past entry.
+  final double markZoomProgress;
+
+  /// Whether the >90% approach narration already played in this zoom session.
+  /// Dropping back below the threshold opens a new session (see
+  /// [ExplorerController.reportMarkProgress]).
+  final bool markNarrationPlayed;
+
+  /// Direction of the last marked-zoom update. The narration fires only while
+  /// approaching, never while receding.
+  final bool markZoomApproaching;
   final double detailZoom;
   final double detailTheta;
   final double detailPhi;
@@ -73,6 +99,8 @@ class ExplorerState extends Equatable {
 
   bool get hasSelection => selectedPlanetId != null;
 
+  bool get hasMark => markedTargetId != null;
+
   ExplorerState copyWith({
     bool? running,
     double? speed,
@@ -80,6 +108,10 @@ class ExplorerState extends Equatable {
     bool? showLabels,
     Object? selectedPlanetId = _sentinel,
     Object? focusedPlanetId = _sentinel,
+    Object? markedTargetId = _sentinel,
+    double? markZoomProgress,
+    bool? markNarrationPlayed,
+    bool? markZoomApproaching,
     double? detailZoom,
     double? detailTheta,
     double? detailPhi,
@@ -103,6 +135,12 @@ class ExplorerState extends Equatable {
       focusedPlanetId: identical(focusedPlanetId, _sentinel)
           ? this.focusedPlanetId
           : focusedPlanetId as String?,
+      markedTargetId: identical(markedTargetId, _sentinel)
+          ? this.markedTargetId
+          : markedTargetId as String?,
+      markZoomProgress: markZoomProgress ?? this.markZoomProgress,
+      markNarrationPlayed: markNarrationPlayed ?? this.markNarrationPlayed,
+      markZoomApproaching: markZoomApproaching ?? this.markZoomApproaching,
       detailZoom: detailZoom ?? this.detailZoom,
       detailTheta: detailTheta ?? this.detailTheta,
       detailPhi: detailPhi ?? this.detailPhi,
@@ -129,6 +167,10 @@ class ExplorerState extends Equatable {
     showLabels,
     selectedPlanetId,
     focusedPlanetId,
+    markedTargetId,
+    markZoomProgress,
+    markNarrationPlayed,
+    markZoomApproaching,
     detailZoom,
     detailTheta,
     detailPhi,

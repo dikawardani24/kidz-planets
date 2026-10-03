@@ -174,6 +174,14 @@ class AvatarFacePainter extends CustomPainter {
   final double phase;
   final double squash;
 
+  /// How far below the face's centre the mouth is drawn, in face units.
+  ///
+  /// The eyes sit above this at 0.78 units and the face has a chin below it, so
+  /// this is the gap that decides how much nose there is. Every mouth style
+  /// hangs off this one offset: raise it and the features crowd the eyes,
+  /// lower it and the mouth slides onto the body's edge.
+  static const double mouthDrop = 2.8;
+
   /// Face ink: a dark navy that reads on both the cyan window and the red body.
   static const Color ink = Color(0xFF10203F);
   static const Color cheek = Color(0xFFFF7EA8);
@@ -293,7 +301,7 @@ class AvatarFacePainter extends CustomPainter {
     double unit,
     double opacity,
   ) {
-    final centre = Offset(0, 1.15 * unit);
+    final centre = Offset(0, mouthDrop * unit);
     switch (style) {
       case AvatarMouth.smile:
         canvas.drawArc(

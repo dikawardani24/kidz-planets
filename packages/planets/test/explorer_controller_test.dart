@@ -198,13 +198,22 @@ void main() {
       expect(c.state.detailZoom, 1.0);
     });
 
-    test('adjustDetailZoom clamps at both ends', () {
+    test('adjustDetailZoom continues past the old 2.6 ceiling', () {
       c.selectPlanet('mars');
       c.adjustDetailZoom(99);
-      expect(c.state.detailZoom, 2.6);
+      expect(c.state.detailZoom, closeTo(100.0, 1e-9));
+    });
 
+    test('adjustDetailZoom continues past the old 0.4 floor', () {
+      c.selectPlanet('mars');
       c.adjustDetailZoom(-99);
-      expect(c.state.detailZoom, 0.4);
+      expect(c.state.detailZoom, closeTo(0.001, 1e-9));
+    });
+
+    test('selectPlanet preserves the pinch distance instead of snapping', () {
+      c.selectPlanet('earth', initialDetailZoom: 0.146);
+      expect(c.state.detailZoom, closeTo(0.146, 1e-9));
+      expect(c.state.selectedPlanetId, 'earth');
     });
 
     test('resetDetailView does nothing without a selection', () {
@@ -281,6 +290,153 @@ void main() {
 
         async.elapse(const Duration(seconds: 1));
         expect(c.state.spinHintVisible, isFalse);
+      });
+    });
+  });
+
+  group('mark target', () {
+    test('marking sets the target without entering detail', () {
+      c.markTarget('earth');
+
+      expect(c.state.markedTargetId, 'earth');
+      expect(c.state.hasMark, isTrue);
+      expect(c.state.selectedPlanetId, isNull);
+      expect(c.state.focusedPlanetId, isNull);
+      expect(c.state.hasSelection, isFalse);
+    });
+
+    test('tapping the marked body again unmarks it', () {
+      c.markTarget('earth');
+      c.markTarget('earth');
+
+      expect(c.state.markedTargetId, isNull);
+      expect(c.state.hasMark, isFalse);
+      expect(c.state.hasSelection, isFalse);
+    });
+
+    test('marking a different body switches the mark', () {
+      c.markTarget('earth');
+      c.markTarget('mars');
+
+      expect(c.state.markedTargetId, 'mars');
+      expect(c.state.hasSelection, isFalse);
+    });
+
+    test('clearing an empty mark is a no-op', () {
+      c.clearMarkedTarget();
+
+      expect(c.state.markedTargetId, isNull);
+    });
+
+    test('clearing a mark resets its zoom session', () {
+      c.markTarget('earth');
+      c.reportMarkProgress(0.95, approaching: true);
+      c.acknowledgeMarkNarration();
+
+      c.clearMarkedTarget();
+
+      expect(c.state.markedTargetId, isNull);
+      expect(c.state.markZoomProgress, 0.0);
+      expect(c.state.markNarrationPlayed, isFalse);
+      expect(c.state.markZoomApproaching, isFalse);
+      expect(c.isMarkNarrationDue, isFalse);
+    });
+
+    test('entering detail keeps the mark (marked == selected)', () {
+      c.markTarget('earth');
+      c.selectPlanet('earth', initialDetailZoom: 2.0);
+
+      expect(c.state.markedTargetId, 'earth');
+      expect(c.state.selectedPlanetId, 'earth');
+      expect(c.state.detailZoom, 2.0);
+    });
+
+    test('closing detail preserves the mark and its zoom session', () {
+      c.markTarget('earth');
+      c.reportMarkProgress(0.95, approaching: true);
+      c.selectPlanet('earth');
+      c.closeDetail();
+
+      // Selection is gone, but the child continues from the previous zoom
+      // position: mark, progress, and narration state all survive.
+      expect(c.state.selectedPlanetId, isNull);
+      expect(c.state.markedTargetId, 'earth');
+      expect(c.state.hasMark, isTrue);
+      expect(c.state.markZoomProgress, 0.95);
+    });
+
+    test('approach narration fires once past 90% while zooming in', () {
+      c.markTarget('earth');
+      expect(c.isMarkNarrationDue, isFalse);
+
+      c.reportMarkProgress(0.5, approaching: true);
+      expect(c.isMarkNarrationDue, isFalse);
+
+      c.reportMarkProgress(0.95, approaching: true);
+      expect(c.isMarkNarrationDue, isTrue);
+
+      c.acknowledgeMarkNarration();
+      expect(c.isMarkNarrationDue, isFalse);
+
+      // Staying above 90% never replays within the same session.
+      c.reportMarkProgress(0.99, approaching: true);
+      expect(c.isMarkNarrationDue, isFalse);
+    });
+
+    test('exactly 90% does not trigger (strictly above)', () {
+      c.markTarget('earth');
+      c.reportMarkProgress(0.90, approaching: true);
+
+      expect(c.isMarkNarrationDue, isFalse);
+    });
+
+    test('zooming out below the threshold opens a new session', () {
+      c.markTarget('earth');
+      c.reportMarkProgress(0.95, approaching: true);
+      c.acknowledgeMarkNarration();
+      expect(c.isMarkNarrationDue, isFalse);
+
+      c.reportMarkProgress(0.5, approaching: false);
+      expect(c.state.markNarrationPlayed, isFalse);
+
+      c.reportMarkProgress(0.95, approaching: true);
+      expect(c.isMarkNarrationDue, isTrue);
+    });
+
+    test('receding above the threshold does not replay nor reset', () {
+      c.markTarget('earth');
+      c.reportMarkProgress(0.95, approaching: true);
+      c.acknowledgeMarkNarration();
+
+      c.reportMarkProgress(0.93, approaching: false);
+      expect(c.state.markNarrationPlayed, isTrue);
+      expect(c.isMarkNarrationDue, isFalse);
+    });
+
+    test('narration never fires while receding, even past 90%', () {
+      c.markTarget('earth');
+      c.reportMarkProgress(0.95, approaching: false);
+
+      expect(c.isMarkNarrationDue, isFalse);
+    });
+
+    test('opening detail directly never arms the zoom narration', () {
+      c.selectPlanet('mars');
+
+      expect(c.isMarkNarrationDue, isFalse);
+
+      c.reportMarkProgress(0.99, approaching: true);
+      expect(c.isMarkNarrationDue, isFalse);
+    });
+
+    test('marking raises no spin hint and no timers', () {
+      fakeAsync((async) {
+        c.markTarget('mars');
+        expect(c.state.spinHintVisible, isFalse);
+
+        async.elapse(const Duration(seconds: 5));
+        expect(c.state.spinHintVisible, isFalse);
+        expect(c.state.markedTargetId, 'mars');
       });
     });
   });

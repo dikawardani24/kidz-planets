@@ -131,6 +131,32 @@ void main() {
       expect(hovered.centre.dy, lessThan(atRest.centre.dy));
     });
 
+    test('a hover lifts the face by exactly as far as it lifts the body', () {
+      // The face is painted in front of the body, at its own closer depth, so
+      // projecting the hover with the window's scale would move the face
+      // further than the rocket moved: the body rises in the plane of its own
+      // centre, and that is the plane the face has to travel in too.
+      const hover = 0.1;
+      final atRest = AvatarFaceProjection.forBox(box, yaw: 0, pitch: 0);
+      final hovered = AvatarFaceProjection.forBox(
+        box,
+        yaw: 0,
+        pitch: 0,
+        motion: const AvatarBodyMotion(hover: hover),
+      );
+
+      // Pixels per body unit in the plane the rocket's centre sits in.
+      final bodyScale =
+          (box.height / 2) /
+          math.tan(AvatarFaceProjection.cameraFovRadiansY / 2) /
+          AvatarFaceProjection.cameraDistance;
+
+      expect(
+        atRest.centre.dy - hovered.centre.dy,
+        closeTo(hover * bodyScale, 1e-9),
+      );
+    });
+
     test('a bank swings the window sideways', () {
       final atRest = AvatarFaceProjection.forBox(box, yaw: 0, pitch: 0);
       final banked = AvatarFaceProjection.forBox(
@@ -165,8 +191,35 @@ void main() {
       // face on the modelled window. If these move, the face is drawn on empty
       // fuselage and no other test fails.
       expect(AvatarPorthole.radius, 0.075);
-      expect(AvatarPorthole.height, 0.08);
+      expect(
+        AvatarPorthole.height,
+        closeTo(0.05 * AvatarBodyScale.growth, 1e-9),
+      );
       expect(AvatarPorthole.depth, -0.30);
+    });
+
+    test('growing the body does not grow the face', () {
+      // The face is sized by [AvatarPorthole.radius] and reaches the screen
+      // through the fixed [AvatarPorthole.depth]. Both are independent of
+      // [AvatarBodyScale], so the only thing a body change can move is where
+      // the face sits on the fuselage, never how big it is drawn. These two
+      // expectations are the whole reason growing the body was safe to do
+      // without touching the painter.
+      expect(AvatarPorthole.radius, isNot(0.075 * AvatarBodyScale.growth));
+      expect(AvatarPorthole.depth, isNot(-0.30 * AvatarBodyScale.growth));
+
+      // ...and the body really did grow, by the amount that was asked for.
+      expect(AvatarBodyScale.growth, closeTo(1.7, 1e-9));
+      expect(AvatarBodyScale.rocket, closeTo(0.714, 1e-9));
+
+      final atRest = AvatarFaceProjection.forBox(box, yaw: 0, pitch: 0);
+      final settled = AvatarFaceProjection.forBox(
+        box,
+        yaw: 0,
+        pitch: 0,
+        motion: const AvatarBodyMotion(hover: 0.2),
+      );
+      expect(settled.radius, closeTo(atRest.radius, 1e-9));
     });
   });
 }

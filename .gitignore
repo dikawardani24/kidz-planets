@@ -56,10 +56,15 @@ app.*.map.json
 __pycache__/
 *.pyo
 *.wav
-!assets/audio/sfx/**/*.wav
-# SFX may be committed as MP3; the narration below is tracked as-is, so only
+# The sound-design beds are generated but shipped: `PlanetSoundService` points
+# every selection at one of these, so a build without them is a silent app.
+# These have to carry the `apps/kidz_planets/` prefix. A pattern with a slash in
+# it is anchored to the repo root, so the shorter form below matched nothing and
+# the beds were silently dropped from every build.
+!apps/kidz_planets/assets/audio/sfx/**/*.wav
+# SFX may also be committed as MP3; the narration below is tracked as-is, so only
 # the SFX tree gets a whitelist entry.
-!assets/audio/sfx/**/*.mp3
+!apps/kidz_planets/assets/audio/sfx/**/*.mp3
 .kokoro/
 *.pth
 *.pt

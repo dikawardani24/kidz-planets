@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:core/l10n.dart';
 
 /// The intro screen's copy, guarded at the ARB source.
 ///

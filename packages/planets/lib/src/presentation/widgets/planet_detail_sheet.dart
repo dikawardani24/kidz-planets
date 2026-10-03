@@ -230,6 +230,7 @@ class DetailSideRails extends ConsumerWidget {
             onZoomOut: () => notifier.adjustDetailZoom(.25),
             onZoomIn: () => notifier.adjustDetailZoom(-.25),
             onReset: notifier.resetDetailView,
+            onClose: notifier.closeDetail,
           ),
         ),
       ],
@@ -400,6 +401,7 @@ class _DetailZoomBar extends StatelessWidget {
     required this.onZoomOut,
     required this.onZoomIn,
     required this.onReset,
+    required this.onClose,
     this.vertical = false,
   });
 
@@ -407,6 +409,15 @@ class _DetailZoomBar extends StatelessWidget {
   final VoidCallback onZoomOut;
   final VoidCallback onZoomIn;
   final VoidCallback onReset;
+
+  /// Leaves the focused body entirely.
+  ///
+  /// Separate from [onReset] on purpose: resetting the framing keeps the body
+  /// focused and its narration playing, so a child who taps the cross while the
+  /// camera is somewhere they cannot get back from still gets the body released
+  /// rather than stuck zoomed in.
+  final VoidCallback onClose;
+
   final bool vertical;
 
   @override
@@ -429,6 +440,12 @@ class _DetailZoomBar extends StatelessWidget {
     );
     final zoomIn = _ZoomButton(icon: Icons.add, onTap: onZoomIn);
     final reset = _ZoomButton(icon: Icons.refresh, onTap: onReset, small: true);
+    final close = _ZoomButton(
+      icon: Icons.close,
+      onTap: onClose,
+      small: true,
+      color: const Color(0xFFC7D2FE),
+    );
 
     if (vertical) {
       return Column(
@@ -439,8 +456,13 @@ class _DetailZoomBar extends StatelessWidget {
           badge,
           const SizedBox(height: 7),
           zoomOut,
-          const SizedBox(height: 7),
+          // A wider gap than the ones inside the zoom cluster, so the two ways
+          // out of the focused view read as their own group rather than as a
+          // fourth step of the same control.
+          const SizedBox(height: 13),
           reset,
+          const SizedBox(height: 7),
+          close,
         ],
       );
     }
@@ -455,6 +477,8 @@ class _DetailZoomBar extends StatelessWidget {
         zoomIn,
         const SizedBox(width: 7),
         reset,
+        const SizedBox(width: 7),
+        close,
       ],
     );
   }
@@ -465,11 +489,13 @@ class _ZoomButton extends StatelessWidget {
     required this.icon,
     required this.onTap,
     this.small = false,
+    this.color = Colors.white,
   });
 
   final IconData icon;
   final VoidCallback onTap;
   final bool small;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -479,7 +505,7 @@ class _ZoomButton extends StatelessWidget {
         pill: true,
         radius: BorderRadius.circular(999),
         padding: EdgeInsets.all(small ? 7 : 8),
-        child: Icon(icon, size: small ? 13 : 16, color: Colors.white),
+        child: Icon(icon, size: small ? 13 : 16, color: color),
       ),
     );
   }

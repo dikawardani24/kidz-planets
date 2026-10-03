@@ -33,6 +33,10 @@ final appShellProvider = StateNotifierProvider<AppShellController, AppShellState
     // stops the celebration loop from running under the planet narration.
     startSuccessCue: ref.read(planetSoundServiceProvider).startMissionSuccess,
     stopSuccessCue: ref.read(planetSoundServiceProvider).stop,
+    playPlanetSound: (planetId) {
+      final planet = ref.read(planetByIdProvider(planetId));
+      ref.read(planetSoundServiceProvider).playBody(planet);
+    },
   );
 
   // A tap that lands on the body already selected is not a new selection, so it

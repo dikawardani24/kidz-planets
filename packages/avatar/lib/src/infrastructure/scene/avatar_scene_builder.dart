@@ -3,7 +3,7 @@ import 'dart:math' as math;
 
 import 'dart:ui' show Color;
 
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
@@ -31,6 +31,13 @@ class AvatarSceneBuilder {
   final Node bodyRoot = Node(name: 'avatar-body');
   final Node targetPivot = Node(name: 'avatar-target');
   final Node exhaustGroupNode = Node(name: 'avatar-exhaust');
+
+  /// Scale the imported body is built at.
+  ///
+  /// Read through here rather than off [AvatarBodyScale] at the call site so a
+  /// test can pin the one number the rest of the companion's layout is measured
+  /// against without having to load the model to look at it.
+  double get bodyScale => AvatarBodyScale.rocket;
 
   /// The layered particle plume, attached once the engine's shader library
   /// can supply the sprite materials it needs.
@@ -103,7 +110,15 @@ class AvatarSceneBuilder {
     // The bundled GLB is now the avatar's primary and only body model.
     // Keep the face window and exhaust as lightweight scene overlays so the
     // existing reactions, physics, and 2D expressions continue to work.
-    exhaustGroupNode.position = vm.Vector3(0, -0.20, 0);
+    //
+    // The plume anchors to the model's engine nozzle, which sits at the bottom
+    // of the body, so it moves down with [AvatarBodyScale.growth]: scaling the
+    // rocket without this would leave the exhaust hanging in the air below it.
+    exhaustGroupNode.position = vm.Vector3(
+      0,
+      -0.20 * AvatarBodyScale.growth,
+      0,
+    );
     bodyRoot.add(exhaustGroupNode);
     unawaited(_attachImportedRocket());
     unawaited(_attachExhaust());
@@ -113,7 +128,10 @@ class AvatarSceneBuilder {
   ///
   /// Kenney's source asset is authored inside a kit coordinate space, so its
   /// scene root is translated back to the avatar origin and scaled to match
-  /// the existing companion viewport.
+  /// the existing companion viewport. [AvatarBodyScale.rocket] owns that scale:
+  /// it is also what [AvatarPorthole.height] and the exhaust anchor are measured
+  /// against, so the painted face stays on the window of whatever size the body
+  /// is drawn at.
   Future<void> _attachImportedRocket() async {
     if (_rocketLoadPending || _importedRocket != null) return;
     _rocketLoadPending = true;
@@ -126,10 +144,10 @@ class AvatarSceneBuilder {
         ..name = 'avatar-glb-rocket'
         ..raycastable = false
         // rocket_baseA.glb is authored at (2, 0, 1.5) in the Kenney kit.
-        // Center it around the same origin used by the old avatar and scale
-        // its 1.6-unit body to roughly the previous 0.56-unit height.
+        // Center it around the same origin used by the old avatar; the size is
+        // AvatarBodyScale.rocket.
         ..position = vm.Vector3.zero()
-        ..scale = vm.Vector3.all(0.42);
+        ..scale = vm.Vector3.all(bodyScale);
       bodyRoot.add(rocket);
       _importedRocket = rocket;
     } catch (error, stackTrace) {
@@ -224,6 +242,63 @@ class AvatarSceneBuilder {
     return c * c * (3 - 2 * c);
   }
 
+  /// The pose the companion holds while it is simply being itself: a hover,
+  /// and never a lean.
+  ///
+  /// The rocket is a friend standing next to the child, not an aeroplane, so
+  /// every resting pose keeps its longitudinal axis vertical. That matters
+  /// most for [AvatarIdleAction.flying], which is what the companion spends
+  /// almost all of its time in: it used to bank 0.35 rad into every circuit,
+  /// which parked the toy permanently leaning to one side, and selecting a hot
+  /// planet left it leaning 0.15 rad even while idle. Yaw and pitch still come
+  /// from a throw and are recovered to zero by the controller; nothing here is
+  /// allowed to reintroduce a resting lean on top of that.
+  ///
+  /// [AvatarIdleAction.dancing] is the one exception, and it is deliberate: the
+  /// wobble is the dance, and it is symmetric about vertical, so the rocket
+  /// still passes through straight rather than resting off-plumb.
+  @visibleForTesting
+  static ({double hover, double tilt}) idlePose({
+    required double t,
+    required AvatarIdleAction idleAction,
+    required String? selectedPlanetId,
+  }) {
+    final isIceWorld = const {
+      'neptune',
+      'uranus',
+      'pluto',
+    }.contains(selectedPlanetId);
+    final isHotWorld = const {
+      'sun',
+      'mercury',
+      'venus',
+    }.contains(selectedPlanetId);
+
+    if (isIceWorld) {
+      // A shiver you can see in the hover, not a lean.
+      return (hover: math.sin(t * 30.0) * 0.008, tilt: 0);
+    }
+    if (isHotWorld) {
+      return (hover: math.sin(t * 8.0) * 0.03, tilt: 0);
+    }
+    switch (idleAction) {
+      case AvatarIdleAction.dancing:
+        return (
+          hover: math.sin(t * 9.0).abs() * 0.07,
+          tilt: math.sin(t * 6.0) * 0.3,
+        );
+      case AvatarIdleAction.thinking:
+        return (hover: math.sin(t * 2.0) * 0.01, tilt: 0);
+      case AvatarIdleAction.sitting:
+        return (hover: -0.12, tilt: 0);
+      case AvatarIdleAction.flying:
+        return (hover: math.sin(t * 6.0) * 0.04, tilt: 0);
+      case AvatarIdleAction.none:
+      case AvatarIdleAction.sendingHeart:
+        return (hover: math.sin(t * 3.0) * 0.02, tilt: 0);
+    }
+  }
+
   void tick(
     Duration elapsed,
     AvatarMood mood,
@@ -241,39 +316,15 @@ class AvatarSceneBuilder {
     }
     final ramp = _ease(reactionTime / _reactionFadeIn);
 
-    double hover = 0.0;
-    double tilt = 0.0;
-
-    final isIceWorld =
-        selectedPlanetId == 'neptune' ||
-        selectedPlanetId == 'uranus' ||
-        selectedPlanetId == 'pluto';
-    final isHotWorld =
-        selectedPlanetId == 'sun' ||
-        selectedPlanetId == 'mercury' ||
-        selectedPlanetId == 'venus';
-
-    if (isIceWorld) {
-      hover = math.sin(t * 30.0) * 0.008;
-      tilt = math.sin(t * 20.0) * 0.08;
-    } else if (isHotWorld) {
-      hover = math.sin(t * 8.0) * 0.03;
-      tilt = 0.15;
-    } else if (idleAction == AvatarIdleAction.dancing) {
-      hover = math.sin(t * 9.0).abs() * 0.07;
-      tilt = math.sin(t * 6.0) * 0.3;
-    } else if (idleAction == AvatarIdleAction.thinking) {
-      hover = math.sin(t * 2.0) * 0.01;
-      tilt = -0.15;
-    } else if (idleAction == AvatarIdleAction.sitting) {
-      hover = -0.12;
-    } else if (idleAction == AvatarIdleAction.flying) {
-      // Rocket banking forward when flying!
-      hover = math.sin(t * 6.0) * 0.04;
-      tilt = 0.35; // Bank forward in flight
-    } else {
-      hover = math.sin(t * 3.0) * 0.02;
-    }
+    // Resting pose: a hover, and never a lean. Reactions below are the only
+    // thing allowed to tip the rocket over.
+    final idle = idlePose(
+      t: t,
+      idleAction: idleAction,
+      selectedPlanetId: selectedPlanetId,
+    );
+    var hover = idle.hover;
+    var tilt = idle.tilt;
 
     // Reaction motion, all of it transforms of existing parts and all of it
     // scaled by `ramp`, so a reaction grows in instead of appearing.

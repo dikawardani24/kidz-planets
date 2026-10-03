@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scene/scene.dart';
@@ -22,14 +24,26 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   double _buildFraction = 0.0;
   PerspectiveCamera? _lastCamera;
   List<PlanetLabelFrame> _labelFrames = const [];
+  Offset? _markedCenter;
+  double _markedDiameter = 64.0;
+  bool _systemVisible = true;
+  bool _pinchActive = false;
+  double _zoomGlide = 0.0;
+  Offset _lastFocalLocal = Offset.zero;
+  Size _lastViewSize = Size.zero;
   double _lastScale = 1.0;
   double _angularVelocityX = 0.0;
   double _angularVelocityY = 0.0;
   bool _zoomLabelsVisible = true;
+  bool _presentedReported = false;
 
   @override
   void initState() {
     super.initState();
+    // A fresh mount means a fresh first frame is still owed: tell the
+    // startup handover to wait for this view's first presented tick rather
+    // than revealing a compiling scene mid-crossfade.
+    ref.read(explorerScenePresentedProvider.notifier).state = false;
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureBuilt());
   }
 
@@ -66,6 +80,25 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     final controller = ref.watch(solarSystemSceneControllerProvider);
     final ui = ref.watch(explorerControllerProvider);
     final planets = ref.watch(planetsProvider);
+    // Every selection teardown (Close button, tap-toggle, tab switch, …)
+    // must hand the camera back to the solar-system anchor without moving
+    // it: while selected, the target is the body's world position, and the
+    // body keeps orbiting after deselect, so a stale body target leaves the
+    // camera staring at empty space. Freezing the last eye and re-anchoring
+    // keeps the system visible from the exact view the user left.
+    // (Auto-deselect already preserves synchronously in the gesture handler;
+    // re-applying here is idempotent.)
+    ref.listen<ExplorerState>(explorerControllerProvider, (previous, next) {
+      if (previous?.selectedPlanetId != null &&
+          next.selectedPlanetId == null) {
+        final camera = _lastCamera;
+        if (camera != null) {
+          ref
+              .read(solarSystemSceneControllerProvider)
+              .preserveReleaseEye(camera);
+        }
+      }
+    });
     // Startup normally gets here with the scene already built, so this branch
     // is a fallback for a feature package used on its own. The fraction is only
     // drawn because it is free: the real progress reporting lives in the app's
@@ -80,11 +113,9 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
           // Scale handles both one-finger drag and two-finger pinch.
           // A separate Pan recognizer competes with Scale in Flutter's gesture arena.
           onScaleStart: _onScaleStart,
-          onScaleUpdate: _onScaleUpdate,
+          onScaleUpdate: (details) => _onScaleUpdate(details, size),
           onScaleEnd: _onScaleEnd,
-          onDoubleTap: () {
-            ref.read(explorerControllerProvider.notifier).resetDetailView();
-          },
+          onDoubleTapDown: (d) => _onDoubleTap(d, size),
           onTapUp: (d) => _onTapUp(d, size),
           child: Stack(
             fit: StackFit.expand,
@@ -98,6 +129,15 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
                 },
                 onTick: (elapsed, deltaSeconds) {
                   controller.tick(deltaSeconds, ui);
+                  // The scene just presented a frame with built content: the
+                  // startup handover may now reveal the Explorer.
+                  if (_ready && !_presentedReported) {
+                    _presentedReported = true;
+                    ref.read(explorerScenePresentedProvider.notifier).state =
+                        true;
+                  }
+                  _driveZoomFlight(controller, deltaSeconds);
+                  _applyZoomGlide(controller, deltaSeconds);
                   _refreshLabels(controller, size);
                 },
               ),
@@ -106,12 +146,84 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
                 planets: planets,
                 showLabels: ui.showLabels && _zoomLabelsVisible,
                 selectedId: ui.selectedPlanetId,
+                markedId: ui.markedTargetId,
+                onMarkedTap: () {
+                  // Label taps mirror 3D taps: a marked chip starts the
+                  // smooth zoom-to-detail flight, unless it is already
+                  // running for this body.
+                  final markedId =
+                      ref.read(explorerControllerProvider).markedTargetId;
+                  final cam = _lastCamera;
+                  if (markedId == null || cam == null) return;
+                  if (!controller.zoomFlightActive) {
+                    controller.startZoomToDetail(markedId, cam);
+                  }
+                },
               ),
+              if (_markedCenter != null &&
+                  ui.markedTargetId != null &&
+                  !ui.hasSelection)
+                _TargetMarker(
+                  center: _markedCenter!,
+                  diameter: _markedDiameter,
+                ),
+              // Recovery shortcut: only ever visible when no body is on
+              // screen at all (zoomed/panned out into empty space) and no
+              // detail is open. Tapping it restores the overview framing.
+              if (!_systemVisible && !ui.hasSelection)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 148,
+                  child: Center(
+                    child: _JumpToSunButton(
+                      onPressed: () {
+                        controller.resetOverview();
+                        ref
+                            .read(explorerControllerProvider.notifier)
+                            .clearMarkedTarget();
+                      },
+                    ),
+                  ),
+                ),
             ],
           ),
         );
       },
     );
+  }
+
+  /// Advances a running "zoom to Detail" flight ("second tap on the marked
+  /// object") and finishes it by opening detail at the reached distance.
+  ///
+  /// Progress is reported every frame so the >90% narration fires while
+  /// passing it, exactly as with manual zoom. A manual pinch, a new tap, or
+  /// a cleared/switched mark cancels the flight elsewhere; the guards here
+  /// are the safety net for state that changed between frames.
+  void _driveZoomFlight(
+    SolarSystemSceneController controller,
+    double deltaSeconds,
+  ) {
+    if (!controller.zoomFlightActive) return;
+    final ui = ref.read(explorerControllerProvider);
+    final flightId = ui.markedTargetId;
+    if (flightId == null || ui.hasSelection) {
+      controller.cancelZoomFlight();
+      return;
+    }
+    final step = controller.stepZoomFlight(deltaSeconds, flightId);
+    ref
+        .read(explorerControllerProvider.notifier)
+        .reportMarkProgress(step.progress, approaching: true);
+    if (!step.done) return;
+    final camera = controller.buildCamera(
+      ref.read(explorerControllerProvider),
+    );
+    _lastCamera = camera;
+    final zoom = controller.prepareSeamlessSelection(flightId, camera);
+    ref
+        .read(explorerControllerProvider.notifier)
+        .selectPlanet(flightId, initialDetailZoom: zoom);
   }
 
   void _refreshLabels(SolarSystemSceneController controller, Size size) {
@@ -120,15 +232,69 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     final frames = controller.projectLabels(camera, size);
     final ui = ref.read(explorerControllerProvider);
     final shouldShow = _shouldShowLabelsForZoom(ui);
+    final marker = _markerFor(controller, ui, camera, size);
+    // Empty space on screen: no projected body inside the viewport means the
+    // solar system has drifted out of view and the recovery shortcut appears.
+    final systemVisible = LabelProjector.anyFrameOnScreen(frames, size);
     if (_framesEqual(frames, _labelFrames) &&
-        shouldShow == _zoomLabelsVisible) {
+        shouldShow == _zoomLabelsVisible &&
+        systemVisible == _systemVisible &&
+        _sameOffset(marker?.center, _markedCenter) &&
+        (marker == null ||
+            (marker.diameter - _markedDiameter).abs() <= 2.0)) {
       return;
     }
     if (!mounted) return;
     setState(() {
       _labelFrames = frames;
       _zoomLabelsVisible = shouldShow;
+      _systemVisible = systemVisible;
+      _markedCenter = marker?.center;
+      if (marker != null) _markedDiameter = marker.diameter;
     });
+  }
+
+  /// Screen anchor of the marked target: its world centre plus a reticle
+  /// diameter derived from its apparent size (world radius, camera distance,
+  /// and field of view), so the ring hugs the body near or far. Null when
+  /// there is no mark, detail is open (detail UI takes over), or the body is
+  /// off-screen. The marker is purely visual: [IgnorePointer] in
+  /// [_TargetMarker].
+  ({Offset center, double diameter})? _markerFor(
+    SolarSystemSceneController controller,
+    ExplorerState ui,
+    PerspectiveCamera camera,
+    Size size,
+  ) {
+    final markedId = ui.markedTargetId;
+    if (markedId == null || ui.hasSelection || size.isEmpty) return null;
+    final center = controller.projectBodyCenter(markedId, camera, size);
+    if (center == null) return null;
+    const margin = 80.0;
+    if (center.dx < -margin ||
+        center.dx > size.width + margin ||
+        center.dy < -margin ||
+        center.dy > size.height + margin) {
+      return null;
+    }
+    final worldRadius = controller.bodyWorldRadius(markedId);
+    final bodyPos = controller.bodyWorldPosition(markedId);
+    var diameter = 64.0;
+    if (worldRadius != null && bodyPos != null && worldRadius > 0) {
+      final distance = camera.position
+          .distanceTo(bodyPos)
+          .clamp(1e-6, 1e9);
+      final apparentPx =
+          worldRadius / distance / math.tan(camera.fovRadiansY / 2) *
+          (size.height / 2);
+      diameter = (apparentPx * 2 * 1.3).clamp(44.0, 200.0);
+    }
+    return (center: center, diameter: diameter);
+  }
+
+  bool _sameOffset(Offset? a, Offset? b) {
+    if (a == null || b == null) return a == b;
+    return (a.dx - b.dx).abs() <= 1.5 && (a.dy - b.dy).abs() <= 1.5;
   }
 
   bool _shouldShowLabelsForZoom(ExplorerState ui) {
@@ -160,44 +326,200 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     return true;
   }
 
+  /// Applies one smoothed zoom step around the selected body, including the
+  /// distance-based auto-deselect. Shared by the pinch gesture and the
+  /// release glide so both feel like one continuous motion.
+  void _applyDetailZoom(
+    SolarSystemSceneController controller,
+    double incrementalScale,
+  ) {
+    final currentZoom = ref.read(explorerControllerProvider).detailZoom;
+    final nextZoom = currentZoom / incrementalScale;
+    // Pinch zoom is persistent: releasing the gesture must not
+    // leave detail mode or reset the current zoom. Leaving detail is
+    // handled explicitly, not as a side effect of ScaleEnd.
+    // No clamp: detail zoom is unbounded (only a tiny physical floor).
+    ref
+        .read(explorerControllerProvider.notifier)
+        .updateDetailCamera(zoom: math.max(0.001, nextZoom));
+
+    // Deselect only on real world-space distance (hysteresis), keeping
+    // the exact camera position for free exploration. The eye is
+    // frozen synchronously here: the scene tick must not do it, since
+    // it can run with a stale frame's UI and snap back to 100%.
+    final updatedUi = ref.read(explorerControllerProvider);
+    final camera = controller.buildCamera(updatedUi);
+    _lastCamera = camera;
+    final selectedId = updatedUi.selectedPlanetId;
+    if (selectedId != null &&
+        controller.shouldAutoReleaseFocus(selectedId, camera)) {
+      controller.preserveReleaseEye(camera);
+      final explorer = ref.read(explorerControllerProvider.notifier);
+      explorer.closeDetail();
+      // Zooming far out means "done with this body": drop the mark too,
+      // or the look-track would swing the view straight back onto it.
+      // (Manual Close keeps the mark so the child can continue there.)
+      explorer.clearMarkedTarget();
+    }
+  }
+
+  /// Applies one smoothed zoom step in exploration mode: toward the marked
+  /// target when one exists, otherwise toward the focal body under the
+  /// fingers. Shared by the pinch gesture and the release glide.
+  void _applyExploreZoom(
+    SolarSystemSceneController controller,
+    double incrementalScale,
+    Offset focalLocal,
+    Size viewSize,
+  ) {
+    // A marked target owns the zoom: any pinch approaches it, and
+    // detail opens once the camera is close enough. Otherwise fall
+    // back to the focal body under the fingers.
+    final markedId = ref.read(explorerControllerProvider).markedTargetId;
+    if (markedId != null) {
+      controller.pinchTowardBody(incrementalScale, markedId);
+      final camera = controller.buildCamera(
+        ref.read(explorerControllerProvider),
+      );
+      _lastCamera = camera;
+      // Track the approach for the >90% voice narration. The app shell
+      // plays it (once per zoom session) from this progress; the marker
+      // and the detail transition read the same state independently.
+      ref
+          .read(explorerControllerProvider.notifier)
+          .reportMarkProgress(
+            controller.markZoomProgress(markedId, camera),
+            approaching: incrementalScale > 1.0,
+          );
+      if (controller.shouldAutoEnterDetail(markedId, camera)) {
+        // Preserve the exact pinch distance: no snap to a default.
+        final initialZoom = controller.prepareSeamlessSelection(
+          markedId,
+          camera,
+        );
+        if (!ref.read(explorerControllerProvider).hasSelection) {
+          ref
+              .read(explorerControllerProvider.notifier)
+              .selectPlanet(markedId, initialDetailZoom: initialZoom);
+        }
+      }
+    } else {
+      // Resolve the focal body with the pre-pinch camera so the zoom
+      // moves toward what is under the fingers (Earth, Jupiter, ...),
+      // not always toward the origin/Sun. Then check auto-select with a
+      // freshly built camera (not a one-frame-stale _lastCamera).
+      final beforeCamera = controller.buildCamera(
+        ref.read(explorerControllerProvider),
+      );
+      controller.pinchWithFocalPoint(
+        incrementalScale,
+        focalScreenPoint: focalLocal,
+        viewSize: viewSize,
+        camera: _lastCamera ?? beforeCamera,
+      );
+      final camera = controller.buildCamera(
+        ref.read(explorerControllerProvider),
+      );
+      _lastCamera = camera;
+      final pickedId = controller.pickPlanetForAutoFocus(
+        focalLocal,
+        viewSize,
+        camera,
+      );
+      if (pickedId != null) {
+        // Preserve the exact pinch distance: no snap to a default.
+        final initialZoom = controller.prepareSeamlessSelection(
+          pickedId,
+          camera,
+        );
+        void select() => ref
+            .read(explorerControllerProvider.notifier)
+            .selectPlanet(pickedId, initialDetailZoom: initialZoom);
+        // prepareSeamlessSelection snaps the rig only when the explorer is
+        // still unselected; guard against a race where selection landed
+        // between the pick and now.
+        if (!ref.read(explorerControllerProvider).hasSelection) {
+          select();
+        }
+      }
+    }
+  }
+
+  /// Coasts the zoom after the fingers leave, decaying the last smoothed
+  /// pinch velocity to rest. Runs on the scene tick so it stays in sync with
+  /// rendering; a new gesture, tap, or flight takes over immediately.
+  void _applyZoomGlide(
+    SolarSystemSceneController controller,
+    double deltaSeconds,
+  ) {
+    if (_pinchActive || controller.zoomFlightActive) return;
+    if (_zoomGlide.abs() < 0.0005) {
+      _zoomGlide = 0.0;
+      return;
+    }
+    final ui = ref.read(explorerControllerProvider);
+    if (ui.hasSelection) {
+      _applyDetailZoom(controller, 1.0 + _zoomGlide);
+    } else {
+      _applyExploreZoom(
+        controller,
+        1.0 + _zoomGlide,
+        _lastFocalLocal,
+        _lastViewSize,
+      );
+    }
+    _zoomGlide *= math.pow(0.02, deltaSeconds).toDouble();
+    if (_zoomGlide.abs() < 0.0005) _zoomGlide = 0.0;
+  }
+
   void _onScaleStart(ScaleStartDetails details) {
     _lastScale = 1.0;
+    _pinchActive = false;
+    _zoomGlide = 0.0;
     _angularVelocityX = 0.0;
     _angularVelocityY = 0.0;
-    ref
-        .read(solarSystemSceneControllerProvider)
-        .setRotationVelocity(angularX: 0, angularY: 0);
+    final controller = ref.read(solarSystemSceneControllerProvider);
+    controller.resetPinchSmoothing();
+    controller.setRotationVelocity(angularX: 0, angularY: 0);
   }
 
   void _onScaleEnd(ScaleEndDetails details) {
     _lastScale = 1.0;
-    // Keep the last gesture velocity. The scene controller damps it every
-    // rendered frame, giving the globe/model a natural inertial finish.
+    _pinchActive = false;
+    // The zoom glide continues from the last smoothed pinch velocity (see
+    // onTick): the camera coasts to rest instead of halting mid-motion.
+    // Rotation inertia is handled the same way by the scene controller,
+    // which damps the angular velocity every rendered frame.
   }
 
-  void _onScaleUpdate(ScaleUpdateDetails details) {
+  void _onScaleUpdate(ScaleUpdateDetails details, Size viewSize) {
     final controller = ref.read(solarSystemSceneControllerProvider);
     final ui = ref.read(explorerControllerProvider);
 
     // Two pointers = pinch zoom. One pointer = orbit/spin.
-    final incrementalScale = details.scale / _lastScale;
+    final rawIncremental = details.scale / _lastScale;
     if (details.pointerCount >= 2) {
       _angularVelocityX = 0.0;
       _angularVelocityY = 0.0;
       controller.setRotationVelocity(angularX: 0, angularY: 0);
-      if (incrementalScale.isFinite && incrementalScale > 0) {
+      if (rawIncremental.isFinite && rawIncremental > 0) {
+        // Ease the raw finger delta so jittery fingers don't jitter the
+        // camera; the release glide below continues from this same value.
+        final incrementalScale = controller.smoothPinchFactor(rawIncremental);
+        _lastFocalLocal = details.localFocalPoint;
+        _lastViewSize = viewSize;
         if (ui.hasSelection) {
-          final currentZoom = ref.read(explorerControllerProvider).detailZoom;
-          final nextZoom = currentZoom / incrementalScale;
-          // Pinch zoom is persistent: releasing the gesture must not
-          // leave detail mode or reset the current zoom. Leaving detail is
-          // handled explicitly, not as a side effect of ScaleEnd.
-          ref
-              .read(explorerControllerProvider.notifier)
-              .updateDetailCamera(zoom: nextZoom.clamp(0.4, 2.6));
+          _applyDetailZoom(controller, incrementalScale);
         } else {
-          controller.pinch(incrementalScale);
+          _applyExploreZoom(
+            controller,
+            incrementalScale,
+            details.localFocalPoint,
+            viewSize,
+          );
         }
+        _pinchActive = true;
+        _zoomGlide = (incrementalScale - 1.0).clamp(-0.25, 0.25);
         _lastScale = details.scale;
       }
       return;
@@ -234,37 +556,91 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     }
   }
 
+  /// Double-tap is the one-finger zoom shortcut for small hands.
+  ///
+  /// On a body it marks (if needed) and flies there with the same smooth
+  /// flight as a second tap; on empty space it kicks a gentle zoom-out
+  /// glide. Detail double-tap keeps its existing reset-framing meaning.
+  /// (The two tap-ups that compose the double-tap fire first and already
+  /// marked the body, so this usually just starts the flight.)
+  void _onDoubleTap(TapDownDetails details, Size size) {
+    final controller = ref.read(solarSystemSceneControllerProvider);
+    final explorer = ref.read(explorerControllerProvider.notifier);
+    _zoomGlide = 0.0;
+    final ui = ref.read(explorerControllerProvider);
+    if (ui.hasSelection) {
+      explorer.resetDetailView();
+      return;
+    }
+    final camera = _lastCamera;
+    final pickedId = camera == null
+        ? null
+        : controller.pickPlanet(details.localPosition, size, camera);
+    if (pickedId == null) {
+      _pinchActive = false;
+      _zoomGlide = -0.18;
+      return;
+    }
+    if (pickedId != ui.markedTargetId) {
+      explorer.markTarget(pickedId);
+    }
+    if (camera != null && !controller.zoomFlightActive) {
+      controller.startZoomToDetail(pickedId, camera);
+    }
+  }
+
   void _onTapUp(TapUpDetails details, Size size) {
     final controller = ref.read(solarSystemSceneControllerProvider);
+    final explorer = ref.read(explorerControllerProvider.notifier);
+    _zoomGlide = 0.0;
+    String? pickedId;
     final camera = _lastCamera;
     if (camera != null) {
-      final pickedId = controller.pickPlanet(
-        details.localPosition,
-        size,
-        camera,
-      );
-      if (pickedId != null) {
-        ref.read(explorerControllerProvider.notifier).selectPlanet(pickedId);
-        return;
-      }
+      pickedId = controller.pickPlanet(details.localPosition, size, camera);
     }
-
-    // Keep labels as a forgiving secondary target, matching the prototype's
-    // tappable planet labels without requiring an exact mesh hit.
-    PlanetLabelFrame? best;
-    var bestDistSq = 48.0 * 48.0;
-    for (final frame in _labelFrames) {
-      if (!frame.visible) continue;
-      final dx = frame.screenX - details.localPosition.dx;
-      final dy = frame.screenY - details.localPosition.dy;
-      final distSq = dx * dx + dy * dy;
-      if (distSq < bestDistSq) {
-        bestDistSq = distSq;
-        best = frame;
+    if (pickedId == null) {
+      // Keep labels as a forgiving secondary target, matching the prototype's
+      // tappable planet labels without requiring an exact mesh hit.
+      PlanetLabelFrame? best;
+      var bestDistSq = 48.0 * 48.0;
+      for (final frame in _labelFrames) {
+        if (!frame.visible) continue;
+        final dx = frame.screenX - details.localPosition.dx;
+        final dy = frame.screenY - details.localPosition.dy;
+        final distSq = dx * dx + dy * dy;
+        if (distSq < bestDistSq) {
+          bestDistSq = distSq;
+          best = frame;
+        }
       }
+      pickedId = best?.id;
     }
-    if (best != null) {
-      ref.read(explorerControllerProvider.notifier).selectPlanet(best.id);
+    final ui = ref.read(explorerControllerProvider);
+    if (pickedId == null) {
+      // Tapping empty space clears the mark (zoom focus) and its session,
+      // returning to free exploration without touching detail.
+      controller.cancelZoomFlight();
+      if (!ui.hasSelection) explorer.clearMarkedTarget();
+      return;
+    }
+    if (ui.hasSelection) {
+      // In detail mode a tap switches straight to the new body, as before.
+      controller.cancelZoomFlight();
+      explorer.selectPlanet(pickedId);
+    } else if (pickedId == ui.markedTargetId) {
+      // Second tap on the marked object: smoothly zoom to 100% detail.
+      // Marking itself never zooms; only this shortcut and pinches move
+      // the camera, so the first tap cannot jump the view. A flight that is
+      // already running for this body is left alone — restarting it on every
+      // tap would keep pushing arrival away with each tap.
+      if (camera != null && !controller.zoomFlightActive) {
+        controller.startZoomToDetail(pickedId, camera);
+      }
+    } else {
+      // First tap: mark as the zoom focus, keep the current zoom level.
+      // Switching bodies takes over from any running flight.
+      controller.cancelZoomFlight();
+      explorer.markTarget(pickedId);
     }
   }
 }
@@ -318,17 +694,112 @@ class _LoadingView extends StatelessWidget {
 }
 
 /// Floating tappable planet name chips projected from 3D.
+/// Non-interactive reticle drawn over the marked target's world centre.
+///
+/// Purely visual ([IgnorePointer]): marking adds no buttons or controls, it
+/// only shows which body pinch zoom is currently approaching. Hidden once
+/// detail opens, where the detail UI takes over.
+class _TargetMarker extends StatelessWidget {
+  const _TargetMarker({required this.center, required this.diameter});
+  final Offset center;
+  final double diameter;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Stack(
+        children: [
+          Positioned(
+            left: center.dx - diameter / 2,
+            top: center.dy - diameter / 2,
+            width: diameter,
+            height: diameter,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppTheme.accentAmber,
+                  width: 2.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.accentAmber.withValues(alpha: 0.35),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Recovery shortcut back to the Sun/overview framing.
+///
+/// Rendered only when no projected body is inside the viewport at all (see
+/// [LabelProjector.anyFrameOnScreen]) and no detail is open. Tapping it
+/// restores the comfortable overview and drops the mark; it never appears
+/// during normal exploration or inside detail mode.
+class _JumpToSunButton extends StatelessWidget {
+  const _JumpToSunButton({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppTheme.space700.withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: AppTheme.accentAmber, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.accentAmber.withValues(alpha: 0.3),
+              blurRadius: 14,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('☀️', style: TextStyle(fontSize: 18)),
+            SizedBox(width: 8),
+            Text(
+              'Back to the Sun',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _PlanetLabelsOverlay extends StatelessWidget {
   const _PlanetLabelsOverlay({
     required this.frames,
     required this.planets,
     required this.showLabels,
     required this.selectedId,
+    required this.markedId,
+    required this.onMarkedTap,
   });
   final List<PlanetLabelFrame> frames;
   final List<Planet> planets;
   final bool showLabels;
   final String? selectedId;
+  final String? markedId;
+  final VoidCallback onMarkedTap;
   @override
   Widget build(BuildContext context) {
     final byId = {for (final p in planets) p.id: p};
@@ -352,7 +823,9 @@ class _PlanetLabelsOverlay extends StatelessWidget {
                     name: byId[frame.id]!.name,
                     colorValue: byId[frame.id]!.colorValue,
                     selected: frame.id == selectedId,
+                    marked: frame.id == markedId,
                     planetId: frame.id,
+                    onMarkedTap: onMarkedTap,
                   ),
                 ),
           ],
@@ -367,27 +840,42 @@ class _LabelChip extends ConsumerWidget {
     required this.name,
     required this.colorValue,
     required this.selected,
+    required this.marked,
     required this.planetId,
+    required this.onMarkedTap,
   });
   final String name;
   final int colorValue;
   final bool selected;
+  final bool marked;
   final String planetId;
+  final VoidCallback onMarkedTap;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
-      onTap: () =>
-          ref.read(explorerControllerProvider.notifier).selectPlanet(planetId),
+      onTap: () {
+        final explorer = ref.read(explorerControllerProvider.notifier);
+        // Labels follow the same model as 3D taps: mark in exploration mode
+        // (a marked chip starts the zoom-to-detail flight), switch detail
+        // directly while a detail is already open.
+        if (ref.read(explorerControllerProvider).hasSelection) {
+          explorer.selectPlanet(planetId);
+        } else if (marked) {
+          onMarkedTap();
+        } else {
+          explorer.markTarget(planetId);
+        }
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: AppTheme.space700.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: selected
+            color: selected || marked
                 ? AppTheme.accentAmber
                 : Colors.white.withValues(alpha: 0.18),
-            width: selected ? 2 : 1,
+            width: selected || marked ? 2 : 1,
           ),
         ),
         child: Row(

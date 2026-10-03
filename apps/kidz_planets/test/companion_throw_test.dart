@@ -378,6 +378,60 @@ void main() {
     });
   });
 
+  group('coming back upright', () {
+    testWidgets('the toy ends a throw standing straight up again', (
+      tester,
+    ) async {
+      final container = (await _pump(tester)).container;
+      final notifier = container.read(avatarControllerProvider.notifier);
+      // Re-read every time: read() hands back the state object as it is now,
+      // not a live view of it.
+      AvatarState pose() => container.read(avatarControllerProvider);
+
+      // Thrown hard and sideways: a thrown toy spins about both axes, which is
+      // what leaves it lying on its side if nothing ever levels it.
+      notifier.placeAt(const Offset(40, 500), maxPosition: _bounds);
+      notifier.launchWithVelocity(
+        velocity: const Offset(1600, -400),
+        maxPosition: _bounds,
+        minPosition: const Offset(8, 105),
+      );
+
+      // Spin it up mid-flight so the throw certainly ends off-plumb.
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 32));
+      }
+      expect(
+        pose().yaw.abs() + pose().pitch.abs(),
+        greaterThan(0.1),
+        reason: 'the throw really did tip the toy over',
+      );
+
+      // Let the simulation settle it, then keep flying for a while.
+      for (var i = 0; i < 240; i++) {
+        await tester.pump(const Duration(milliseconds: 32));
+      }
+
+      expect(pose().yaw, 0, reason: 'yaw is levelled, not merely small');
+      expect(pose().pitch, 0, reason: 'pitch is levelled, not merely small');
+      expect(
+        pose().idleAction,
+        isNot(AvatarIdleAction.sitting),
+        reason: 'and it is back on its flight circuit',
+      );
+
+      // Still upright a moment later: recovery is a landing, not a pose that
+      // drifts back out.
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 32));
+      }
+      expect(pose().yaw, 0);
+      expect(pose().pitch, 0);
+
+      await _finish(tester);
+    });
+  });
+
   group('reduced motion', () {
     testWidgets('a throw is calmer but still happens', (tester) async {
       final normal = (await _pump(tester)).container;

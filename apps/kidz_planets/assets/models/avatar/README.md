@@ -26,5 +26,10 @@ Source license: CC0 1.0.
 - Keep +Y as the rocket's longitudinal axis.
 - The existing `avatarRoot` controls rotation, squash and reaction transforms.
 - The existing exhaust and Flutter face overlay remain separate from the imported model.
+- Textures must be core glTF images (PNG or JPEG). Exporters such as trimesh
+  emit `EXT_texture_webp`, which the importer cannot parse, and the build hook
+  then fails with `glTF requires unsupported extension(s): EXT_texture_webp`.
+  Run `tool/convert_glb_webp_textures.py --in-place <file>.glb` after any export
+  that produces WebP; it transcodes the images and leaves the geometry alone.
 
 Do not remove the procedural fallback until the bundled GLB has been verified on Android and iOS.

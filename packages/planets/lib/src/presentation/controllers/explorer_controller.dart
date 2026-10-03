@@ -5,6 +5,7 @@
 // ignore_for_file: prefer_initializing_formals
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -49,7 +50,76 @@ class ExplorerController extends StateNotifier<ExplorerState> {
 
   void toggleLabels() => state = state.copyWith(showLabels: !state.showLabels);
 
-  void selectPlanet(String id) {
+  /// Marks [id] as the body the child wants to approach.
+  ///
+  /// Marking stays in exploration mode: no selection, no focus change, no
+  /// detail UI, and therefore no mission grading or planet sound (the app
+  /// shell only reacts to [ExplorerState.selectedPlanetId]). Tapping the
+  /// already-marked body unmarks it. Detail opens later, once a zoom brings
+  /// the camera close enough (see `shouldAutoEnterDetail`).
+  /// Strictly-above threshold for the approach narration: the body
+  /// "introduces itself" only after the zoom passes the 90% point, never
+  /// exactly on it.
+  static const double markNarrationThreshold = 0.90;
+
+  void markTarget(String id) {
+    if (state.markedTargetId == id) {
+      state = state.copyWith(markedTargetId: null);
+      return;
+    }
+    // A fresh mark starts a fresh zoom session: no progress yet, narration
+    // not played. Closing detail later preserves these (see [closeDetail])
+    // so the child continues from the previous zoom position.
+    state = state.copyWith(
+      markedTargetId: id,
+      markZoomProgress: 0.0,
+      markNarrationPlayed: false,
+      markZoomApproaching: false,
+    );
+  }
+
+  void clearMarkedTarget() {
+    if (state.markedTargetId == null) return;
+    state = state.copyWith(
+      markedTargetId: null,
+      markZoomProgress: 0.0,
+      markNarrationPlayed: false,
+      markZoomApproaching: false,
+    );
+  }
+
+  /// Records the latest zoom progress toward the marked body.
+  ///
+  /// Called on every marked-zoom update with the pinch direction. Receding
+  /// back to or below the threshold opens a new session ([markNarrationPlayed]
+  /// resets), so the next approach may narrate again. Without a mark this is
+  /// a no-op, which is what keeps direct detail opens narration-free.
+  void reportMarkProgress(double progress, {required bool approaching}) {
+    if (state.markedTargetId == null) return;
+    final finite = progress.isFinite ? progress : 0.0;
+    state = state.copyWith(
+      markZoomProgress: finite,
+      markZoomApproaching: approaching,
+      markNarrationPlayed: (!approaching && finite <= markNarrationThreshold)
+          ? false
+          : state.markNarrationPlayed,
+    );
+  }
+
+  /// Whether the approach narration should play now: marked, approaching,
+  /// past the threshold, and not yet played this session.
+  bool get isMarkNarrationDue =>
+      state.markedTargetId != null &&
+      state.markZoomApproaching &&
+      !state.markNarrationPlayed &&
+      state.markZoomProgress > markNarrationThreshold;
+
+  void acknowledgeMarkNarration() {
+    if (state.markedTargetId == null || state.markNarrationPlayed) return;
+    state = state.copyWith(markNarrationPlayed: true);
+  }
+
+  void selectPlanet(String id, {double initialDetailZoom = 1.0}) {
     // Tapping the already-focused body exits detail mode. Facts are never
     // required to leave the focused view.
     if (state.selectedPlanetId == id) {
@@ -60,7 +130,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
     state = state.copyWith(
       selectedPlanetId: id,
       focusedPlanetId: id,
-      detailZoom: 1.0,
+      detailZoom: math.max(0.001, initialDetailZoom),
       detailTheta: 0.65,
       detailPhi: 0.28,
       detailHotspot: null,
@@ -80,6 +150,9 @@ class ExplorerController extends StateNotifier<ExplorerState> {
 
   void closeDetail() {
     _spinHintTimer?.cancel();
+    // The mark and its zoom/narration session survive closing: the child
+    // continues from the previous zoom position, and the marker is still
+    // there for the next approach.
     state = state.copyWith(
       selectedPlanetId: null,
       focusedPlanetId: null,
@@ -100,7 +173,7 @@ class ExplorerController extends StateNotifier<ExplorerState> {
   void adjustDetailZoom(double delta) {
     if (!state.hasSelection) return;
     state = state.copyWith(
-      detailZoom: (state.detailZoom + delta).clamp(0.4, 2.6),
+      detailZoom: math.max(0.001, state.detailZoom + delta),
     );
   }
 

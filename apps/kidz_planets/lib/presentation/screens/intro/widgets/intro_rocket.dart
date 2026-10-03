@@ -18,13 +18,31 @@ class IntroRocket extends StatefulWidget {
   /// prototype's launch into the Explorer.
   final bool launching;
 
+  /// How long the climb lasts.
+  ///
+  /// The page hands over to the Explorer on exactly this beat, so the two
+  /// cannot drift: the rocket is at the top of its climb, fully faded, exactly
+  /// when the handover begins.
+  static const Duration launchDuration = Duration(milliseconds: 650);
+
   @override
   State<IntroRocket> createState() => _IntroRocketState();
 }
 
 class _IntroRocketState extends State<IntroRocket>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _loop;
+
+  /// The climb, on its own monotonic controller.
+  ///
+  /// This used to be sampled out of [_loop]'s sine, which meant the launch
+  /// progress depended on wherever the 3.5s float happened to be when the CTA
+  /// was tapped: the rocket would jump 0-80px instantly, sometimes appear
+  /// already faded, and never finish in step with the handover. A dedicated
+  /// forward-only controller makes the beat repeatable and lets the idle
+  /// float fade out underneath it instead of fighting it.
+  late final AnimationController _launch;
+  late final Animation<double> _climb;
 
   @override
   void initState() {
@@ -33,31 +51,49 @@ class _IntroRocketState extends State<IntroRocket>
       vsync: this,
       duration: const Duration(milliseconds: 3500),
     )..repeat();
+    _launch = AnimationController(
+      vsync: this,
+      duration: IntroRocket.launchDuration,
+    );
+    _climb = CurvedAnimation(parent: _launch, curve: Curves.easeInCubic);
+  }
+
+  @override
+  void didUpdateWidget(IntroRocket oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.launching && !oldWidget.launching) _launch.forward();
   }
 
   @override
   void dispose() {
     _loop.dispose();
+    _launch.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _loop,
+      animation: Listenable.merge([_loop, _launch]),
       builder: (context, _) {
         final t = _loop.value * math.pi * 2;
+        final climb = _climb.value;
+        // The idle float, rock and flicker all fade out as the rocket climbs:
+        // a floating, wobbling rocket reads as "still here" while it is on its
+        // way out.
+        final idle = 1 - climb;
         // `rocketFloat`: ±12px drift and a ±2° rock, eased as a sine.
-        final float = math.sin(t) * -6;
-        final rock = math.sin(t) * 2 * math.pi / 180;
-        // `flameFlicker` runs ~23x faster than the float on its own phase.
+        final float = math.sin(t) * -6 * idle;
+        final rock = math.sin(t) * 2 * math.pi / 180 * idle;
+        // `flameFlicker` runs ~23x faster than the float on its own phase, and
+        // stretches out as the rocket accelerates away.
         final flicker = 0.5 + 0.5 * math.sin(t * 23.3);
         return Transform.translate(
-          offset: Offset(0, widget.launching ? -160 * _launchT(t) : float),
+          offset: Offset(0, -160 * climb + float),
           child: Transform.rotate(
             angle: rock,
             child: Opacity(
-              opacity: widget.launching ? 1 - _launchT(t) : 1.0,
+              opacity: 1 - climb,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -114,7 +150,4 @@ class _IntroRocketState extends State<IntroRocket>
       },
     );
   }
-
-  /// Launch progress 0→1, derived from wall time so it needs no controller.
-  double _launchT(double t) => (0.5 + 0.5 * math.sin(t / 4)).clamp(0.0, 1.0);
 }

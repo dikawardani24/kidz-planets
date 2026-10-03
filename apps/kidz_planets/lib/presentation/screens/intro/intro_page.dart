@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/startup/startup_providers.dart';
 import 'intro_body.dart';
 import 'widgets/intro_background.dart';
+import 'widgets/intro_rocket.dart';
 
 export 'intro_body.dart';
 
@@ -18,11 +19,22 @@ export 'intro_body.dart';
 /// animation is a self-contained loop so progress updates rebuild nothing but
 /// the bar text.
 class IntroPage extends ConsumerStatefulWidget {
-  const IntroPage({super.key, required this.onEnterExplorer});
+  const IntroPage({
+    super.key,
+    required this.onEnterExplorer,
+    this.onPrepareExplorer,
+  });
 
   /// What happens when the child taps the completion CTA: the composition
-  /// root swaps this page for the existing Explorer screen.
+  /// root starts handing this page over to the Explorer.
   final VoidCallback onEnterExplorer;
+
+  /// Called the instant the CTA is tapped, before the launch beat plays.
+  ///
+  /// The gate uses it to build the Explorer while this page still covers the
+  /// screen, so the scene is compiled by the time the handover starts and the
+  /// swap is a pure animation rather than a cut followed by a stall.
+  final VoidCallback? onPrepareExplorer;
 
   @override
   ConsumerState<IntroPage> createState() => _IntroPageState();
@@ -105,11 +117,14 @@ class _IntroPageState extends ConsumerState<IntroPage> {
   ///
   /// The prototype fires the Explorer view the moment the button is tapped;
   /// the short climb lets the child see the rocket leave before the swap,
-  /// which is the payoff the whole screen has been promising.
+  /// which is the payoff the whole screen has been promising. The Explorer is
+  /// asked for first, so its scene is built and compiled underneath this page
+  /// during the beat and the handover has nothing left to stall on.
   void _beginLaunch() {
     if (_launching) return;
+    widget.onPrepareExplorer?.call();
     setState(() => _launching = true);
-    _launchTimer = Timer(const Duration(milliseconds: 650), () {
+    _launchTimer = Timer(IntroRocket.launchDuration, () {
       if (mounted) widget.onEnterExplorer();
     });
   }
