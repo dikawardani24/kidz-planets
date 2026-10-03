@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scene/scene.dart';
+import 'package:vector_math/vector_math.dart' as vm;
 
 import 'package:planets/state.dart';
 import 'package:planets/domain.dart';
@@ -80,7 +81,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
           // Scale handles both one-finger drag and two-finger pinch.
           // A separate Pan recognizer competes with Scale in Flutter's gesture arena.
           onScaleStart: _onScaleStart,
-          onScaleUpdate: _onScaleUpdate,
+          onScaleUpdate: (details) => _onScaleUpdate(details, size),
           onScaleEnd: _onScaleEnd,
           onDoubleTap: () {
             ref.read(explorerControllerProvider.notifier).resetDetailView();
@@ -175,7 +176,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     // rendered frame, giving the globe/model a natural inertial finish.
   }
 
-  void _onScaleUpdate(ScaleUpdateDetails details) {
+  void _onScaleUpdate(ScaleUpdateDetails details, Size viewSize) {
     final controller = ref.read(solarSystemSceneControllerProvider);
     final ui = ref.read(explorerControllerProvider);
 
@@ -217,13 +218,26 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
               ? null
               : controller.pickPlanetForAutoFocus(
                   details.focalPoint,
-                  context.size ?? Size.zero,
+                  viewSize,
                   camera,
                 );
-          if (pickedId != null) {
+          if (pickedId != null && camera != null) {
+            // Promote the body under the pinch without changing the current
+            // physical camera distance. The selected camera will now orbit
+            // that body, but it starts from the exact zoom level reached by
+            // the user rather than snapping back to 1.0.
+            final renderDistance = camera.position.distanceTo(
+              // pickPlanetForAutoFocus already proved this body is the ray hit;
+              // use the current camera radius as the stable distance estimate.
+              vm.Vector3.zero(),
+            );
+            final initialZoom = controller.detailZoomForPlanetAtCameraDistance(
+              pickedId,
+              renderDistance,
+            );
             ref
                 .read(explorerControllerProvider.notifier)
-                .selectPlanet(pickedId);
+                .selectPlanet(pickedId, initialDetailZoom: initialZoom);
           }
         }
         _lastScale = details.scale;
