@@ -33,6 +33,15 @@ class OrbitCameraRig {
   static const double kMaxRadius = 10e9;
   static const double kMinRadius = 1e-4;
 
+  /// Stable logical center of the solar system in world space.
+  ///
+  /// The Sun sits at the origin and every orbit is centered on it, so free
+  /// exploration always rotates around this anchor. Pinch zoom moves the
+  /// camera eye toward/away from the focal area but never rewrites this
+  /// anchor, which is what keeps repeated gestures from drifting the whole
+  /// system out of the viewport. (Read-only: never mutate the instance.)
+  static final vm.Vector3 kExploreAnchor = vm.Vector3.zero();
+
   void resetOverview() {
     _state
       ..theta = 0.0
@@ -60,23 +69,43 @@ class OrbitCameraRig {
   /// Free-exploration pinch that can move toward a focal world point.
   ///
   /// [scaleFactor] follows the same convention as [pinch] (>1 zooms in).
-  /// When [focalWorldPoint] is given and the gesture zooms in, the orbit
-  /// target is pulled toward that point so pinching over Jupiter moves toward
+  /// When [focalWorldPoint] is given and the gesture zooms in, the camera
+  /// eye moves toward that point so pinching over Jupiter approaches
   /// Jupiter instead of always dollying toward the solar-system origin
   /// (which is why the Sun used to be the only body with usable zoom).
-  /// Zoom-out leaves the target alone so the user keeps their anchor.
+  ///
+  /// Crucially, the orbit target is NOT rewritten: it is re-pinned to
+  /// [kExploreAnchor] every focal pinch. The focal point is a temporary zoom
+  /// intent for the current gesture, not a new permanent anchor, so repeated
+  /// pinches can never accumulate target drift and push the solar system
+  /// off-screen. Rotation therefore always stays centered on the system.
+  /// Zoom-out (and a missing focal point) is a pure dolly via [pinch].
   void pinchToward(double scaleFactor, {vm.Vector3? focalWorldPoint}) {
     if (!scaleFactor.isFinite || scaleFactor <= 0) return;
-    if (focalWorldPoint != null && scaleFactor > 1.0) {
-      final pull = (1.0 - 1.0 / scaleFactor).clamp(0.0, 1.0);
-      // Pull strongly toward the focal body so repeated pinch frames converge.
-      const kPull = 0.9;
-      final t = (pull * kPull).clamp(0.0, 1.0);
-      _state.targetX += (focalWorldPoint.x - _state.targetX) * t;
-      _state.targetY += (focalWorldPoint.y - _state.targetY) * t;
-      _state.targetZ += (focalWorldPoint.z - _state.targetZ) * t;
+    if (focalWorldPoint == null || scaleFactor <= 1.0) {
+      pinch(scaleFactor);
+      return;
     }
-    pinch(scaleFactor);
+    final pull = (1.0 - 1.0 / scaleFactor).clamp(0.0, 1.0);
+    // Move strongly toward the focal area so repeated frames converge.
+    const kPull = 0.9;
+    final t = (pull * kPull).clamp(0.0, 1.0);
+    final cosPhi = math.cos(_state.phi);
+    final eyeX =
+        _state.targetX + _state.radius * cosPhi * math.sin(_state.theta);
+    final eyeY = _state.targetY + _state.radius * math.sin(_state.phi);
+    final eyeZ =
+        _state.targetZ + _state.radius * cosPhi * math.cos(_state.theta);
+    _state.targetX = kExploreAnchor.x;
+    _state.targetY = kExploreAnchor.y;
+    _state.targetZ = kExploreAnchor.z;
+    preserveEye(
+      vm.Vector3(
+        eyeX + (focalWorldPoint.x - eyeX) * t,
+        eyeY + (focalWorldPoint.y - eyeY) * t,
+        eyeZ + (focalWorldPoint.z - eyeZ) * t,
+      ),
+    );
   }
 
   /// World-space radius of a body (logical radius scaled by node transform).
@@ -138,6 +167,19 @@ class OrbitCameraRig {
       ..theta = math.atan2(ox, oz)
       ..phi = math.asin((oy / distance).clamp(-1.0, 1.0))
       ..radius = distance.clamp(1e-4, 1e9);
+  }
+
+  /// Restore the stable exploration anchor without moving the camera.
+  ///
+  /// Used when a selection is released: [eye] stays exactly where the user
+  /// left it, but rotation/zoom anchor back onto [kExploreAnchor] so the next
+  /// free-exploration gesture orbits the solar system instead of the
+  /// just-deselected body. No snap, no recenter animation, no zoom reset.
+  void reanchorPreservingEye(vm.Vector3 eye) {
+    _state.targetX = kExploreAnchor.x;
+    _state.targetY = kExploreAnchor.y;
+    _state.targetZ = kExploreAnchor.z;
+    preserveEye(eye);
   }
 
   double snapToBodyPreservingEye({

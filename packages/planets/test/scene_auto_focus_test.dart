@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vector_math/vector_math.dart' as vm;
@@ -250,6 +251,173 @@ void main() {
       }
       // At 4.0x the 3.42 base the camera is past Earth's 11.4 exit range.
       expect(lastDist, greaterThan(0.95 * 12.0));
+    });
+  });
+
+  group('close transition keeps the system visible', () {
+    // The Close button clears selection with no gesture in flight, so the
+    // view re-anchors on selection teardown. These tests drive exactly what
+    // that teardown does: reanchorPreservingEye (same call the controller's
+    // preserveReleaseEye makes) with the last rendered camera.
+    const viewSize = Size(800, 600);
+
+    test('select then close leaves the sun on screen', () {
+      final rig = OrbitCameraRig(state: CameraRigState());
+      final zoom = rig.snapToBodyPreservingEye(
+        planetId: 'earth',
+        bodyPos: vm.Vector3(12, 0, 0),
+        worldRadius: 0.95,
+        isSun: false,
+        eye: vm.Vector3(12 + 2, 1, 1.5),
+      );
+      final detailCam = rig.buildCamera(
+        ui: ExplorerState(selectedPlanetId: 'earth', detailZoom: zoom),
+      );
+      // Close: freeze the eye, hand the anchor back to the system center.
+      rig.reanchorPreservingEye(detailCam.position.clone());
+      rig.releaseFocus();
+      final freeCam = rig.buildCamera(ui: const ExplorerState());
+      expect(
+        (freeCam.position - detailCam.position).length,
+        lessThan(1e-6),
+      );
+      expect(rig.state.targetX, 0);
+      expect(rig.state.targetY, 0);
+      expect(rig.state.targetZ, 0);
+      final sunScreen = freeCam.worldToScreen(vm.Vector3.zero(), viewSize);
+      expect(sunScreen, isNotNull);
+      expect(sunScreen!.dx, inInclusiveRange(0, viewSize.width));
+      expect(sunScreen.dy, inInclusiveRange(0, viewSize.height));
+    });
+
+    test('close after heavy rotation preserves orientation', () {
+      final rig = OrbitCameraRig(state: CameraRigState());
+      rig.state
+        ..theta = 2.6
+        ..phi = 1.1
+        ..radius = 6
+        ..targetX = 12
+        ..targetY = 0
+        ..targetZ = 0;
+      final detailCam = rig.buildCamera(
+        ui: const ExplorerState(selectedPlanetId: 'earth'),
+      );
+      rig.reanchorPreservingEye(detailCam.position.clone());
+      rig.releaseFocus();
+      final freeCam = rig.buildCamera(ui: const ExplorerState());
+      expect(
+        (freeCam.position - detailCam.position).length,
+        lessThan(1e-6),
+      );
+      expect(
+        (freeCam.target - detailCam.target).length,
+        greaterThan(1.0),
+        reason: 'anchor returns to the system center, the eye does not move',
+      );
+    });
+
+    test('close preserves the zoom level instead of resetting', () {
+      final rig = OrbitCameraRig(state: CameraRigState());
+      rig.snapToBodyPreservingEye(
+        planetId: 'earth',
+        bodyPos: vm.Vector3(12, 0, 0),
+        worldRadius: 0.95,
+        isSun: false,
+        eye: vm.Vector3(12 + 1.2, 0.4, 0.8),
+      );
+      final detailCam = rig.buildCamera(
+        ui: const ExplorerState(selectedPlanetId: 'earth', detailZoom: 0.4),
+      );
+      final distBefore = detailCam.position.length;
+      rig.reanchorPreservingEye(detailCam.position.clone());
+      rig.releaseFocus();
+      // The eye (hence the visual zoom) is untouched …
+      final freeCam = rig.buildCamera(ui: const ExplorerState());
+      expect((freeCam.position - detailCam.position).length, lessThan(1e-6));
+      // … and the radius now measures from the system center, not a default.
+      expect(rig.state.radius, closeTo(distBefore, 1e-6));
+      expect(rig.state.radius, isNot(closeTo(46.0, 1e-6)));
+    });
+
+    test('close never jumps to the default overview pose', () {
+      final rig = OrbitCameraRig(state: CameraRigState());
+      rig.state
+        ..theta = 1.9
+        ..phi = -0.6
+        ..radius = 4.2
+        ..targetX = 12
+        ..targetY = 0
+        ..targetZ = 0;
+      final detailCam = rig.buildCamera(
+        ui: const ExplorerState(selectedPlanetId: 'earth', detailZoom: 1.2),
+      );
+      rig.reanchorPreservingEye(detailCam.position.clone());
+      rig.releaseFocus();
+      expect(rig.state.theta, isNot(closeTo(0.0, 1e-6)));
+      expect(rig.state.phi, isNot(closeTo(0.32, 1e-6)));
+      expect(rig.state.radius, isNot(closeTo(46.0, 1e-6)));
+      final freeCam = rig.buildCamera(ui: const ExplorerState());
+      expect(
+        (freeCam.position - detailCam.position).length,
+        lessThan(1e-6),
+      );
+    });
+
+    test('repeated select/close cycles do not walk the camera away', () {
+      final rig = OrbitCameraRig(state: CameraRigState());
+      for (var i = 0; i < 10; i++) {
+        final eye = rig.buildCamera(ui: const ExplorerState()).position;
+        // Production derives the selection zoom from the pinch distance.
+        final zoom = rig.snapToBodyPreservingEye(
+          planetId: 'earth',
+          bodyPos: vm.Vector3(12, 0, 0),
+          worldRadius: 0.95,
+          isSun: false,
+          eye: eye.clone(),
+        );
+        final detailCam = rig.buildCamera(
+          ui: ExplorerState(selectedPlanetId: 'earth', detailZoom: zoom),
+        );
+        // Close teardown.
+        rig.reanchorPreservingEye(detailCam.position.clone());
+        rig.releaseFocus();
+        final freeCam = rig.buildCamera(ui: const ExplorerState());
+        expect(
+          (freeCam.position - eye).length,
+          lessThan(1e-4),
+          reason: 'cycle $i must return to the pre-select eye',
+        );
+        expect(rig.state.targetX, 0);
+        expect(rig.state.targetY, 0);
+        expect(rig.state.targetZ, 0);
+      }
+      expect(rig.state.radius, lessThan(200));
+      expect(rig.state.radius, greaterThan(0));
+    });
+
+    test('close after vertical flip still leaves a usable view', () {
+      final rig = OrbitCameraRig(state: CameraRigState());
+      rig.state
+        ..theta = 0.7
+        ..phi = -1.2
+        ..radius = 7
+        ..targetX = 12
+        ..targetY = 0
+        ..targetZ = 0;
+      final detailCam = rig.buildCamera(
+        ui: const ExplorerState(selectedPlanetId: 'earth'),
+      );
+      rig.reanchorPreservingEye(detailCam.position.clone());
+      rig.releaseFocus();
+      final freeCam = rig.buildCamera(ui: const ExplorerState());
+      expect(
+        (freeCam.position - detailCam.position).length,
+        lessThan(1e-6),
+      );
+      final sunScreen = freeCam.worldToScreen(vm.Vector3.zero(), viewSize);
+      expect(sunScreen, isNotNull);
+      expect(sunScreen!.dx, inInclusiveRange(0, viewSize.width));
+      expect(sunScreen.dy, inInclusiveRange(0, viewSize.height));
     });
   });
 }

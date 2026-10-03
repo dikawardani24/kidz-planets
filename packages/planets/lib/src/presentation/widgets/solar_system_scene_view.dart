@@ -28,10 +28,15 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   double _angularVelocityX = 0.0;
   double _angularVelocityY = 0.0;
   bool _zoomLabelsVisible = true;
+  bool _presentedReported = false;
 
   @override
   void initState() {
     super.initState();
+    // A fresh mount means a fresh first frame is still owed: tell the
+    // startup handover to wait for this view's first presented tick rather
+    // than revealing a compiling scene mid-crossfade.
+    ref.read(explorerScenePresentedProvider.notifier).state = false;
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureBuilt());
   }
 
@@ -68,6 +73,25 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     final controller = ref.watch(solarSystemSceneControllerProvider);
     final ui = ref.watch(explorerControllerProvider);
     final planets = ref.watch(planetsProvider);
+    // Every selection teardown (Close button, tap-toggle, tab switch, …)
+    // must hand the camera back to the solar-system anchor without moving
+    // it: while selected, the target is the body's world position, and the
+    // body keeps orbiting after deselect, so a stale body target leaves the
+    // camera staring at empty space. Freezing the last eye and re-anchoring
+    // keeps the system visible from the exact view the user left.
+    // (Auto-deselect already preserves synchronously in the gesture handler;
+    // re-applying here is idempotent.)
+    ref.listen<ExplorerState>(explorerControllerProvider, (previous, next) {
+      if (previous?.selectedPlanetId != null &&
+          next.selectedPlanetId == null) {
+        final camera = _lastCamera;
+        if (camera != null) {
+          ref
+              .read(solarSystemSceneControllerProvider)
+              .preserveReleaseEye(camera);
+        }
+      }
+    });
     // Startup normally gets here with the scene already built, so this branch
     // is a fallback for a feature package used on its own. The fraction is only
     // drawn because it is free: the real progress reporting lives in the app's
@@ -100,6 +124,13 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
                 },
                 onTick: (elapsed, deltaSeconds) {
                   controller.tick(deltaSeconds, ui);
+                  // The scene just presented a frame with built content: the
+                  // startup handover may now reveal the Explorer.
+                  if (_ready && !_presentedReported) {
+                    _presentedReported = true;
+                    ref.read(explorerScenePresentedProvider.notifier).state =
+                        true;
+                  }
                   _refreshLabels(controller, size);
                 },
               ),

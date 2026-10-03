@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:planets/scene.dart';
+
 import 'explorer_screen.dart';
 import 'intro/intro_page.dart';
 
@@ -77,6 +79,12 @@ class _StartupGateState extends ConsumerState<StartupGate>
   /// True once the CTA has been tapped and the handover is under way.
   var _handingOver = false;
 
+  /// True once the rocket's launch beat has elapsed.
+  var _beatDone = false;
+
+  /// True once the crossfade itself has started.
+  var _swapStarted = false;
+
   /// True once the crossfade has finished and the intro can leave the tree.
   var _done = false;
 
@@ -105,18 +113,38 @@ class _StartupGateState extends ConsumerState<StartupGate>
     setState(() => _explorerLive = true);
   }
 
-  /// Starts the handover: the Explorer is already warm, so this only animates.
+  /// The rocket has landed: freeze the intro's loops and wait for the scene.
+  ///
+  /// The crossfade itself starts in [_maybeStartSwap] once the Explorer has
+  /// also presented its first frame, so the reveal never exposes a compiling
+  /// scene or a loading fallback — only two already-running pages.
   void _enterExplorer() {
     if (_handingOver) return;
     setState(() {
       _handingOver = true;
       _explorerLive = true;
+      _beatDone = true;
     });
+    _maybeStartSwap();
+  }
+
+  /// Starts the crossfade once both sides are ready: the launch beat has
+  /// elapsed and the Explorer scene has presented a frame.
+  void _maybeStartSwap() {
+    if (_swapStarted || !_beatDone) return;
+    if (!ref.read(explorerScenePresentedProvider)) return;
+    _swapStarted = true;
     _swap.forward();
   }
 
   @override
   Widget build(BuildContext context) {
+    // The scene view reports its first presented frame through this flag;
+    // starting the swap from the listener (rather than during build) keeps
+    // the animation controller out of the build phase.
+    ref.listen<bool>(explorerScenePresentedProvider, (_, presented) {
+      if (presented) _maybeStartSwap();
+    });
     // Both slots exist from the very first build, and neither is ever inserted
     // or removed in the middle: Stack children are matched by index, so adding
     // the Explorer underneath would shift the intro along and make Flutter
@@ -166,10 +194,12 @@ class _StartupGateState extends ConsumerState<StartupGate>
       child: ScaleTransition(
         scale: Tween(begin: 1.0, end: _introZoom).animate(_zoomOut),
         child: TickerMode(
-          // Its own loops stop as it leaves: the twinkling starfield repaints
-          // the whole screen every frame, and this is the moment the first
-          // Explorer frame is being paid for.
-          enabled: !_handingOver,
+          // Its own loops stop once the swap itself starts: the twinkling
+          // starfield repaints the whole screen every frame, and this is the
+          // moment the first Explorer frame is being paid for. While the gate
+          // waits out a slow first frame the intro stays alive behind its
+          // opaque background rather than freezing mid-fade.
+          enabled: !_swapStarted,
           // Dead to touches while it fades, so a second tap cannot re-enter.
           child: IgnorePointer(ignoring: _handingOver, child: intro),
         ),

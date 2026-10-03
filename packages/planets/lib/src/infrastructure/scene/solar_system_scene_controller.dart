@@ -106,10 +106,12 @@ abstract class SolarSystemSceneController {
   double prepareSeamlessSelection(String planetId, PerspectiveCamera camera);
 
   /// Freeze [camera]'s eye into the orbit state so the following deselection
-  /// keeps the exact camera position for free exploration. Call synchronously
-  /// before clearing the selection: the per-frame tick must never do this
-  /// itself, because it can run with a stale frame's UI and would then
-  /// overwrite the preserved distance with a default.
+  /// keeps the exact camera position for free exploration, and restore the
+  /// stable solar-system anchor so later gestures orbit the system rather
+  /// than the just-deselected body. Call synchronously before clearing the
+  /// selection: the per-frame tick must never do this itself, because it can
+  /// run with a stale frame's UI and would then overwrite the preserved
+  /// distance with a default.
   void preserveReleaseEye(PerspectiveCamera camera);
   void spinPlanet(String planetId, double delta);
   void rotatePlanet(String planetId, double dx, double dy);
@@ -454,7 +456,9 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
 
   @override
   void preserveReleaseEye(PerspectiveCamera camera) {
-    _rig.preserveEye(camera.position.clone());
+    // Freeze the eye AND restore the stable system anchor, so the next
+    // free gesture orbits the solar system rather than the ex-body.
+    _rig.reanchorPreservingEye(camera.position.clone());
   }
 
   @override

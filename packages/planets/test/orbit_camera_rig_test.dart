@@ -82,16 +82,22 @@ void main() {
       expect(state.radius, OrbitCameraRig.kOverviewRadius);
     });
 
-    test('pinchToward moves the target toward the focal body on zoom-in', () {
+    test('pinchToward moves the eye toward the focal body on zoom-in', () {
       state
         ..targetX = 0
         ..targetY = 0
         ..targetZ = 0
         ..radius = 46;
+      final before = rig.buildCamera(ui: const ExplorerState()).position;
+      final beforeDist = (before - vm.Vector3(12, 0, 0)).length;
       rig.pinchToward(2.0, focalWorldPoint: vm.Vector3(12, 0, 0));
-      expect(state.targetX, greaterThan(0));
-      expect(state.targetX, lessThanOrEqualTo(12));
-      expect(state.radius, closeTo(23, 1e-12));
+      final after = rig.buildCamera(ui: const ExplorerState()).position;
+      // The eye approaches Earth …
+      expect((after - vm.Vector3(12, 0, 0)).length, lessThan(beforeDist));
+      // … while the anchor never moves.
+      expect(state.targetX, 0);
+      expect(state.targetY, 0);
+      expect(state.targetZ, 0);
     });
 
     test('pinchToward leaves the target alone on zoom-out', () {
@@ -101,6 +107,67 @@ void main() {
         ..targetZ = 0;
       rig.pinchToward(0.5, focalWorldPoint: vm.Vector3(12, 0, 0));
       expect(state.targetX, 0);
+      expect(state.radius, closeTo(92, 1e-12));
+    });
+
+    test('repeated focal pinches never drift the anchor off-screen', () {
+      state.radius = 46;
+      final focal = vm.Vector3(12, 0, 0);
+      final startDist = (rig.buildCamera(ui: const ExplorerState()).position -
+              focal)
+          .length;
+      for (var i = 0; i < 50; i++) {
+        rig.pinchToward(1.1, focalWorldPoint: focal);
+      }
+      // Fifty gestures later the rotation anchor is still the system center.
+      expect(state.targetX, 0);
+      expect(state.targetY, 0);
+      expect(state.targetZ, 0);
+      // … and the eye has converged toward the focal area, not drifted past.
+      final endDist =
+          (rig.buildCamera(ui: const ExplorerState()).position - focal).length;
+      expect(endDist, lessThan(startDist));
+      expect(endDist, lessThan(12.0));
+    });
+
+    test('on-axis focal pinch preserves the current rotation', () {
+      state
+        ..theta = 0.5
+        ..phi = 0.2
+        ..radius = 46;
+      // A focal point straight ahead (the anchor itself) moves along the
+      // current view ray, so orientation must not change.
+      rig.pinchToward(2.0, focalWorldPoint: vm.Vector3.zero());
+      // Angles round-trip through atan2/asin, so single precision only.
+      expect(state.theta, closeTo(0.5, 1e-6));
+      expect(state.phi, closeTo(0.2, 1e-6));
+      expect(state.radius, lessThan(46));
+    });
+
+    test('pure pinch preserves orientation', () {
+      state
+        ..theta = 0.5
+        ..phi = 0.2;
+      rig.pinch(2.0);
+      expect(state.theta, closeTo(0.5, 1e-12));
+      expect(state.phi, closeTo(0.2, 1e-12));
+    });
+
+    test('reanchor keeps the eye and restores the system anchor', () {
+      state
+        ..theta = 0.4
+        ..phi = 0.1
+        ..radius = 5
+        ..targetX = 10
+        ..targetY = 0
+        ..targetZ = 0;
+      final eye = rig.buildCamera(ui: const ExplorerState()).position.clone();
+      rig.reanchorPreservingEye(eye);
+      expect(state.targetX, 0);
+      expect(state.targetY, 0);
+      expect(state.targetZ, 0);
+      final after = rig.buildCamera(ui: const ExplorerState()).position;
+      expect((after - eye).length, lessThan(1e-6));
     });
   });
 
