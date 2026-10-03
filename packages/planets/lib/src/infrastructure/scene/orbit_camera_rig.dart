@@ -132,9 +132,9 @@ class OrbitCameraRig {
     _state.targetZ *= (1 - k);
     _focusedPlanetRadius = 1.0;
     _focusedPlanetIsSun = false;
-    if (_state.radius < kOverviewRadius) {
-      _state.radius += (kOverviewRadius - _state.radius) * 0.05;
-    }
+    // Do not change the camera radius here. Releasing a pinch must preserve
+    // the exact zoom level the user reached. Overview recentering is handled
+    // independently from the gesture lifecycle.
   }
 
   /// Builds the camera for this frame.
@@ -191,9 +191,12 @@ class OrbitCameraRig {
     // A floor of 2.5 buries them behind the parent/zoom math that was tuned
     // for full-size planets — so clamp relative to the focused body size.
     final bodyMin = (focusedRadius * 3.0).clamp(0.45, 2.5);
-    final bodyMax = (focusedRadius * 22.0).clamp(6.0, 30.0);
+    // bodyMax used to impose the visible "38%"/zoom-out ceiling. Detail
+    // camera distance is now controlled continuously by the user's zoom.
     final baseDistance = focusedRadius * (focusedIsSun ? 3.4 : 3.6);
-    return (baseDistance * zoom).clamp(bodyMin, bodyMax);
+    // There is deliberately no detail-mode max/min zoom range. Keep only a
+    // tiny numerical floor so a camera can never collapse onto the object.
+    return math.max(baseDistance * zoom, math.max(0.001, bodyMin * 0.01));
   }
 }
 
