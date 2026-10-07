@@ -76,8 +76,12 @@ class _IntroSpaceFactState extends State<IntroSpaceFact> {
       ),
       child: Stack(
         children: [
+          // Clears the corner tab: text never slides under it at any scale.
           Padding(
-            padding: const EdgeInsets.only(top: 6, right: 16),
+            padding: EdgeInsets.only(
+              top: ds.px(28),
+              right: ds.px(12),
+            ),
             child: AnimatedOpacity(
               opacity: _visible ? 1 : 0,
               duration: const Duration(milliseconds: 300),

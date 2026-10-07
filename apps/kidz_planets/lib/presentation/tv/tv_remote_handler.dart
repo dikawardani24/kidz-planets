@@ -107,8 +107,8 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
   /// this only ever fires from the void — never steals.
   void _refocusFromVoid() {
     if (!mounted) return;
-    if (!ref.read(isTelevisionProvider)) return;
-    if (FocusManager.instance.primaryFocus == null) {
+    final primary = FocusManager.instance.primaryFocus;
+    if (primary == null || primary == FocusManager.instance.rootScope) {
       _scope.requestFocus();
     }
   }
@@ -117,7 +117,6 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
     final last = _lastTick;
     _lastTick = elapsed;
     if (last == null) return;
-    if (!ref.read(isTelevisionProvider)) return;
     final dt = (elapsed - last).inMicroseconds / 1e6;
     try {
       ref.read(tvExplorerControllerProvider.notifier).advance(dt);
@@ -132,7 +131,6 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
   }
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
-    if (!ref.read(isTelevisionProvider)) return KeyEventResult.ignored;
     final key = event.logicalKey;
     final remoteKey = tvRemoteKeyFor(key);
     if (remoteKey == null) return KeyEventResult.ignored;

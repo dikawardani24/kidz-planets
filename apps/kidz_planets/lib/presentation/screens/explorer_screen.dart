@@ -11,8 +11,10 @@ import 'package:core/theme.dart';
 import 'package:kidz_planets/application/state/providers.dart';
 import 'package:kidz_planets/presentation/tv/tv_controller_hint.dart';
 import 'package:kidz_planets/presentation/tv/tv_home_panel.dart';
+import 'package:kidz_planets/presentation/tv/tv_input_probe.dart';
 import 'package:kidz_planets/presentation/tv/tv_nav_bar.dart';
 import 'package:kidz_planets/presentation/tv/tv_providers.dart';
+import 'package:kidz_planets/presentation/tv/tv_quick_select_drawer.dart';
 import 'package:kidz_planets/presentation/tv/tv_remote_handler.dart';
 import 'package:kidz_planets/presentation/widgets/overlays/bottom_nav.dart';
 import 'package:kidz_planets/presentation/widgets/overlays/toast_overlay.dart';
@@ -204,6 +206,19 @@ class ExplorerScreen extends ConsumerWidget {
               // LayoutBuilder then supplies the new viewport dimensions.
               final isLandscape = orientation == Orientation.landscape;
               final horizontalInset = isLandscape ? 24.0 : 0.0;
+              final viewportSize = Size(
+                constraints.maxWidth,
+                constraints.maxHeight,
+              );
+              if (isTv) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (context.mounted) {
+                    ref
+                        .read(tvExplorerControllerProvider.notifier)
+                        .updateViewportSize(viewportSize);
+                  }
+                });
+              }
 
               // The scene is intentionally allowed to use the entire viewport.
               // The previous 390px width cap made landscape render as a narrow
@@ -224,6 +239,10 @@ class ExplorerScreen extends ConsumerWidget {
                     isExploreTab: shell.tab == AppTab.explore,
                   ),
                   const ToastOverlay(),
+
+                  // TEMPORARY TV input probe (see tv_input_probe.dart): two
+                  // test buttons plus raw key/focus readouts. TV only.
+                  if (isTv) const TvInputProbe(),
 
                   if (shell.tab == AppTab.playground)
                     Positioned(
@@ -284,6 +303,8 @@ class ExplorerScreen extends ConsumerWidget {
                   if (isTv && shell.tab == AppTab.explore && !tvUi.homeVisible)
                     const TvControllerChrome(),
 
+                  if (isTv) const TvQuickSelectDrawer(),
+
                   if (isTv) const TvNavBar() else const ExplorerBottomNav(),
 
                   if (progress.celebrationVisible)
@@ -306,9 +327,9 @@ class ExplorerScreen extends ConsumerWidget {
         },
       ),
     );
-    // One branch: the remote handler owns D-pad input on TV, and the touch
-    // tree is byte-identical to before on phones and tablets.
-    return isTv ? TvRemoteHandler(child: scaffold) : scaffold;
+    // The remote handler owns D-pad input on TV and keyboard/remote testing,
+    // providing seamless D-pad navigation across all devices.
+    return TvRemoteHandler(child: scaffold);
   }
 }
 

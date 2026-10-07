@@ -50,6 +50,13 @@ class SolarSystemSceneOps implements TvSceneOps {
 
   @override
   void resetOverview() => _scene.resetOverview();
+
+  @override
+  Offset? projectBodyCenter(
+    String planetId,
+    PerspectiveCamera camera,
+    Size viewSize,
+  ) => _scene.projectBodyCenter(planetId, camera, viewSize);
 }
 
 final tvSceneOpsProvider = Provider<TvSceneOps>((ref) {

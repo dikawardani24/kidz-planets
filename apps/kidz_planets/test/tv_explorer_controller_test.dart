@@ -1,5 +1,6 @@
 import 'package:core/platform.dart';
 import 'package:core/time.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planets/state.dart';
@@ -57,6 +58,13 @@ class FakeSceneOps implements TvSceneOps {
 
   @override
   void resetOverview() => resets++;
+
+  @override
+  Offset? projectBodyCenter(
+    String planetId,
+    PerspectiveCamera camera,
+    Size viewSize,
+  ) => null;
 }
 
 TvBackContext quietBack({
@@ -478,6 +486,15 @@ void main() {
       explorer.markTarget('earth');
       tv.ensureCursor();
       expect(explorer.state.markedTargetId, 'earth');
+    });
+
+    test('quick select toggles and dismisses on BACK', () {
+      final (_, _, tv) = setup();
+      expect(tv.state.quickSelectVisible, isFalse);
+      tv.toggleQuickSelect();
+      expect(tv.state.quickSelectVisible, isTrue);
+      expect(tv.handleBack(quietBack()), TvBackOutcome.closedDetail);
+      expect(tv.state.quickSelectVisible, isFalse);
     });
   });
 }

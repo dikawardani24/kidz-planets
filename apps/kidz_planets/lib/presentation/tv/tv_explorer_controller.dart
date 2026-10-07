@@ -7,6 +7,7 @@
 import 'dart:async';
 
 import 'package:equatable/equatable.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -55,6 +56,11 @@ abstract class TvSceneOps {
   double markZoomProgress(String planetId, PerspectiveCamera camera);
   void cancelZoomFlight();
   void resetOverview();
+  Offset? projectBodyCenter(
+    String planetId,
+    PerspectiveCamera camera,
+    Size viewSize,
+  );
 }
 
 /// Visible TV chrome state: the D-pad's current job, the hint bar, the home.
@@ -63,24 +69,33 @@ class TvExplorerUiState extends Equatable {
     this.mode = TvControlMode.browse,
     this.hintVisible = true,
     this.homeVisible = true,
+    this.quickSelectVisible = false,
   });
 
   final TvControlMode mode;
   final bool hintVisible;
   final bool homeVisible;
+  final bool quickSelectVisible;
 
   TvExplorerUiState copyWith({
     TvControlMode? mode,
     bool? hintVisible,
     bool? homeVisible,
+    bool? quickSelectVisible,
   }) => TvExplorerUiState(
     mode: mode ?? this.mode,
     hintVisible: hintVisible ?? this.hintVisible,
     homeVisible: homeVisible ?? this.homeVisible,
+    quickSelectVisible: quickSelectVisible ?? this.quickSelectVisible,
   );
 
   @override
-  List<Object?> get props => [mode, hintVisible, homeVisible];
+  List<Object?> get props => [
+    mode,
+    hintVisible,
+    homeVisible,
+    quickSelectVisible,
+  ];
 }
 
 /// Remote-first driver for the Explorer.
@@ -186,10 +201,10 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     }
     switch (action) {
       case TvExplorerAction.focusNext:
-        _moveCursor(1);
+        _moveCursor(1, directionKey: TvRemoteKey.right);
         return true;
       case TvExplorerAction.focusPrevious:
-        _moveCursor(-1);
+        _moveCursor(-1, directionKey: TvRemoteKey.left);
         return true;
       case TvExplorerAction.select:
         _select();
@@ -329,12 +344,67 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     }
   }
 
+  Size? viewportSize;
+
+  void updateViewportSize(Size size) {
+    if (viewportSize == size) return;
+    viewportSize = size;
+  }
+
   /// Moves the body cursor. In detail, LEFT/RIGHT switches the detailed body
   /// (mirroring tap-to-switch on touch); otherwise it moves the mark, which
   /// steers the camera target through the existing tick behavior.
-  void _moveCursor(int delta) {
+  void _moveCursor(int delta, {TvRemoteKey? directionKey}) {
     if (_bodyIds.isEmpty) return;
     final ui = _explorer.state;
+    final size = viewportSize;
+    if (size != null && !size.isEmpty && directionKey != null) {
+      final camera = _scene.buildCamera(ui);
+      final currentId = ui.hasSelection
+          ? ui.selectedPlanetId
+          : (ui.markedTargetId ?? _bodyIds.first);
+      if (currentId != null) {
+        final currentPos = _scene.projectBodyCenter(currentId, camera, size);
+        if (currentPos != null) {
+          final targetDir = switch (directionKey) {
+            TvRemoteKey.left => const Offset(-1, 0),
+            TvRemoteKey.right => const Offset(1, 0),
+            TvRemoteKey.up => const Offset(0, -1),
+            TvRemoteKey.down => const Offset(0, 1),
+            _ => Offset(delta.toDouble(), 0),
+          };
+          String? bestCandidate;
+          double bestScore = double.infinity;
+          for (final id in _bodyIds) {
+            if (id == currentId) continue;
+            final pos = _scene.projectBodyCenter(id, camera, size);
+            if (pos == null) continue;
+            final vec = pos - currentPos;
+            final dist = vec.distance;
+            if (dist < 1.0) continue;
+            final norm = vec / dist;
+            final dot = norm.dx * targetDir.dx + norm.dy * targetDir.dy;
+            if (dot > -0.2) {
+              final angularPenalty = (1.0 - dot) * 350.0;
+              final score = dist + angularPenalty;
+              if (score < bestScore) {
+                bestScore = score;
+                bestCandidate = id;
+              }
+            }
+          }
+          if (bestCandidate != null) {
+            _scene.cancelZoomFlight();
+            if (ui.hasSelection) {
+              _explorer.selectPlanet(bestCandidate);
+            } else {
+              _explorer.markTarget(bestCandidate);
+            }
+            return;
+          }
+        }
+      }
+    }
     if (ui.hasSelection) {
       final current = _bodyIds.indexOf(ui.selectedPlanetId!);
       final next = _bodyIds[(current + delta) % _bodyIds.length];
@@ -386,8 +456,12 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
 
   // -- back -------------------------------------------------------------------
 
-  /// Predictable BACK: celebration > detail > mark > missions > system.
+  /// Predictable BACK: quick select > celebration > detail > mark > missions > system.
   TvBackOutcome handleBack(TvBackContext back) {
+    if (state.quickSelectVisible) {
+      dismissQuickSelect();
+      return TvBackOutcome.closedDetail;
+    }
     if (back.celebrationVisible) {
       back.closeCelebration();
       return TvBackOutcome.dismissedCelebration;
@@ -406,6 +480,24 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
       return TvBackOutcome.exitedMissions;
     }
     return TvBackOutcome.unhandled;
+  }
+
+  // -- quick select ------------------------------------------------------------
+
+  void toggleQuickSelect() {
+    state = state.copyWith(quickSelectVisible: !state.quickSelectVisible);
+  }
+
+  void showQuickSelect() {
+    if (!state.quickSelectVisible) {
+      state = state.copyWith(quickSelectVisible: true);
+    }
+  }
+
+  void dismissQuickSelect() {
+    if (state.quickSelectVisible) {
+      state = state.copyWith(quickSelectVisible: false);
+    }
   }
 
   // -- chrome -------------------------------------------------------------------

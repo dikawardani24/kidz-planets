@@ -8,6 +8,7 @@ import 'package:planets/state.dart';
 import 'package:planets/domain.dart';
 import 'package:planets/scene.dart';
 import 'package:core/layout.dart';
+import 'package:core/platform.dart';
 import 'package:core/theme.dart';
 
 /// True 3D solar system rendered with flutter_scene (no WebView).
@@ -697,13 +698,14 @@ class _LoadingView extends StatelessWidget {
 /// Purely visual ([IgnorePointer]): marking adds no buttons or controls, it
 /// only shows which body pinch zoom is currently approaching. Hidden once
 /// detail opens, where the detail UI takes over.
-class _TargetMarker extends StatelessWidget {
+class _TargetMarker extends ConsumerWidget {
   const _TargetMarker({required this.center, required this.diameter});
   final Offset center;
   final double diameter;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isTv = ref.watch(isTelevisionProvider);
     return IgnorePointer(
       child: Stack(
         children: [
@@ -715,15 +717,32 @@ class _TargetMarker extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: AppTheme.accentAmber, width: 2.5),
+                border: Border.all(
+                  color: AppTheme.accentAmber,
+                  width: isTv ? 3.5 : 2.5,
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.accentAmber.withValues(alpha: 0.35),
-                    blurRadius: 12,
-                    spreadRadius: 1,
+                    color: AppTheme.accentAmber.withValues(
+                      alpha: isTv ? 0.65 : 0.35,
+                    ),
+                    blurRadius: isTv ? 22 : 12,
+                    spreadRadius: isTv ? 3 : 1,
                   ),
                 ],
               ),
+              child: isTv
+                  ? Container(
+                      margin: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          width: 1.5,
+                        ),
+                      ),
+                    )
+                  : null,
             ),
           ),
         ],

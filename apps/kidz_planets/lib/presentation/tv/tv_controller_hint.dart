@@ -126,6 +126,29 @@ class TvControllerChrome extends ConsumerWidget {
                 ),
                 SizedBox(width: ds.px(10)),
                 TvFocusable(
+                  onSelect: notifier.toggleQuickSelect,
+                  child: Container(
+                    width: ds.px(52),
+                    height: ds.px(52),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppTheme.space700.withValues(alpha: 0.92),
+                      border: Border.all(
+                        color: AppTheme.accentAmber.withValues(alpha: 0.6),
+                        width: ds.px(2),
+                      ),
+                    ),
+                    child: Text(
+                      '🪐',
+                      style: TextStyle(
+                        fontSize: ds.font(22),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: ds.px(10)),
+                TvFocusable(
                   onSelect: notifier.showHint,
                   child: Container(
                     width: ds.px(52),
