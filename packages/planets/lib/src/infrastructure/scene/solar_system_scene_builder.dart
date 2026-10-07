@@ -17,7 +17,7 @@ import 'texture_provider.dart';
 /// `flutter run --profile --dart-define=KIDZ_NO_RINGS=true`. There is no
 /// runtime UI and no performance effect when unset (constant-folded).
 /// Recipe: baseline → `KIDZ_NO_TEXTURES` (decode/upload cost) →
-/// `KIDZ_NO_RINGS` (84 Saturn nodes) → `KIDZ_NO_ORBITS` (8 rings) and compare
+/// `KIDZ_NO_RINGS` (now 4 Saturn nodes) → `KIDZ_NO_ORBITS` (8 rings) and compare
 /// `scene.build` stats lines plus DevTools frame times. `KIDZ_NO_TEXTURES`
 /// exercises the production flat-tint fallback materials, not a test stub.
 const kSceneNoTextures = bool.fromEnvironment('KIDZ_NO_TEXTURES');
