@@ -32,12 +32,6 @@ class GeometryFactory {
     ),
   );
 
-  /// Saturn-style band in the XZ plane.
-  RingGeometry saturnBand(double inner, double outer) => _rings.putIfAbsent(
-    'band:$inner:$outer',
-    () => RingGeometry(innerRadius: inner, outerRadius: outer, segments: 128),
-  );
-
   /// One combined Saturn ring mesh containing the broad bands, fine ringlets,
   /// and the tiny edge-support planes needed at grazing angles.
   ///
