@@ -16,6 +16,7 @@ library;
 export 'audio.dart';
 export 'layout.dart';
 export 'l10n.dart';
+export 'platform.dart';
 export 'startup.dart';
 export 'theme.dart';
 export 'time.dart';

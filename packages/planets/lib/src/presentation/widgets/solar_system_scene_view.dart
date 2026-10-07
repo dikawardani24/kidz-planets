@@ -7,6 +7,7 @@ import 'package:flutter_scene/scene.dart';
 import 'package:planets/state.dart';
 import 'package:planets/domain.dart';
 import 'package:planets/scene.dart';
+import 'package:core/layout.dart';
 import 'package:core/theme.dart';
 
 /// True 3D solar system rendered with flutter_scene (no WebView).
@@ -89,8 +90,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     // (Auto-deselect already preserves synchronously in the gesture handler;
     // re-applying here is idempotent.)
     ref.listen<ExplorerState>(explorerControllerProvider, (previous, next) {
-      if (previous?.selectedPlanetId != null &&
-          next.selectedPlanetId == null) {
+      if (previous?.selectedPlanetId != null && next.selectedPlanetId == null) {
         final camera = _lastCamera;
         if (camera != null) {
           ref
@@ -151,8 +151,9 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
                   // Label taps mirror 3D taps: a marked chip starts the
                   // smooth zoom-to-detail flight, unless it is already
                   // running for this body.
-                  final markedId =
-                      ref.read(explorerControllerProvider).markedTargetId;
+                  final markedId = ref
+                      .read(explorerControllerProvider)
+                      .markedTargetId;
                   final cam = _lastCamera;
                   if (markedId == null || cam == null) return;
                   if (!controller.zoomFlightActive) {
@@ -216,9 +217,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
         .read(explorerControllerProvider.notifier)
         .reportMarkProgress(step.progress, approaching: true);
     if (!step.done) return;
-    final camera = controller.buildCamera(
-      ref.read(explorerControllerProvider),
-    );
+    final camera = controller.buildCamera(ref.read(explorerControllerProvider));
     _lastCamera = camera;
     final zoom = controller.prepareSeamlessSelection(flightId, camera);
     ref
@@ -240,8 +239,7 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
         shouldShow == _zoomLabelsVisible &&
         systemVisible == _systemVisible &&
         _sameOffset(marker?.center, _markedCenter) &&
-        (marker == null ||
-            (marker.diameter - _markedDiameter).abs() <= 2.0)) {
+        (marker == null || (marker.diameter - _markedDiameter).abs() <= 2.0)) {
       return;
     }
     if (!mounted) return;
@@ -281,11 +279,11 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
     final bodyPos = controller.bodyWorldPosition(markedId);
     var diameter = 64.0;
     if (worldRadius != null && bodyPos != null && worldRadius > 0) {
-      final distance = camera.position
-          .distanceTo(bodyPos)
-          .clamp(1e-6, 1e9);
+      final distance = camera.position.distanceTo(bodyPos).clamp(1e-6, 1e9);
       final apparentPx =
-          worldRadius / distance / math.tan(camera.fovRadiansY / 2) *
+          worldRadius /
+          distance /
+          math.tan(camera.fovRadiansY / 2) *
           (size.height / 2);
       diameter = (apparentPx * 2 * 1.3).clamp(44.0, 200.0);
     }
@@ -717,10 +715,7 @@ class _TargetMarker extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: AppTheme.accentAmber,
-                  width: 2.5,
-                ),
+                border: Border.all(color: AppTheme.accentAmber, width: 2.5),
                 boxShadow: [
                   BoxShadow(
                     color: AppTheme.accentAmber.withValues(alpha: 0.35),
@@ -803,6 +798,9 @@ class _PlanetLabelsOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final byId = {for (final p in planets) p.id: p};
+    // Chip half-width from the same viewport scale the chip content uses,
+    // so the anchor math and the drawn chip can never disagree.
+    final halfW = DesignScale.sharedOf(context).px(60);
     return IgnorePointer(
       ignoring: !showLabels,
       child: AnimatedOpacity(
@@ -816,9 +814,9 @@ class _PlanetLabelsOverlay extends StatelessWidget {
                   frame.id != selectedId &&
                   byId.containsKey(frame.id))
                 Positioned(
-                  left: frame.screenX - 60,
+                  left: frame.screenX - halfW,
                   top: frame.screenY - 18,
-                  width: 120,
+                  width: halfW * 2,
                   child: _LabelChip(
                     name: byId[frame.id]!.name,
                     colorValue: byId[frame.id]!.colorValue,
@@ -852,6 +850,8 @@ class _LabelChip extends ConsumerWidget {
   final VoidCallback onMarkedTap;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Chip content scales with the viewport, like every other overlay.
+    final ds = DesignScale.sharedOf(context);
     return GestureDetector(
       onTap: () {
         final explorer = ref.read(explorerControllerProvider.notifier);
@@ -867,15 +867,15 @@ class _LabelChip extends ConsumerWidget {
         }
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        padding: ds.insets(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: AppTheme.space700.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(ds.radius(999)),
           border: Border.all(
             color: selected || marked
                 ? AppTheme.accentAmber
                 : Colors.white.withValues(alpha: 0.18),
-            width: selected || marked ? 2 : 1,
+            width: ds.px(selected || marked ? 2 : 1),
           ),
         ),
         child: Row(
@@ -883,18 +883,18 @@ class _LabelChip extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 8,
-              height: 8,
+              width: ds.px(8),
+              height: ds.px(8),
               decoration: BoxDecoration(
                 color: Color(colorValue),
                 shape: BoxShape.circle,
               ),
             ),
-            const SizedBox(width: 6),
+            SizedBox(width: ds.px(6)),
             Flexible(
               child: Text(
                 name,
-                style: AppTheme.labelGlow,
+                style: AppTheme.labelGlow.copyWith(fontSize: ds.font(10)),
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
               ),

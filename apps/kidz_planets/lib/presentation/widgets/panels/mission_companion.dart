@@ -13,7 +13,9 @@ import 'package:avatar/scene.dart';
 import 'package:avatar/state.dart';
 import 'package:avatar/widgets.dart';
 import 'package:core/l10n.dart';
+import 'package:core/platform.dart';
 import 'package:kidz_planets/application/state/providers.dart';
+import 'package:kidz_planets/presentation/tv/tv_providers.dart';
 import 'package:planets/data.dart';
 import 'package:planets/state.dart';
 
@@ -73,6 +75,10 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
   /// Cached for the same reason as [_avatar]; [didChangeDependencies] keeps it
   /// current, since the frame loop has to read it without building.
   bool _hasSelection = false;
+
+  /// The TV focus node for the parked toy: owned here (never rebuilt) so the
+  /// shell can hand the remote to the companion on a miss.
+  final FocusNode _tvFocus = FocusNode(debugLabel: 'tvCompanion');
 
   bool _ready = false;
   bool _placed = false;
@@ -473,15 +479,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
         if (_tapCount == 1) {
           _singleTapTimer?.cancel();
           _singleTapTimer = Timer(const Duration(milliseconds: 250), () {
-            if (_tapCount == 1 && mounted) {
-              if (ref.read(appShellProvider).avatarMood == AvatarMood.wrong) {
-                ref.read(appShellProvider.notifier).retryMission();
-              } else {
-                ref
-                    .read(avatarControllerProvider.notifier)
-                    .react(AvatarReaction.happy);
-              }
-            }
+            if (_tapCount == 1 && mounted) _interactByTap();
             _tapCount = 0;
           });
         } else if (_tapCount >= 2) {
@@ -500,6 +498,17 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
     }
   }
 
+  /// The TV-remote equivalent of tapping the toy: encouragement after a miss,
+  /// a happy reaction otherwise. Shared with the single-tap path above so
+  /// touch and remote always do the same thing.
+  void _interactByTap() {
+    if (ref.read(appShellProvider).avatarMood == AvatarMood.wrong) {
+      ref.read(appShellProvider.notifier).retryMission();
+    } else {
+      ref.read(avatarControllerProvider.notifier).react(AvatarReaction.happy);
+    }
+  }
+
   void _onPointerCancel(PointerCancelEvent event) {
     _activePointers.remove(event.pointer);
     _longPressTimer?.cancel();
@@ -509,6 +518,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
 
   @override
   void dispose() {
+    _tvFocus.dispose();
     _singleTapTimer?.cancel();
     _longPressTimer?.cancel();
     _frameClock.dispose();
@@ -585,6 +595,24 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
       if (previous == next) return;
       playResolvedCue();
     });
+
+    // A miss hands the remote to the rocket: encouragement is one OK away
+    // instead of unreachable. Post-frame so the freshly mounted facts pill
+    // (which autofocuses on every selection) loses deterministically rather
+    // than racing it. Directly in build — listeners cannot live in the
+    // LayoutBuilder below.
+    ref.listen<AvatarMood>(
+      appShellProvider.select((s) => s.avatarMood),
+      (previous, next) {
+        if (next == AvatarMood.wrong && previous != AvatarMood.wrong) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && ref.read(isTelevisionProvider)) {
+              _tvFocus.requestFocus();
+            }
+          });
+        }
+      },
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -678,6 +706,22 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
             ui.selectedPlanetId == 'venus';
 
         final t = AppLocalizations.of(context);
+        // On TV the throwable toy is parked: the same tap interaction is
+        // offered as a focusable stop instead, and focus ownership tells the
+        // remote handler to yield arrow input to the avatar layer.
+        final isTv = ref.watch(isTelevisionProvider);
+        Widget focusForTv(Widget child) {
+          if (!isTv) return child;
+          return TvFocusable(
+            focusNode: _tvFocus,
+            onSelect: _interactByTap,
+            scaleOnFocus: false,
+            onFocusChange: (focused) =>
+                ref.read(tvAvatarFocusedProvider.notifier).state = focused,
+            child: child,
+          );
+        }
+
         String companionText = t.companionFlying;
         if (hasFocus) {
           if (isIceWorld) {
@@ -760,52 +804,54 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
                         },
                       ),
                     ),
-                  Semantics(
-                    // The label the move handle used to carry: the toy itself
-                    // is the handle now, so a screen reader hears it there.
-                    label: t.companionMoveLabel,
-                    child: Listener(
-                      behavior: HitTestBehavior.opaque,
-                      onPointerDown: _onPointerDown,
-                      onPointerMove: _onPointerMove,
-                      onPointerUp: _onPointerUp,
-                      onPointerCancel: _onPointerCancel,
-                      child: Stack(
-                        children: [
-                          _CompanionScene(
-                            ready: _ready,
-                            controller: _controller,
-                            mood: mood,
-                            idleAction: hasFocus
-                                ? AvatarIdleAction.sitting
-                                : pose.idleAction,
-                            selectedPlanetId: ui.selectedPlanetId,
-                          ),
-                          // The face is Flutter paint over the 3D render, so it
-                          // must not swallow drags meant for the toy.
-                          if (_ready)
-                            AnimatedBuilder(
-                              // The face is driven by the same clock as the
-                              // physics, so the expression and the toy never
-                              // disagree about how much time has passed.
-                              animation: Listenable.merge([
-                                _frameClock,
-                                _impactTicker,
-                              ]),
-                              builder: (context, _) => IgnorePointer(
-                                child: AvatarFace(
-                                  box: const Size(
-                                    kCompanionBoxWidth,
-                                    kCompanionBoxHeight,
+                  focusForTv(
+                    Semantics(
+                      // The label the move handle used to carry: the toy itself
+                      // is the handle now, so a screen reader hears it there.
+                      label: t.companionMoveLabel,
+                      child: Listener(
+                        behavior: HitTestBehavior.opaque,
+                        onPointerDown: _onPointerDown,
+                        onPointerMove: _onPointerMove,
+                        onPointerUp: _onPointerUp,
+                        onPointerCancel: _onPointerCancel,
+                        child: Stack(
+                          children: [
+                            _CompanionScene(
+                              ready: _ready,
+                              controller: _controller,
+                              mood: mood,
+                              idleAction: hasFocus
+                                  ? AvatarIdleAction.sitting
+                                  : pose.idleAction,
+                              selectedPlanetId: ui.selectedPlanetId,
+                            ),
+                            // The face is Flutter paint over the 3D render, so it
+                            // must not swallow drags meant for the toy.
+                            if (_ready)
+                              AnimatedBuilder(
+                                // The face is driven by the same clock as the
+                                // physics, so the expression and the toy never
+                                // disagree about how much time has passed.
+                                animation: Listenable.merge([
+                                  _frameClock,
+                                  _impactTicker,
+                                ]),
+                                builder: (context, _) => IgnorePointer(
+                                  child: AvatarFace(
+                                    box: const Size(
+                                      kCompanionBoxWidth,
+                                      kCompanionBoxHeight,
+                                    ),
+                                    pose: pose,
+                                    motion: _controller.bodyMotion,
+                                    phase: _frameClock.seconds,
+                                    squash: _impactSquash,
                                   ),
-                                  pose: pose,
-                                  motion: _controller.bodyMotion,
-                                  phase: _frameClock.seconds,
-                                  squash: _impactSquash,
                                 ),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),

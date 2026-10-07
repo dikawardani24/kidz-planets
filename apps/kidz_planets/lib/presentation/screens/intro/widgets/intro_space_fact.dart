@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:core/layout.dart';
 import 'package:core/l10n.dart';
 
 import '../../../../application/startup/intro_copy.dart';
@@ -57,11 +58,12 @@ class _IntroSpaceFactState extends State<IntroSpaceFact> {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
+    final ds = DesignScale.sharedOf(context);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: ds.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(ds.radius(24)),
         gradient: LinearGradient(
           colors: [
             const Color(0xFF4C1D95).withValues(alpha: 0.30),
@@ -81,10 +83,10 @@ class _IntroSpaceFactState extends State<IntroSpaceFact> {
               duration: const Duration(milliseconds: 300),
               child: Text(
                 t.introFact(IntroCopy.spaceFacts[_index]),
-                style: const TextStyle(
-                  fontSize: 13,
+                style: TextStyle(
+                  fontSize: ds.font(13),
                   height: 1.5,
-                  color: Color(0xFFE9D5FF),
+                  color: const Color(0xFFE9D5FF),
                 ),
               ),
             ),
@@ -106,10 +108,10 @@ class _IntroSpaceFactState extends State<IntroSpaceFact> {
               ),
               child: Text(
                 '💡 ${t.introFactLabel}',
-                style: const TextStyle(
-                  fontSize: 10,
+                style: TextStyle(
+                  fontSize: ds.font(10),
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFFFDE047),
+                  color: const Color(0xFFFDE047),
                 ),
               ),
             ),

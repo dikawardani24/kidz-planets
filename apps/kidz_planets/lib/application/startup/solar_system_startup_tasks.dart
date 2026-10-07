@@ -69,16 +69,67 @@ abstract final class SolarSystemStartupWeights {
   static const double total = 7.0;
 }
 
+/// How long each startup task may run before its hang becomes a failure.
+///
+/// A task that never returns (an audio session the OS never grants on a TV,
+/// a texture decode stalled on a weak GPU) would otherwise strand the child
+/// on a full-looking bar forever: the bar reflects reported work, not a
+/// timer. Timing out converts the hang into the coordinator's normal failure
+/// path — kid-friendly error dialog plus retry — instead of a dead screen.
+/// Budgets are generous on purpose: slow is fine, silent forever is not.
+abstract final class StartupTimeouts {
+  static const session = Duration(seconds: 30);
+  static const solarSystem = Duration(minutes: 4);
+  static const missions = Duration(seconds: 30);
+  static const companion = Duration(seconds: 30);
+  static const sounds = Duration(seconds: 60);
+  static const moons = Duration(minutes: 3);
+
+  static Duration? forTask(String id) => switch (id) {
+    SolarSystemStartupTaskId.core => session,
+    SolarSystemStartupTaskId.solarSystem => solarSystem,
+    SolarSystemStartupTaskId.missions => missions,
+    SolarSystemStartupTaskId.companion => companion,
+    SolarSystemStartupTaskId.sounds => sounds,
+    SolarSystemStartupTaskId.moons => moons,
+    _ => null,
+  };
+}
+
+Future<void> _withTimeout(Future<void> work, Duration limit, String taskId) =>
+    work.timeout(
+      limit,
+      onTimeout: () =>
+          throw TimeoutException('Startup task "$taskId" timed out', limit),
+    );
+
 /// The six tasks every cold start runs, in dependency order.
 ///
 /// Only the moons task declares a dependency (on the scene it extends). The
 /// rest are independent by construction and the coordinator overlaps them:
 /// the catalogue decode runs while the GPU is busy, which is where the cold
 /// start's wall-clock savings come from.
+///
+/// [timeoutFor] overrides the per-task hang guard ([StartupTimeouts.forTask]
+/// by default). Tests with scripted hooks that intentionally never finish
+/// pass `(_) => null` so no watchdog timer outlives the test — a pending
+/// `Future.timeout` timer fails a widget test at teardown.
 List<StartupTask> buildSolarSystemStartupTasks({
   SolarSystemStartupHooks? hooks,
+  Duration? Function(String taskId)? timeoutFor,
 }) {
   final resolved = hooks ?? const SolarSystemStartupHooks();
+  final limits = timeoutFor ?? StartupTimeouts.forTask;
+
+  Future<void> Function(StartupTaskContext) guard(
+    Future<void> Function(StartupTaskContext) run,
+    String id,
+  ) {
+    final limit = limits(id);
+    if (limit == null) return run;
+    return (context) => _withTimeout(run(context), limit, id);
+  }
+
   return [
     FunctionStartupTask(
       id: SolarSystemStartupTaskId.core,
@@ -87,7 +138,7 @@ List<StartupTask> buildSolarSystemStartupTasks({
       failureMessage: 'We could not start your spaceship.',
       weight: SolarSystemStartupWeights.core,
       criticality: StartupCriticality.required,
-      execute: (context) => resolved.configureSession(context),
+      execute: guard(resolved.configureSession, SolarSystemStartupTaskId.core),
     ),
     FunctionStartupTask(
       id: SolarSystemStartupTaskId.solarSystem,
@@ -96,7 +147,10 @@ List<StartupTask> buildSolarSystemStartupTasks({
       failureMessage: 'We could not load the planets.',
       weight: SolarSystemStartupWeights.solarSystem,
       criticality: StartupCriticality.required,
-      execute: (context) => resolved.buildSolarSystem(context),
+      execute: guard(
+        resolved.buildSolarSystem,
+        SolarSystemStartupTaskId.solarSystem,
+      ),
     ),
     FunctionStartupTask(
       id: SolarSystemStartupTaskId.missions,
@@ -105,7 +159,7 @@ List<StartupTask> buildSolarSystemStartupTasks({
       failureMessage: 'We could not read your missions.',
       weight: SolarSystemStartupWeights.missions,
       criticality: StartupCriticality.required,
-      execute: (context) => resolved.loadMissions(context),
+      execute: guard(resolved.loadMissions, SolarSystemStartupTaskId.missions),
     ),
     FunctionStartupTask(
       id: SolarSystemStartupTaskId.companion,
@@ -114,7 +168,10 @@ List<StartupTask> buildSolarSystemStartupTasks({
       failureMessage: 'We could not wake your rocket buddy.',
       weight: SolarSystemStartupWeights.companion,
       criticality: StartupCriticality.required,
-      execute: (context) => resolved.primeCompanion(context),
+      execute: guard(
+        resolved.primeCompanion,
+        SolarSystemStartupTaskId.companion,
+      ),
     ),
     FunctionStartupTask(
       id: SolarSystemStartupTaskId.sounds,
@@ -128,7 +185,7 @@ List<StartupTask> buildSolarSystemStartupTasks({
       // the session first. One edge in `dependsOn` keeps that order written
       // down instead of assumed.
       dependsOn: const {SolarSystemStartupTaskId.core},
-      execute: (context) => resolved.prepareSounds(context),
+      execute: guard(resolved.prepareSounds, SolarSystemStartupTaskId.sounds),
     ),
     FunctionStartupTask(
       id: SolarSystemStartupTaskId.moons,
@@ -138,7 +195,7 @@ List<StartupTask> buildSolarSystemStartupTasks({
       weight: SolarSystemStartupWeights.moons,
       criticality: StartupCriticality.required,
       dependsOn: const {SolarSystemStartupTaskId.solarSystem},
-      execute: (context) => resolved.buildMoons(context),
+      execute: guard(resolved.buildMoons, SolarSystemStartupTaskId.moons),
     ),
   ];
 }

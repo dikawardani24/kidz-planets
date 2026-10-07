@@ -332,5 +332,11 @@
   "introRetry": "TRY AGAIN",
   "@introRetry": {
     "description": "Retry button on the startup error."
-  }
+  },
+  "tvModeBrowse": "Explore",
+  "tvModeRotate": "Spin view",
+  "tvHintBrowse": "← → pick a planet • ↑ ↓ zoom • OK select",
+  "tvHintRotate": "← → ↑ ↓ spin • OK select • BACK back",
+  "tvContinueExploring": "Continue Exploring",
+  "tvHomeSubtitle": "Explore the Solar System"
 }

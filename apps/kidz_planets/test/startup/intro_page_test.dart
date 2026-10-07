@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:kidz_planets/application/startup/startup_providers.dart';
@@ -88,18 +88,25 @@ void main() {
       ..failing.add(SolarSystemStartupTaskId.solarSystem);
     await pumpIntro(tester, hooks);
 
-    // The failure state: plain sentences, never the thrown exception.
-    expect(find.text('Oh no!'), findsOneWidget);
+    // The failure state: plain sentences, never the thrown exception. The
+    // modal dialog shouts over the inline card, so both read the same copy.
+    expect(find.text('Oh no!'), findsNWidgets(2));
     expect(
       find.text('Something went wrong while preparing your space adventure.'),
-      findsOneWidget,
+      findsNWidgets(2),
     );
-    expect(find.text('🔄 TRY AGAIN'), findsOneWidget);
+    expect(find.text('🔄 TRY AGAIN'), findsNWidgets(2));
     expect(find.textContaining('startup failure'), findsNothing);
     expect(find.text("LET'S EXPLORE!"), findsNothing);
 
     hooks.failing.clear();
-    await tester.tap(find.text('🔄 TRY AGAIN'));
+    // The dialog's retry: the route on top owns the dismissible one.
+    final dialogRetry = find.descendant(
+      of: find.byType(Dialog),
+      matching: find.text('🔄 TRY AGAIN'),
+    );
+    expect(dialogRetry, findsOneWidget);
+    await tester.tap(dialogRetry);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
