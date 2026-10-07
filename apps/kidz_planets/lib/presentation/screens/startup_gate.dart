@@ -102,6 +102,15 @@ class _StartupGateState extends ConsumerState<StartupGate>
     _swap.addStatusListener((status) {
       if (status != AnimationStatus.completed || !mounted) return;
       setState(() => _done = true);
+      // Moons are lazy: start decoding once the handover has fully landed,
+      // not when the swap starts. The swap frames already pay for shader
+      // compilation plus the 12 MB companion GLB parsing off the same thread
+      // pool — moon decode joining that window only raises the post-startup
+      // peak. Moons are invisible until the child zooms into a planet, so
+      // delaying them by the handover duration changes nothing visible.
+      ref
+          .read(startupCoordinatorProvider.notifier)
+          .warmLater(SolarSystemStartupTaskId.moons);
     });
   }
 
@@ -142,11 +151,6 @@ class _StartupGateState extends ConsumerState<StartupGate>
     if (_swapStarted || !_beatDone) return;
     if (!ref.read(explorerScenePresentedProvider)) return;
     _swapStarted = true;
-    // Moons are lazy: start decoding once the Explorer can present, so Intro
-    // readiness and the first interactive frame are not blocked on them.
-    ref
-        .read(startupCoordinatorProvider.notifier)
-        .warmLater(SolarSystemStartupTaskId.moons);
     _swap.forward();
   }
 

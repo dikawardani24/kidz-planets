@@ -7,6 +7,7 @@
 /// focus primitives every TV screen is built from.
 library;
 
+export 'src/platform/device_capability.dart';
 export 'src/platform/device_form_factor.dart';
 export 'src/platform/tv_explorer_actions.dart';
 export 'src/platform/tv_focus.dart';

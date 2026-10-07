@@ -3,6 +3,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:avatar/scene.dart';
+import 'package:core/platform.dart';
 import 'package:core/startup.dart';
 import 'package:mission/domain.dart';
 import 'package:planets/audio.dart';
@@ -41,12 +42,23 @@ class RealSolarSystemStartupHooks extends SolarSystemStartupHooks {
   /// frame finds a finished scene instead of decoding it. Idempotent through
   /// the controller's memoized future: a retry after a later failure joins
   /// the finished build instead of decoding eight megabytes twice.
+  ///
+  /// Before the first texture decodes, the device capability tier is resolved
+  /// (one `/proc/meminfo` read, microseconds) and applied as the texture
+  /// budget: constrained devices (~2 GB Android TV) decode the 2K planet
+  /// textures at 1024 wide, cutting loading peak memory by ~4x per texture
+  /// with no content or interaction change. Standard devices decode full
+  /// resolution, exactly as before.
   @override
   Future<void> buildSolarSystem(StartupTaskContext context) async {
     final ref = _requireRef('planets.scene');
     final controller = ref.read(solarSystemSceneControllerProvider);
     final planets = ref.read(planetsProvider);
     reportStage(context, 0.05, message: StartupMessage.solarSystem);
+    final capability = await ref.read(deviceCapabilityProvider.future);
+    controller.setMaxTextureDecodeWidth(
+      maxTextureDecodeWidthFor(capability),
+    );
     await controller.ensureBuilt(
       planets: planets,
       onProgress: (fraction, label) {

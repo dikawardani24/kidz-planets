@@ -175,6 +175,14 @@ abstract class SolarSystemSceneController {
   /// distance/orientation) for the jump-to-Sun recovery button. Any running
   /// zoom flight is cancelled first.
   void resetOverview();
+
+  /// Budgets texture decoding for constrained devices (see
+  /// [AssetTextureProvider.maxDecodeWidth]).
+  ///
+  /// Call before [ensureBuilt]; the cache is keyed by asset path, so changing
+  /// the budget mid-build would mix resolutions. Startup resolves the device
+  /// capability tier and sets this once, before the solar-system task runs.
+  void setMaxTextureDecodeWidth(int? maxWidth);
   void dispose();
 }
 
@@ -455,6 +463,14 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   void resetOverview() {
     _rig.cancelZoomFlight();
     _rig.resetOverview();
+  }
+
+  @override
+  void setMaxTextureDecodeWidth(int? maxWidth) {
+    final textures = _textures;
+    if (textures is AssetTextureProvider) {
+      textures.maxDecodeWidth = maxWidth;
+    }
   }
 
   @override
