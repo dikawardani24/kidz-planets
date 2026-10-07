@@ -70,6 +70,7 @@ class TvExplorerUiState extends Equatable {
     this.hintVisible = true,
     this.homeVisible = true,
     this.quickSelectVisible = false,
+    this.spatialFocusId,
   });
 
   final TvControlMode mode;
@@ -77,16 +78,24 @@ class TvExplorerUiState extends Equatable {
   final bool homeVisible;
   final bool quickSelectVisible;
 
+  /// Id of the currently selected interactive target (3D body or chrome id).
+  /// Null means nothing selected yet. Always visible via mark/focus visuals.
+  final String? spatialFocusId;
+
   TvExplorerUiState copyWith({
     TvControlMode? mode,
     bool? hintVisible,
     bool? homeVisible,
     bool? quickSelectVisible,
+    Object? spatialFocusId = _sentinel,
   }) => TvExplorerUiState(
     mode: mode ?? this.mode,
     hintVisible: hintVisible ?? this.hintVisible,
     homeVisible: homeVisible ?? this.homeVisible,
     quickSelectVisible: quickSelectVisible ?? this.quickSelectVisible,
+    spatialFocusId: identical(spatialFocusId, _sentinel)
+        ? this.spatialFocusId
+        : spatialFocusId as String?,
   );
 
   @override
@@ -95,8 +104,11 @@ class TvExplorerUiState extends Equatable {
     hintVisible,
     homeVisible,
     quickSelectVisible,
+    spatialFocusId,
   ];
 }
+
+const _sentinel = Object();
 
 /// Remote-first driver for the Explorer.
 ///
@@ -131,12 +143,6 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
   /// How quickly rotation ramps up while held.
   static const double rotationAccel = 1700;
 
-  /// Zoom rate while a zoom key is held (fraction/second).
-  static const double zoomRate = 0.6;
-
-  /// Detail-zoom units/second while a zoom key is held in detail.
-  static const double detailZoomRate = 1.2;
-
   final ExplorerController _explorer;
   final TvSceneOps _scene;
   final List<String> _bodyIds;
@@ -156,14 +162,21 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
   DateTime? _lastSelectAt;
   Timer? _hintTimer;
 
+  /// Registered Flutter chrome targets (zoom +/-, play/pause, help, ...),
+  /// keyed by stable id. 3D bodies come from [_bodyIds] + scene projection;
+  /// chrome comes from [TvNavTarget] widgets calling [registerTarget].
+  final Map<String, TvRegisteredTarget> _chromeTargets = {};
+
   ExplorerController get explorer => _explorer;
 
   // -- discrete input -------------------------------------------------------
 
   /// Handles a remote button press. Returns true when consumed.
   ///
-  /// Direction keys in [TvControlMode.rotate] start held rotation (finished
-  /// by [handleKeyUp] + [advance]); everything else acts immediately.
+  /// One spatial model: in navigate (browse) mode every arrow moves the
+  /// cursor to the nearest interactive target (3D body or chrome control);
+  /// OK activates it. Rotate mode only spins the camera while held and is
+  /// opt-in from chrome — never entered automatically on selection.
   bool handleKeyDown(
     TvRemoteKey key,
     TvInputLayer layer, {
@@ -195,16 +208,13 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
       }
       return false;
     }
-    // Repeats only keep stepping/rotating/zooming; select fires once.
+    // Repeats only keep navigating/rotating; select fires once.
     if (isRepeat && action == TvExplorerAction.select) {
       return true;
     }
     switch (action) {
-      case TvExplorerAction.focusNext:
-        _moveCursor(1, directionKey: TvRemoteKey.right);
-        return true;
-      case TvExplorerAction.focusPrevious:
-        _moveCursor(-1, directionKey: TvRemoteKey.left);
+      case TvExplorerAction.navigate:
+        _navigateSpatial(key);
         return true;
       case TvExplorerAction.select:
         _select();
@@ -215,41 +225,39 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
       case TvExplorerAction.rotateDown:
         _held.add(key);
         return true;
-      case TvExplorerAction.zoomIn:
-      case TvExplorerAction.zoomOut:
-        _held.add(key);
-        return true;
       case TvExplorerAction.back:
       case TvExplorerAction.playPause:
         return true; // Handled above; unreachable.
     }
   }
 
-  /// Releases a held direction/zoom key. Held motion decays in [advance].
+  /// Releases a held rotate key. Held motion decays in [advance].
   void handleKeyUp(TvRemoteKey key) {
     _held.remove(key);
   }
 
   /// Translates a raw remote key into the semantic action for the current mode.
+  ///
+  /// Navigate mode: every arrow is spatial navigation (never zoom — zoom has
+  /// its own explicit chrome targets). Rotate mode: arrows spin the camera.
   TvExplorerAction _actionFor(TvRemoteKey key) {
+    if (state.mode == TvControlMode.rotate) {
+      return switch (key) {
+        TvRemoteKey.center => TvExplorerAction.select,
+        TvRemoteKey.left => TvExplorerAction.rotateLeft,
+        TvRemoteKey.right => TvExplorerAction.rotateRight,
+        TvRemoteKey.up => TvExplorerAction.rotateUp,
+        TvRemoteKey.down => TvExplorerAction.rotateDown,
+        TvRemoteKey.back => TvExplorerAction.back,
+        TvRemoteKey.playPause => TvExplorerAction.playPause,
+      };
+    }
     return switch (key) {
       TvRemoteKey.center => TvExplorerAction.select,
-      TvRemoteKey.left =>
-        state.mode == TvControlMode.browse
-            ? TvExplorerAction.focusPrevious
-            : TvExplorerAction.rotateLeft,
-      TvRemoteKey.right =>
-        state.mode == TvControlMode.browse
-            ? TvExplorerAction.focusNext
-            : TvExplorerAction.rotateRight,
-      TvRemoteKey.up =>
-        state.mode == TvControlMode.browse
-            ? TvExplorerAction.zoomOut
-            : TvExplorerAction.rotateUp,
-      TvRemoteKey.down =>
-        state.mode == TvControlMode.browse
-            ? TvExplorerAction.zoomIn
-            : TvExplorerAction.rotateDown,
+      TvRemoteKey.left ||
+      TvRemoteKey.right ||
+      TvRemoteKey.up ||
+      TvRemoteKey.down => TvExplorerAction.navigate,
       TvRemoteKey.back => TvExplorerAction.back,
       TvRemoteKey.playPause => TvExplorerAction.playPause,
     };
@@ -257,14 +265,12 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
 
   // -- continuous motion -----------------------------------------------------
 
-  /// Advances held rotation/zoom by [dtSeconds]. Called once per frame while
-  /// the TV explorer is active; clamps large gaps (backgrounding) so the
-  /// camera never jumps.
+  /// Advances held rotation by [dtSeconds]. Navigate mode is discrete
+  /// (one press = one target step); only opt-in rotate mode holds keys.
   void advance(double dtSeconds) {
     final dt = dtSeconds.clamp(0.0, 0.05);
     if (dt <= 0) return;
     _advanceRotation(dt);
-    _advanceZoom(dt);
   }
 
   void _advanceRotation(double dt) {
@@ -273,7 +279,7 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     final right = _held.contains(TvRemoteKey.right);
     final up = _held.contains(TvRemoteKey.up);
     final down = _held.contains(TvRemoteKey.down);
-    // Zoom keys never rotate: in browse mode UP/DOWN are zoom.
+    // Navigate mode never rotates: only opt-in rotate mode holds arrows.
     final rotating =
         state.mode == TvControlMode.rotate && (left || right || up || down);
     final targetX = rotating
@@ -299,41 +305,23 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     }
   }
 
-  void _advanceZoom(double dt) {
-    final inHeld = _held.contains(TvRemoteKey.down);
-    final outHeld = _held.contains(TvRemoteKey.up);
-    // Zoom keys double as rotation in rotate mode; only browse zooms here.
-    if (state.mode != TvControlMode.browse || inHeld == outHeld) return;
-    final ui = _explorer.state;
-    if (ui.hasSelection) {
-      _explorer.adjustDetailZoom((outHeld ? 1 : -1) * detailZoomRate * dt);
-      return;
-    }
-    final markedId =
-        ui.markedTargetId ?? (_bodyIds.isEmpty ? null : _bodyIds.first);
-    if (markedId == null) return;
-    final scale = inHeld ? 1 + zoomRate * dt : 1 / (1 + zoomRate * dt);
-    _scene.pinchTowardBody(scale, markedId);
-    final camera = _scene.buildCamera(_explorer.state);
-    _explorer.reportMarkProgress(
-      _scene.markZoomProgress(markedId, camera),
-      approaching: inHeld,
-    );
-    if (inHeld && _scene.shouldAutoEnterDetail(markedId, camera)) {
-      final initialZoom = _scene.prepareSeamlessSelection(markedId, camera);
-      if (!_explorer.state.hasSelection) {
-        _explorer.selectPlanet(markedId, initialDetailZoom: initialZoom);
-      }
-    }
-  }
-
   static double _approach(double value, double target, double step) {
     if (value == target) return target;
     if ((target - value).abs() <= step) return target;
     return value + step * (target > value ? 1 : -1);
   }
 
-  // -- cursor / selection -----------------------------------------------------
+  // -- unified spatial cursor -----------------------------------------------
+
+  /// Registers a Flutter chrome control as a spatial candidate.
+  /// [TvNavTarget] widgets call this on layout; bodies project live below.
+  void registerTarget(TvRegisteredTarget target) {
+    _chromeTargets[target.id] = target;
+  }
+
+  void unregisterTarget(String id) {
+    _chromeTargets.remove(id);
+  }
 
   /// Parks the body cursor on the first body when nothing is marked or
   /// selected, so the next OK always does something real.
@@ -341,6 +329,11 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     final ui = _explorer.state;
     if (ui.markedTargetId == null && !ui.hasSelection && _bodyIds.isNotEmpty) {
       _explorer.markTarget(_bodyIds.first);
+      state = state.copyWith(spatialFocusId: _bodyIds.first);
+    } else {
+      state = state.copyWith(
+        spatialFocusId: ui.selectedPlanetId ?? ui.markedTargetId,
+      );
     }
   }
 
@@ -351,72 +344,130 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     viewportSize = size;
   }
 
+  @visibleForTesting
+  void updateSpatialFocusForTest(String? id) {
+    state = state.copyWith(spatialFocusId: id);
+  }
+
+  /// One spatial D-pad step: nearest interactive target (3D body or
+  /// registered chrome control) in [directionKey]'s direction.
+  ///
+  /// Bodies project live from the scene; chrome centers come from
+  /// [TvNavTarget] layout. Shared scoring ([nearestInDirection]) keeps one
+  /// model — no separate planet/widget modes.
+  void _navigateSpatial(TvRemoteKey directionKey) {
+    final ui = _explorer.state;
+    final size = viewportSize;
+    // No viewport (unit tests): fall back to catalogue order so stepping
+    // stays deterministic.
+    if (size == null || size.isEmpty || _bodyIds.isEmpty) {
+      _stepCatalogueOrder(directionKey);
+      return;
+    }
+    final camera = _scene.buildCamera(ui);
+    final currentId =
+        ui.selectedPlanetId ?? ui.markedTargetId ?? state.spatialFocusId;
+    final currentCenter = currentId == null
+        ? null
+        : _centerFor(currentId, camera, size);
+    final origin = currentCenter ?? Offset(size.width / 2, size.height / 2);
+    final direction = tvDirectionForKey(directionKey.name);
+
+    final candidates = <TvSpatialCandidate>[];
+    for (final id in _bodyIds) {
+      if (id == currentId) continue;
+      final pos = _scene.projectBodyCenter(id, camera, size);
+      if (pos == null) continue;
+      candidates.add((id: id, center: pos));
+    }
+    for (final target in _chromeTargets.values) {
+      if (!target.enabled || target.id == currentId) continue;
+      candidates.add((id: target.id, center: target.center));
+    }
+    final nextId = nearestInDirection(
+      origin: origin,
+      direction: direction,
+      candidates: candidates,
+      excludeId: currentId,
+    );
+    if (nextId == null) {
+      _stepCatalogueOrder(directionKey);
+      return;
+    }
+    _focusTarget(nextId);
+  }
+
+  Offset? _centerFor(String id, PerspectiveCamera camera, Size size) {
+    final chrome = _chromeTargets[id];
+    if (chrome != null) return chrome.center;
+    return _scene.projectBodyCenter(id, camera, size);
+  }
+
+  bool _chromeHasPrimaryFocus(TvRegisteredTarget chrome) {
+    final node = chrome.focusNode;
+    if (node == null) return false;
+    try {
+      return FocusManager.instance.primaryFocus == node;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Applies a spatial focus change: chrome requests Flutter focus (visible
+  /// ring follows the cursor); bodies mark/select through shared explorer
+  /// state — the same actions as mobile tap.
+  void _focusTarget(String id) {
+    state = state.copyWith(spatialFocusId: id);
+    final chrome = _chromeTargets[id];
+    if (chrome != null) {
+      // Re-entrant focus requests during a traversal callback can throw;
+      // the visible ring follows on the next frame regardless.
+      Future.microtask(() {
+        try {
+          chrome.focusNode?.requestFocus();
+        } catch (_) {}
+      });
+      return;
+    }
+    _scene.cancelZoomFlight();
+    final ui = _explorer.state;
+    if (ui.hasSelection) {
+      _explorer.selectPlanet(id);
+    } else {
+      _explorer.markTarget(id);
+    }
+  }
+
   /// Moves the body cursor. In detail, LEFT/RIGHT switches the detailed body
   /// (mirroring tap-to-switch on touch); otherwise it moves the mark, which
   /// steers the camera target through the existing tick behavior.
-  void _moveCursor(int delta, {TvRemoteKey? directionKey}) {
+  /// Test entry point: delegates to [_navigateSpatial].
+  @visibleForTesting
+  void moveCursorForTest(int delta, {TvRemoteKey? directionKey}) {
+    _navigateSpatial(directionKey ?? TvRemoteKey.right);
+  }
+
+  /// Catalogue-order fallback for headless contexts and empty half-planes.
+  /// LEFT goes back, everything else forward — deterministic, never a no-op.
+  void _stepCatalogueOrder(TvRemoteKey directionKey) {
     if (_bodyIds.isEmpty) return;
     final ui = _explorer.state;
-    final size = viewportSize;
-    if (size != null && !size.isEmpty && directionKey != null) {
-      final camera = _scene.buildCamera(ui);
-      final currentId = ui.hasSelection
-          ? ui.selectedPlanetId
-          : (ui.markedTargetId ?? _bodyIds.first);
-      if (currentId != null) {
-        final currentPos = _scene.projectBodyCenter(currentId, camera, size);
-        if (currentPos != null) {
-          final targetDir = switch (directionKey) {
-            TvRemoteKey.left => const Offset(-1, 0),
-            TvRemoteKey.right => const Offset(1, 0),
-            TvRemoteKey.up => const Offset(0, -1),
-            TvRemoteKey.down => const Offset(0, 1),
-            _ => Offset(delta.toDouble(), 0),
-          };
-          String? bestCandidate;
-          double bestScore = double.infinity;
-          for (final id in _bodyIds) {
-            if (id == currentId) continue;
-            final pos = _scene.projectBodyCenter(id, camera, size);
-            if (pos == null) continue;
-            final vec = pos - currentPos;
-            final dist = vec.distance;
-            if (dist < 1.0) continue;
-            final norm = vec / dist;
-            final dot = norm.dx * targetDir.dx + norm.dy * targetDir.dy;
-            if (dot > -0.2) {
-              final angularPenalty = (1.0 - dot) * 350.0;
-              final score = dist + angularPenalty;
-              if (score < bestScore) {
-                bestScore = score;
-                bestCandidate = id;
-              }
-            }
-          }
-          if (bestCandidate != null) {
-            _scene.cancelZoomFlight();
-            if (ui.hasSelection) {
-              _explorer.selectPlanet(bestCandidate);
-            } else {
-              _explorer.markTarget(bestCandidate);
-            }
-            return;
-          }
-        }
-      }
-    }
+    final delta = directionKey == TvRemoteKey.left ? -1 : 1;
     if (ui.hasSelection) {
       final current = _bodyIds.indexOf(ui.selectedPlanetId!);
       final next = _bodyIds[(current + delta) % _bodyIds.length];
       _scene.cancelZoomFlight();
       _explorer.selectPlanet(next);
+      state = state.copyWith(spatialFocusId: next);
       return;
     }
     final anchor = ui.markedTargetId;
     if (anchor == null) {
       // No cursor yet: land on the near end rather than skipping it.
       _scene.cancelZoomFlight();
-      _explorer.markTarget(delta > 0 ? _bodyIds.first : _bodyIds.last);
+      final first = delta > 0 ? _bodyIds.first : _bodyIds.last;
+      _explorer.markTarget(first);
+      state = state.copyWith(spatialFocusId: first);
       return;
     }
     var index = _bodyIds.indexOf(anchor);
@@ -425,14 +476,18 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     if (next == ui.markedTargetId) return;
     _scene.cancelZoomFlight();
     _explorer.markTarget(next);
+    state = state.copyWith(spatialFocusId: next);
   }
 
-  /// OK: focus the marked body (camera follows through the existing focus
-  /// behavior), or re-speak the selected body on a repeat press.
+  /// OK: activate the spatially focused target.
   ///
-  /// Opening facts stays with the "Show facts" pill, which takes autofocus on
-  /// TV: a second OK lands on the pill and opens the existing facts dialog,
-  /// so this controller never duplicates dialog plumbing.
+  /// Chrome target → its registered onActivate (same callback as tap).
+  /// Marked body → selectPlanet (same action as tapping it).
+  /// Selected body → re-speak; facts open via the "Show facts" pill.
+  ///
+  /// When a chrome node already owns Flutter focus, its ActivateIntent fires
+  /// the same callback through the focus system — skip the direct call so
+  /// one OK press produces exactly one activation.
   void _select() {
     final now = DateTime.now();
     if (_lastSelectAt != null &&
@@ -440,6 +495,13 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
       return;
     }
     _lastSelectAt = now;
+    final focusedId = state.spatialFocusId;
+    final chrome = focusedId == null ? null : _chromeTargets[focusedId];
+    if (chrome != null) {
+      if (_chromeHasPrimaryFocus(chrome)) return;
+      chrome.onActivate?.call();
+      return;
+    }
     final ui = _explorer.state;
     if (ui.hasSelection) {
       final selectedId = ui.selectedPlanetId;
@@ -451,7 +513,10 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
       _explorer.selectPlanet(markedId);
       return;
     }
-    if (_bodyIds.isNotEmpty) _explorer.markTarget(_bodyIds.first);
+    if (_bodyIds.isNotEmpty) {
+      _explorer.markTarget(_bodyIds.first);
+      state = state.copyWith(spatialFocusId: _bodyIds.first);
+    }
   }
 
   // -- back -------------------------------------------------------------------
@@ -509,6 +574,38 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     _velY = 0;
     state = state.copyWith(mode: mode);
     _showHintTemporarily();
+  }
+
+  /// Explicit TV zoom step: the D-pad never zooms (arrows navigate), so zoom
+  /// has its own chrome targets. Reuses the exact scene APIs the touch pinch
+  /// handlers call — no second camera system, no gesture interference.
+  void zoomInStep() => _zoomStep(1.18);
+
+  void zoomOutStep() => _zoomStep(1 / 1.18);
+
+  void _zoomStep(double scale) {
+    final ui = _explorer.state;
+    if (ui.hasSelection) {
+      _explorer.adjustDetailZoom(scale > 1 ? -0.25 : 0.25);
+      return;
+    }
+    final markedId =
+        ui.markedTargetId ?? (_bodyIds.isEmpty ? null : _bodyIds.first);
+    if (markedId == null) return;
+    _scene.pinchTowardBody(scale, markedId);
+    final camera = _scene.buildCamera(_explorer.state);
+    _explorer.reportMarkProgress(
+      _scene.markZoomProgress(markedId, camera),
+      approaching: scale > 1,
+    );
+  }
+
+  /// Called when detail closes (whoever closed it): an armed rotate mode
+  /// returns to browse so arrows navigate again.
+  void exitDetailCleanup() {
+    if (state.mode == TvControlMode.rotate) {
+      setMode(TvControlMode.browse);
+    }
   }
 
   void toggleMode() => setMode(state.mode.toggled);

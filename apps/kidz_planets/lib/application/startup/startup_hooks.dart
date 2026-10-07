@@ -109,11 +109,10 @@ class RealSolarSystemStartupHooks extends SolarSystemStartupHooks {
 
   /// Paints the moons onto the already-built scene.
   ///
-  /// Depends on the solar-system task and runs after it: eighteen small
-  /// textures a child cannot see until they zoom into a planet. Kept required
-  /// (rather than lazy) so the bar cannot hit 100% while moons are still
-  /// missing — the prototype's Saturn milestone pops at ~68%, and the real
-  /// ringed planet must be on screen to earn it.
+  /// Lazy warm: eighteen small textures a child cannot see until they zoom
+  /// into a planet. Invoked via [StartupCoordinator.warmLater] after the
+  /// Explorer presents its first frame so Intro CTA readiness is not gated
+  /// on moon decode (important on memory-constrained Android TV).
   @override
   Future<void> buildMoons(StartupTaskContext context) async {
     final ref = _requireRef('planets.moons');

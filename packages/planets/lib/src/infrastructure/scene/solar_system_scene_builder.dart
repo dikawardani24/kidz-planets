@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -31,6 +32,15 @@ class SolarSystemSceneBuilder {
 
   /// Whether [buildMoons] has finished, so a second call is a no-op.
   bool _moonsBuilt = false;
+
+  /// Whether the solar-system root has already been attached to the scene.
+  ///
+  /// Lets a failed [build] resume without calling [Scene.add] twice.
+  bool _rootAttached = false;
+
+  /// Whether [buildMoons] has finished successfully.
+  bool get moonsBuilt => _moonsBuilt;
+
   final Map<String, Node> orbitNodes = {};
   Node? starNode;
   final Node solarSystemRoot = Node(name: 'solar-system-root');
@@ -59,8 +69,12 @@ class SolarSystemSceneBuilder {
     scene.environmentIntensity = 0.14;
     // All celestial bodies and their orbit paths live under one transform root.
     // Rotating this root is equivalent to physically turning the whole model.
-    scene.add(solarSystemRoot);
-    _buildSunLight(scene);
+    // Resume-safe: a failed build must not attach the root a second time.
+    if (!_rootAttached) {
+      scene.add(solarSystemRoot);
+      _buildSunLight(scene);
+      _rootAttached = true;
+    }
 
     final primaryBodies = planets.where((p) => !p.isMoon).toList();
 
@@ -72,26 +86,41 @@ class SolarSystemSceneBuilder {
     var step = 0;
 
     onProgress(step / steps, 'Painting stars…');
-    await _buildStars(scene);
-    // Let Flutter present the loading animation before the first expensive
-    // planet/material batch starts.
-    await _yieldToUi();
+    if (starNode == null) {
+      developer.log('scene.build: stars started', name: 'startup');
+      await _buildStars(scene);
+      developer.log('scene.build: stars completed', name: 'startup');
+      // Let Flutter present the loading animation before the first expensive
+      // planet/material batch starts.
+      await _yieldToUi();
+    }
     step++;
 
     for (final planet in primaryBodies) {
       onProgress(step / steps, 'Painting ${planet.name}…');
-      await _buildPlanet(planet);
-      if (planet.hasRing) {
-        await _buildSaturnRing(planet);
+      if (!states.containsKey(planet.id)) {
+        developer.log(
+          'scene.build: ${planet.id} started',
+          name: 'startup',
+        );
+        await _buildPlanet(planet);
+        if (planet.hasRing) {
+          await _buildSaturnRing(planet);
+        }
+        if (!planet.isSun && !orbitNodes.containsKey(planet.id)) {
+          _buildOrbit(scene, planet);
+        }
+        developer.log(
+          'scene.build: ${planet.id} completed',
+          name: 'startup',
+        );
+        // Build one body per event-loop turn so progress UI and the renderer
+        // can run between texture/mesh/material batches.
+        await _yieldToUi();
       }
-      if (!planet.isSun) {
-        _buildOrbit(scene, planet);
-      }
-      // Build one body per event-loop turn so progress UI and the renderer
-      // can run between texture/mesh/material batches.
-      await _yieldToUi();
       step++;
     }
+    developer.log('scene.build: primary bodies ready', name: 'startup');
   }
 
   /// Adds the moons to a scene that [build] has already started.

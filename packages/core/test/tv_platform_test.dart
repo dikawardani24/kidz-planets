@@ -133,12 +133,79 @@ void main() {
       for (final layer in [TvInputLayer.mission, TvInputLayer.detail]) {
         expect(isActionForLayer(TvExplorerAction.back, layer), isTrue);
         expect(isActionForLayer(TvExplorerAction.playPause, layer), isTrue);
-        expect(isActionForLayer(TvExplorerAction.focusNext, layer), isFalse);
+        expect(isActionForLayer(TvExplorerAction.navigate, layer), isFalse);
         expect(isActionForLayer(TvExplorerAction.select, layer), isFalse);
       }
     });
   });
 
+  group('nearestInDirection', () {
+    const origin = Offset(500, 500);
+
+    test('picks the nearest candidate in the requested direction', () {
+      expect(
+        nearestInDirection(
+          origin: origin,
+          direction: const Offset(1, 0),
+          candidates: const [
+            (id: 'far', center: Offset(900, 500)),
+            (id: 'near', center: Offset(600, 500)),
+            (id: 'behind', center: Offset(100, 500)),
+          ],
+        ),
+        'near',
+      );
+    });
+
+    test('ignores candidates outside the half-plane', () {
+      expect(
+        nearestInDirection(
+          origin: origin,
+          direction: const Offset(0, -1),
+          candidates: const [
+            (id: 'below', center: Offset(500, 900)),
+            (id: 'far-left', center: Offset(100, 800)),
+          ],
+        ),
+        isNull,
+      );
+    });
+
+    test('widgets and bodies compete by position, not kind', () {
+      // A chrome control slightly off-axis but close beats a body far away.
+      expect(
+        nearestInDirection(
+          origin: origin,
+          direction: const Offset(1, 0),
+          candidates: const [
+            (id: 'chrome:zoom-in', center: Offset(600, 560)),
+            (id: 'saturn', center: Offset(1500, 500)),
+          ],
+        ),
+        'chrome:zoom-in',
+      );
+    });
+
+    test('zero direction selects nothing', () {
+      expect(
+        nearestInDirection(
+          origin: origin,
+          direction: Offset.zero,
+          candidates: const [(id: 'earth', center: Offset(600, 500))],
+        ),
+        isNull,
+      );
+    });
+  });
+
+  group('tvDirectionForKey', () {
+    test('maps arrow names to unit directions', () {
+      expect(tvDirectionForKey('left'), const Offset(-1, 0));
+      expect(tvDirectionForKey('right'), const Offset(1, 0));
+      expect(tvDirectionForKey('up'), const Offset(0, -1));
+      expect(tvDirectionForKey('down'), const Offset(0, 1));
+    });
+  });
   group('TvControlMode', () {
     test('toggled switches browse and rotate', () {
       expect(TvControlMode.browse.toggled, TvControlMode.rotate);

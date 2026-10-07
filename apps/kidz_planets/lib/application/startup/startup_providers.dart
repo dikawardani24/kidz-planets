@@ -52,6 +52,9 @@ class StartupCoordinatorNotifier extends StateNotifier<StartupProgress> {
   /// Re-runs only the tasks that failed; wired to the error screen's button.
   Future<void> retry() => _coordinator.retry();
 
+  /// Best-effort warm of a lazy startup task (e.g. moons after first frame).
+  void warmLater(String taskId) => _coordinator.warmLater(taskId);
+
   /// Releases the progress subscription and the coordinator's stream.
   ///
   /// Called from the provider's `onDispose`, which is the composition root

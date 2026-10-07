@@ -176,51 +176,45 @@ void main() {
     });
   });
 
-  group('zoom', () {
-    test('held DOWN pinches toward the marked body', () {
+  group('spatial navigation (one D-pad model)', () {
+    test('all four arrows move the cursor, never zoom or rotate', () {
       final (explorer, scene, tv) = setup();
-      explorer.markTarget('mars');
-      down(tv, TvRemoteKey.down, TvInputLayer.explorer);
-      tv.advance(1 / 60);
-      expect(scene.pinches, isNotEmpty);
-      expect(scene.pinches.last.$2, 'mars');
-      expect(scene.pinches.last.$1, greaterThan(1.0));
-      tv.handleKeyUp(TvRemoteKey.down);
-    });
-
-    test('held UP zooms back out', () {
-      final (_, scene, tv) = setup();
-      down(tv, TvRemoteKey.up, TvInputLayer.explorer);
-      tv.advance(1 / 60);
-      expect(scene.pinches, isNotEmpty);
-      expect(scene.pinches.last.$1, lessThan(1.0));
-      tv.handleKeyUp(TvRemoteKey.up);
-    });
-
-    test('zooming close enough auto-enters detail seamlessly', () {
-      final (explorer, scene, tv) = setup();
-      scene.autoEnter = true;
-      scene.progress = 0.99;
       explorer.markTarget('earth');
       down(tv, TvRemoteKey.down, TvInputLayer.explorer);
+      expect(explorer.state.markedTargetId, isNot('earth'));
       tv.advance(1 / 60);
-      expect(explorer.state.selectedPlanetId, 'earth');
-      expect(explorer.state.detailZoom, scene.seamlessZoom);
-      tv.handleKeyUp(TvRemoteKey.down);
+      expect(scene.pinches, isEmpty);
+      expect(scene.viewRotations, isEmpty);
+      down(tv, TvRemoteKey.up, TvInputLayer.explorer);
+      tv.advance(1 / 60);
+      expect(scene.pinches, isEmpty);
+      expect(scene.viewRotations, isEmpty);
     });
 
-    test('zoom in detail adjusts the detail zoom, reversibly', () {
+    test('selecting a planet never enters rotate mode', () {
       final (explorer, _, tv) = setup();
+      expect(tv.state.mode, TvControlMode.browse);
       explorer.selectPlanet('earth');
-      final before = explorer.state.detailZoom;
-      down(tv, TvRemoteKey.down, TvInputLayer.explorer);
-      tv.advance(0.25);
-      tv.handleKeyUp(TvRemoteKey.down);
-      expect(explorer.state.detailZoom, lessThan(before));
-      down(tv, TvRemoteKey.up, TvInputLayer.explorer);
-      tv.advance(0.25);
-      tv.handleKeyUp(TvRemoteKey.up);
-      expect(explorer.state.detailZoom, closeTo(before, 0.001));
+      expect(tv.state.mode, TvControlMode.browse);
+      down(tv, TvRemoteKey.right, TvInputLayer.explorer);
+      expect(tv.state.mode, TvControlMode.browse);
+    });
+
+    test('OK on a chrome target fires its activation, not body logic', () {
+      final (explorer, _, tv) = setup();
+      var calls = 0;
+      tv.registerTarget(
+        TvRegisteredTarget(
+          id: 'chrome:zoom-in',
+          center: const Offset(100, 100),
+          onActivate: () => calls++,
+        ),
+      );
+      explorer.markTarget('earth');
+      tv.updateSpatialFocusForTest('chrome:zoom-in');
+      down(tv, TvRemoteKey.center, TvInputLayer.explorer);
+      expect(calls, 1);
+      expect(explorer.state.hasSelection, isFalse);
     });
   });
 

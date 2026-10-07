@@ -202,6 +202,8 @@ class StartupCoordinatorImpl implements StartupCoordinator {
 
   Future<_TaskFailure?> _executeTask(StartupTask task) async {
     _reported[task.id] = 0.0;
+    final sw = Stopwatch()..start();
+    _onDiagnostic('StartupTask ${task.id} started');
     try {
       await task.execute(
         CallbackStartupTaskContext((fraction, message) {
@@ -217,11 +219,17 @@ class StartupCoordinatorImpl implements StartupCoordinator {
       _reported[task.id] = 1.0;
       _succeeded.add(task.id);
       _emitProgressOnly();
+      _onDiagnostic(
+        'StartupTask ${task.id} completed in ${sw.elapsedMilliseconds}ms',
+      );
       return null;
     } catch (error, stackTrace) {
       // The child never sees this. It goes to the log for whoever is debugging
       // a device, and the screen gets a sentence instead.
-      _onDiagnostic('StartupTask ${task.id} failed:\n$error\n$stackTrace');
+      _onDiagnostic(
+        'StartupTask ${task.id} failed after ${sw.elapsedMilliseconds}ms:\n'
+        '$error\n$stackTrace',
+      );
       return _TaskFailure(task);
     }
   }

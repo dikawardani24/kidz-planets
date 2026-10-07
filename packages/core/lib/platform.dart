@@ -10,3 +10,6 @@ library;
 export 'src/platform/device_form_factor.dart';
 export 'src/platform/tv_explorer_actions.dart';
 export 'src/platform/tv_focus.dart';
+export 'src/platform/tv_spatial_nav.dart';
+export 'src/platform/tv_spatial_target.dart';
+

@@ -24,6 +24,7 @@ class TvFocusable extends StatefulWidget {
     this.onFocusChange,
     this.builder,
     this.scaleOnFocus = true,
+    this.consumeDirectionalKeys = true,
   });
 
   /// What happens on SELECT/OK (remote) or tap (touch/mouse fallback).
@@ -47,6 +48,14 @@ class TvFocusable extends StatefulWidget {
 
   /// Slightly grows the control while focused. Off for full-bleed cards.
   final bool scaleOnFocus;
+
+  /// When false, arrow keys bubble to the Explorer spatial navigator instead
+  /// of Flutter's [DirectionalFocusIntent] traversal. OK/Activate still works.
+  ///
+  /// Explorer chrome and detail controls set this false so widgets and 3D
+  /// bodies share one D-pad model. Panels/dialogs outside that model keep the
+  /// default (true).
+  final bool consumeDirectionalKeys;
 
   @override
   State<TvFocusable> createState() => _TvFocusableState();
@@ -83,20 +92,18 @@ class _TvFocusableState extends State<TvFocusable> {
         if (mounted && focused != _focused) setState(() => _focused = focused);
         widget.onFocusChange?.call(focused);
       },
-      shortcuts: const {
-        SingleActivator(LogicalKeyboardKey.arrowLeft): DirectionalFocusIntent(
-          TraversalDirection.left,
-        ),
-        SingleActivator(LogicalKeyboardKey.arrowRight): DirectionalFocusIntent(
-          TraversalDirection.right,
-        ),
-        SingleActivator(LogicalKeyboardKey.arrowUp): DirectionalFocusIntent(
-          TraversalDirection.up,
-        ),
-        SingleActivator(LogicalKeyboardKey.arrowDown): DirectionalFocusIntent(
-          TraversalDirection.down,
-        ),
-      },
+      shortcuts: widget.consumeDirectionalKeys
+          ? const {
+              SingleActivator(LogicalKeyboardKey.arrowLeft):
+                  DirectionalFocusIntent(TraversalDirection.left),
+              SingleActivator(LogicalKeyboardKey.arrowRight):
+                  DirectionalFocusIntent(TraversalDirection.right),
+              SingleActivator(LogicalKeyboardKey.arrowUp):
+                  DirectionalFocusIntent(TraversalDirection.up),
+              SingleActivator(LogicalKeyboardKey.arrowDown):
+                  DirectionalFocusIntent(TraversalDirection.down),
+            }
+          : const <ShortcutActivator, Intent>{},
       actions: {
         ActivateIntent: CallbackAction<ActivateIntent>(
           onInvoke: (intent) {

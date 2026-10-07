@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:planets/scene.dart';
 
+import '../../application/startup/startup_providers.dart';
 import 'explorer_screen.dart';
 import 'intro/intro_page.dart';
 
@@ -141,6 +142,11 @@ class _StartupGateState extends ConsumerState<StartupGate>
     if (_swapStarted || !_beatDone) return;
     if (!ref.read(explorerScenePresentedProvider)) return;
     _swapStarted = true;
+    // Moons are lazy: start decoding once the Explorer can present, so Intro
+    // readiness and the first interactive frame are not blocked on them.
+    ref
+        .read(startupCoordinatorProvider.notifier)
+        .warmLater(SolarSystemStartupTaskId.moons);
     _swap.forward();
   }
 

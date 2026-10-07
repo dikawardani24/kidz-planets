@@ -228,43 +228,72 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
     required List<Planet> planets,
     required void Function(double fraction, String label) onProgress,
   }) {
-    _buildFuture ??= () async {
-      // The full catalogue, moons included, goes to the animator and the label
-      // projector even though only the planets are built here: both read the
-      // builder's state map per frame and pick the moons up the moment the lazy
-      // build adds them.
-      await _builder.build(
-        scene: _scene,
-        planets: planets,
-        onProgress: onProgress,
-      );
-      _animator = SolarSystemAnimator(
-        clock: _clock,
-        builder: _builder,
-        planets: planets,
-      );
-      _animator!.attach();
-      _projector = LabelProjector(builder: _builder, planets: planets);
-      _rigState
-        ..theta = 0.0
-        ..phi = 0.32
-        ..radius = OrbitCameraRig.kOverviewRadius
-        ..fovRadians = 0.85;
-      _built = true;
+    if (_built) return Future<void>.value();
+    final inFlight = _buildFuture;
+    if (inFlight != null) return inFlight;
+
+    // Memoize the in-flight future so concurrent callers join one build.
+    // On failure, clear the memo so coordinator retry() can rebuild: a sticky
+    // failed Future would make every retry re-await the same error forever.
+    final run = () async {
+      try {
+        // The full catalogue, moons included, goes to the animator and the label
+        // projector even though only the planets are built here: both read the
+        // builder's state map per frame and pick the moons up the moment the lazy
+        // build adds them.
+        await _builder.build(
+          scene: _scene,
+          planets: planets,
+          onProgress: onProgress,
+        );
+        _animator?.detach();
+        _animator = SolarSystemAnimator(
+          clock: _clock,
+          builder: _builder,
+          planets: planets,
+        );
+        _animator!.attach();
+        _projector = LabelProjector(builder: _builder, planets: planets);
+        if (!_built) {
+          _rigState
+            ..theta = 0.0
+            ..phi = 0.32
+            ..radius = OrbitCameraRig.kOverviewRadius
+            ..fovRadians = 0.85;
+        }
+        _built = true;
+      } catch (_) {
+        _buildFuture = null;
+        rethrow;
+      }
     }();
-    return _buildFuture!;
+    _buildFuture = run;
+    return run;
   }
 
   @override
   Future<void> ensureMoonsBuilt({
     required List<Planet> moons,
     required void Function(double fraction, String label) onProgress,
-  }) => _moonsFuture ??= () async {
-    await _builder.buildMoons(moons: moons, onProgress: onProgress);
-  }();
+  }) {
+    if (_builder.moonsBuilt) return Future<void>.value();
+    final inFlight = _moonsFuture;
+    if (inFlight != null) return inFlight;
+
+    final run = () async {
+      try {
+        await _builder.buildMoons(moons: moons, onProgress: onProgress);
+      } catch (_) {
+        _moonsFuture = null;
+        rethrow;
+      }
+    }();
+    _moonsFuture = run;
+    return run;
+  }
 
   @override
-  bool get areMoonsBuilt => _moonsFuture != null;
+  bool get areMoonsBuilt => _builder.moonsBuilt;
 
   @override
   int get cachedTextureCount => _textures.cachedCount;

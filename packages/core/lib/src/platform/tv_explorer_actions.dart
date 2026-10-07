@@ -9,9 +9,9 @@ library;
 /// A physical remote button, before mode and layer are applied.
 ///
 /// The app's key handler translates Android key codes into these; the TV
-/// controller turns them into [TvExplorerAction]s using the current
-/// [TvControlMode], so the same button can navigate in one mode and rotate
-/// in another.
+/// controller turns them into [TvExplorerAction]s. In the default navigate
+/// mode every D-pad direction is spatial navigation; rotate mode is opt-in
+/// via an explicit chrome control.
 enum TvRemoteKey { up, down, left, right, center, back, playPause }
 
 /// What the child meant, independent of which remote sent it.
@@ -20,10 +20,11 @@ enum TvExplorerAction {
   rotateRight,
   rotateUp,
   rotateDown,
-  zoomIn,
-  zoomOut,
-  focusNext,
-  focusPrevious,
+
+  /// Move the spatial cursor to the nearest interactive target in a direction.
+  /// All four D-pad arrows map here in navigate mode (never zoom/rotate).
+  navigate,
+
   select,
   back,
   playPause,
@@ -56,6 +57,10 @@ enum TvInputLayer {
 /// Picks the single layer that may consume the next remote event.
 ///
 /// Exactly one layer is ever returned: the highest-priority active one.
+///
+/// [detailOpen] means detail *chrome widgets* currently own focus — not merely
+/// that a planet is selected. Selection alone must not block spatial D-pad
+/// navigation across bodies and Explorer controls.
 TvInputLayer resolveTvInputLayer({
   required bool modalOpen,
   required bool missionOpen,
@@ -113,16 +118,17 @@ TvBackFocusAction resolveBackFocus({
   return canUnwind ? TvBackFocusAction.unwind : TvBackFocusAction.toChrome;
 }
 
-/// The D-pad's current job in the Explorer.
+/// Opt-in camera spin vs the default spatial navigator.
 ///
-/// One mode means one predictable mapping, and the mode pill in the TV chrome
-/// always shows which one is active, so the child never has to guess what the
-/// arrows will do.
+/// Default is [browse]: every D-pad direction moves among interactive targets
+/// (3D bodies and registered chrome controls). [rotate] is entered only when
+/// the child activates the Rotate control — never automatically on selection.
 enum TvControlMode {
-  /// LEFT/RIGHT moves the body cursor, UP/DOWN zooms, OK selects.
+  /// Spatial navigation among interactive targets; OK activates the target.
   browse,
 
   /// All four directions rotate the view (or the selected body in detail).
+  /// Armed explicitly from chrome; selecting a planet does not enter this.
   rotate,
 }
 

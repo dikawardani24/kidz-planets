@@ -7,6 +7,7 @@ import 'package:core/platform.dart';
 import 'package:core/theme.dart';
 import 'package:planets/state.dart';
 
+import 'tv_nav_target.dart';
 import 'tv_providers.dart';
 
 /// The TV controller chrome: the visible mode indicator plus the hint bar.
@@ -71,7 +72,9 @@ class TvControllerChrome extends ConsumerWidget {
             SizedBox(height: ds.px(12)),
             Row(
               children: [
-                TvFocusable(
+                TvNavTarget(
+                  id: 'chrome:rotate-mode',
+                  control: TvChromeControl.rotate,
                   onSelect: notifier.toggleMode,
                   child: Container(
                     padding: ds.insets(horizontal: 22, vertical: 13),
@@ -101,7 +104,9 @@ class TvControllerChrome extends ConsumerWidget {
                   ),
                 ),
                 SizedBox(width: ds.px(10)),
-                TvFocusable(
+                TvNavTarget(
+                  id: 'chrome:play-pause',
+                  control: TvChromeControl.playPause,
                   onSelect: () => ref
                       .read(explorerControllerProvider.notifier)
                       .toggleRunning(),
@@ -125,7 +130,39 @@ class TvControllerChrome extends ConsumerWidget {
                   ),
                 ),
                 SizedBox(width: ds.px(10)),
-                TvFocusable(
+                TvNavTarget(
+                  id: 'chrome:zoom-out',
+                  control: TvChromeControl.zoomOut,
+                  onSelect: notifier.zoomOutStep,
+                  child: _ChromeCircle(
+                    ds: ds,
+                    borderColor: AppTheme.accentSky.withValues(alpha: 0.6),
+                    child: Icon(
+                      Icons.remove,
+                      size: ds.px(26),
+                      color: AppTheme.accentSky,
+                    ),
+                  ),
+                ),
+                SizedBox(width: ds.px(10)),
+                TvNavTarget(
+                  id: 'chrome:zoom-in',
+                  control: TvChromeControl.zoomIn,
+                  onSelect: notifier.zoomInStep,
+                  child: _ChromeCircle(
+                    ds: ds,
+                    borderColor: AppTheme.accentSky.withValues(alpha: 0.6),
+                    child: Icon(
+                      Icons.add,
+                      size: ds.px(26),
+                      color: AppTheme.accentSky,
+                    ),
+                  ),
+                ),
+                SizedBox(width: ds.px(10)),
+                TvNavTarget(
+                  id: 'chrome:quick-select',
+                  control: TvChromeControl.quickSelect,
                   onSelect: notifier.toggleQuickSelect,
                   child: Container(
                     width: ds.px(52),
@@ -139,16 +176,13 @@ class TvControllerChrome extends ConsumerWidget {
                         width: ds.px(2),
                       ),
                     ),
-                    child: Text(
-                      '🪐',
-                      style: TextStyle(
-                        fontSize: ds.font(22),
-                      ),
-                    ),
+                    child: Text('🪐', style: TextStyle(fontSize: ds.font(22))),
                   ),
                 ),
                 SizedBox(width: ds.px(10)),
-                TvFocusable(
+                TvNavTarget(
+                  id: 'chrome:help',
+                  control: TvChromeControl.help,
                   onSelect: notifier.showHint,
                   child: Container(
                     width: ds.px(52),
@@ -177,6 +211,34 @@ class TvControllerChrome extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Circular chrome button frame shared by the icon-only controls.
+class _ChromeCircle extends StatelessWidget {
+  const _ChromeCircle({
+    required this.ds,
+    required this.borderColor,
+    required this.child,
+  });
+
+  final DesignScale ds;
+  final Color borderColor;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: ds.px(52),
+      height: ds.px(52),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppTheme.space700.withValues(alpha: 0.92),
+        border: Border.all(color: borderColor, width: ds.px(2)),
+      ),
+      child: child,
     );
   }
 }

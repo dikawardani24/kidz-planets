@@ -11,7 +11,6 @@ import 'package:core/theme.dart';
 import 'package:kidz_planets/application/state/providers.dart';
 import 'package:kidz_planets/presentation/tv/tv_controller_hint.dart';
 import 'package:kidz_planets/presentation/tv/tv_home_panel.dart';
-import 'package:kidz_planets/presentation/tv/tv_input_probe.dart';
 import 'package:kidz_planets/presentation/tv/tv_nav_bar.dart';
 import 'package:kidz_planets/presentation/tv/tv_providers.dart';
 import 'package:kidz_planets/presentation/tv/tv_quick_select_drawer.dart';
@@ -240,10 +239,6 @@ class ExplorerScreen extends ConsumerWidget {
                   ),
                   const ToastOverlay(),
 
-                  // TEMPORARY TV input probe (see tv_input_probe.dart): two
-                  // test buttons plus raw key/focus readouts. TV only.
-                  if (isTv) const TvInputProbe(),
-
                   if (shell.tab == AppTab.playground)
                     Positioned(
                       left: horizontalInset + 12,
@@ -284,12 +279,39 @@ class ExplorerScreen extends ConsumerWidget {
                           planet: ref.watch(
                             planetByIdProvider(ui.selectedPlanetId!),
                           ),
+                          onSpatialTarget: isTv
+                              ? ref
+                                    .read(
+                                      tvExplorerControllerProvider.notifier,
+                                    )
+                                    .registerTarget
+                              : null,
+                          onUnregisterSpatialTarget: isTv
+                              ? ref
+                                    .read(
+                                      tvExplorerControllerProvider.notifier,
+                                    )
+                                    .unregisterTarget
+                              : null,
                         ),
                       ),
                     ),
 
                   if (ui.hasSelection && shell.tab == AppTab.explore)
-                    const Positioned.fill(child: DetailSideRails()),
+                    Positioned.fill(
+                      child: DetailSideRails(
+                        onSpatialTarget: isTv
+                            ? ref
+                                  .read(tvExplorerControllerProvider.notifier)
+                                  .registerTarget
+                            : null,
+                        onUnregisterSpatialTarget: isTv
+                            ? ref
+                                  .read(tvExplorerControllerProvider.notifier)
+                                  .unregisterTarget
+                            : null,
+                      ),
+                    ),
 
                   // TV home: large remote-first cards over the explore tab
                   // until the child picks a destination or a body.

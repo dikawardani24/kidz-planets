@@ -158,7 +158,10 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
     final layer = resolveTvInputLayer(
       modalOpen: celebrationVisible,
       missionOpen: shell.tab != AppTab.explore,
-      detailOpen: explorer.hasSelection,
+      // Detail *dialogs/routes* own the remote; detail *chrome widgets* stay
+      // in the explorer layer so the unified spatial navigator keeps working.
+      // Selection alone must not block D-pad movement across bodies/controls.
+      detailOpen: false,
       avatarFocused: ref.read(tvAvatarFocusedProvider),
     );
 

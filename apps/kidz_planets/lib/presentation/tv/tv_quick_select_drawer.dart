@@ -58,10 +58,7 @@ class TvQuickSelectDrawer extends ConsumerWidget {
               children: [
                 Row(
                   children: [
-                    Text(
-                      '🪐',
-                      style: TextStyle(fontSize: ds.font(28)),
-                    ),
+                    Text('🪐', style: TextStyle(fontSize: ds.font(28))),
                     SizedBox(width: ds.px(10)),
                     Text(
                       t.sectionPlanets.toUpperCase(),
@@ -110,7 +107,7 @@ class TvQuickSelectDrawer extends ConsumerWidget {
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: planets.length,
-                    separatorBuilder: (_, __) => SizedBox(width: ds.px(14)),
+                    separatorBuilder: (_, _) => SizedBox(width: ds.px(14)),
                     itemBuilder: (context, index) {
                       final planet = planets[index];
                       return _QuickSelectCard(

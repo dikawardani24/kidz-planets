@@ -56,21 +56,21 @@ void main() {
   testWidgets('the bar tracks real work and hits 100% only at the end', (
     tester,
   ) async {
-    // Everything but the moons runs: their slice of the bar is held, exactly
-    // as a real decode in progress would hold it.
-    final hooks = FakeStartupHooks()..gateOn(SolarSystemStartupTaskId.moons);
+    // Gating the first (serial) task holds the pipeline before any later
+    // level can overwrite the current-task copy: with every required task
+    // unfinished the bar is held and the completion CTA stays hidden —
+    // exactly as real startup work in progress would hold it. Moons are
+    // lazy and never gate the bar.
+    final hooks = FakeStartupHooks()..gateOn(SolarSystemStartupTaskId.core);
     await pumpIntro(tester, hooks);
 
-    // Phase copy and the quoted message card follow the running task.
-    expect(find.text('Moon is getting ready'), findsOneWidget);
-    expect(find.text('"Moon is getting ready... 🌕"'), findsOneWidget);
-    // Past the prototype's 68% beat, the Saturn badge has popped in.
-    expect(find.text('Saturn'), findsOneWidget);
     // Held work: never 100%, never the completion state.
     expect(find.text('100%'), findsNothing);
     expect(find.text("LET'S EXPLORE!"), findsNothing);
+    // Not stuck at zero either: the gated task reported and owns its slice.
+    expect(find.text('0%'), findsNothing);
 
-    hooks.openGate(SolarSystemStartupTaskId.moons);
+    hooks.openGate(SolarSystemStartupTaskId.core);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 

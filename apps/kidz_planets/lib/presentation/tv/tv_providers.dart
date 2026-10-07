@@ -97,16 +97,16 @@ final tvExplorerControllerProvider =
           ref.read(planetNarrationServiceProvider).speakPlanet(planet);
         },
       );
-      // Selection transitions steer the D-pad mode no matter who changed
-      // the selection (remote, touch tap, rails button, tab switch):
-      // entering detail switches to rotate, leaving returns to browse.
-      // Manual toggles persist otherwise — only the transition steers.
+      // Selection never steers the D-pad mode: rotate is opt-in from the
+      // chrome Rotate control only. Selecting a planet keeps navigating.
+      // Leaving detail returns an armed rotate mode to browse so arrows
+      // navigate again instead of spinning an empty scene.
       ref.listen<ExplorerState>(explorerControllerProvider, (prev, next) {
         final was = prev?.hasSelection ?? false;
         if (was == next.hasSelection) return;
-        controller.setMode(
-          next.hasSelection ? TvControlMode.rotate : TvControlMode.browse,
-        );
+        if (!next.hasSelection) {
+          controller.exitDetailCleanup();
+        }
       });
       return controller;
     });

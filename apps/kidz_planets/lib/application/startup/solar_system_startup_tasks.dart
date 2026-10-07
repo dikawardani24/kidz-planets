@@ -51,11 +51,12 @@ class FunctionStartupTask implements StartupTask {
   Future<void> execute(StartupTaskContext context) => run(context);
 }
 
-/// Relative bar shares for the six startup tasks.
+/// Relative bar shares for the startup tasks.
 ///
 /// Estimates, not decoration: the solar system decodes the texture bulk, so it
 /// owns the bar's middle; the catalogue read is microseconds and owns almost
-/// nothing.
+/// nothing. Moons are lazy (warmed after Explorer is interactive) and do not
+/// contribute to the required-task total that drives the Intro bar.
 abstract final class SolarSystemStartupWeights {
   static const double core = 0.6;
   static const double solarSystem = 3.4;
@@ -64,9 +65,9 @@ abstract final class SolarSystemStartupWeights {
   static const double sounds = 0.6;
   static const double moons = 1.4;
 
-  /// The sum the coordinator normalizes against; asserted in tests so a weight
-  /// edit that silently rescales the whole bar fails loudly.
-  static const double total = 7.0;
+  /// Sum of **required** task weights the coordinator normalizes against.
+  /// Asserted in tests so a weight edit that silently rescales the bar fails.
+  static const double total = 5.6;
 }
 
 /// How long each startup task may run before its hang becomes a failure.
@@ -103,12 +104,14 @@ Future<void> _withTimeout(Future<void> work, Duration limit, String taskId) =>
           throw TimeoutException('Startup task "$taskId" timed out', limit),
     );
 
-/// The six tasks every cold start runs, in dependency order.
+/// The startup tasks for a cold start, in dependency order.
 ///
-/// Only the moons task declares a dependency (on the scene it extends). The
-/// rest are independent by construction and the coordinator overlaps them:
-/// the catalogue decode runs while the GPU is busy, which is where the cold
-/// start's wall-clock savings come from.
+/// Required tasks block the Intro CTA. Moons are lazy: they warm after the
+/// Explorer presents its first frame so weak TVs are not asked to decode
+/// eighteen moon textures before the child can explore.
+///
+/// [planets.scene] waits on [core.session] so audio-session setup and megabyte
+/// texture decode do not race on constrained GPUs.
 ///
 /// [timeoutFor] overrides the per-task hang guard ([StartupTimeouts.forTask]
 /// by default). Tests with scripted hooks that intentionally never finish
@@ -147,6 +150,9 @@ List<StartupTask> buildSolarSystemStartupTasks({
       failureMessage: 'We could not load the planets.',
       weight: SolarSystemStartupWeights.solarSystem,
       criticality: StartupCriticality.required,
+      // Serialize GPU texture decode after the audio session is ready so weak
+      // Android TV devices are not asked to do both at once.
+      dependsOn: const {SolarSystemStartupTaskId.core},
       execute: guard(
         resolved.buildSolarSystem,
         SolarSystemStartupTaskId.solarSystem,
@@ -193,7 +199,9 @@ List<StartupTask> buildSolarSystemStartupTasks({
       title: 'Painting the moons',
       failureMessage: 'We could not paint the moons.',
       weight: SolarSystemStartupWeights.moons,
-      criticality: StartupCriticality.required,
+      // Deferred: warm after first Explorer frame via warmLater. Does not gate
+      // the Intro CTA; children cannot see moons until they zoom in anyway.
+      criticality: StartupCriticality.lazy,
       dependsOn: const {SolarSystemStartupTaskId.solarSystem},
       execute: guard(resolved.buildMoons, SolarSystemStartupTaskId.moons),
     ),

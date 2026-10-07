@@ -46,8 +46,7 @@ abstract final class SolarSystemStartupTaskId {
   /// The Sun, starfield, planets and orbits: the 3D scene `ensureBuilt` owns.
   static const String solarSystem = 'planets.scene';
 
-  /// Moon meshes on the same scene, promoted from the lazy background warm so
-  /// their share of the bar is honest.
+  /// Moon meshes on the same scene, warmed lazily after Explorer is interactive.
   static const String moons = 'planets.moons';
 
   /// Companion geometry caches primed on the UI thread.

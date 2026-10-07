@@ -37,9 +37,19 @@ class PlanetDetailSheet extends ConsumerWidget {
 /// Opens the full facts view as a modal dialog. The dialog owns its available
 /// space, so orientation changes do not constrain the facts card to the scene.
 class DetailDescriptionToggle extends ConsumerWidget {
-  const DetailDescriptionToggle({super.key, required this.planet});
+  const DetailDescriptionToggle({
+    super.key,
+    required this.planet,
+    this.onSpatialTarget,
+    this.onUnregisterSpatialTarget,
+  });
 
   final Planet planet;
+
+  /// Publishes the pill into the app's TV spatial registry (null in
+  /// standalone hosts). Arrows bubble to the unified spatial navigator.
+  final ValueChanged<TvSpatialTarget>? onSpatialTarget;
+  final ValueChanged<String>? onUnregisterSpatialTarget;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -48,7 +58,11 @@ class DetailDescriptionToggle extends ConsumerWidget {
     // Sizing is purely viewport-derived, like every other pill here.
     final isTv = ref.watch(isTelevisionProvider);
     final ds = DesignScale.sharedOf(context);
-    return TvFocusable(
+    return TvSpatialTargetWidget(
+      id: 'chrome:show-facts',
+      control: TvChromeControl.other,
+      onTarget: onSpatialTarget ?? (_) {},
+      onUnregister: onUnregisterSpatialTarget ?? (_) {},
       autofocus: isTv,
       onSelect: () {
         showGeneralDialog<void>(
@@ -113,7 +127,18 @@ class DetailDescriptionToggle extends ConsumerWidget {
 }
 
 class DetailSideRails extends ConsumerWidget {
-  const DetailSideRails({super.key});
+  const DetailSideRails({
+    super.key,
+    this.onSpatialTarget,
+    this.onUnregisterSpatialTarget,
+  });
+
+  /// Publishes one control into the app's TV spatial registry.
+  ///
+  /// Null in standalone feature hosts (widget tests, previews): the rails
+  /// keep their touch behavior and shared focus treatment either way.
+  final ValueChanged<TvSpatialTarget>? onSpatialTarget;
+  final ValueChanged<String>? onUnregisterSpatialTarget;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -138,7 +163,11 @@ class DetailSideRails extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TvFocusable(
+              TvSpatialTargetWidget(
+                id: 'chrome:listen',
+                control: TvChromeControl.playPause,
+                onTarget: onSpatialTarget ?? (_) {},
+                onUnregister: onUnregisterSpatialTarget ?? (_) {},
                 onSelect: () =>
                     ref.read(planetNarrationServiceProvider).replay(planet),
                 child: AppTheme.glass(
@@ -167,7 +196,11 @@ class DetailSideRails extends ConsumerWidget {
                 ),
               ),
               SizedBox(height: ds.px(6)),
-              TvFocusable(
+              TvSpatialTargetWidget(
+                id: 'chrome:sound',
+                control: TvChromeControl.playPause,
+                onTarget: onSpatialTarget ?? (_) {},
+                onUnregister: onUnregisterSpatialTarget ?? (_) {},
                 onSelect: () =>
                     ref.read(planetSoundServiceProvider).playBody(planet),
                 child: AppTheme.glass(
@@ -196,7 +229,11 @@ class DetailSideRails extends ConsumerWidget {
                 ),
               ),
               SizedBox(height: ds.px(6)),
-              TvFocusable(
+              TvSpatialTargetWidget(
+                id: 'chrome:play-mode',
+                control: TvChromeControl.other,
+                onTarget: onSpatialTarget ?? (_) {},
+                onUnregister: onUnregisterSpatialTarget ?? (_) {},
                 onSelect: notifier.toggleDetailCard,
                 child: AppTheme.glass(
                   pill: true,
@@ -237,6 +274,8 @@ class DetailSideRails extends ConsumerWidget {
             onZoomIn: () => notifier.adjustDetailZoom(-.25),
             onReset: notifier.resetDetailView,
             onClose: notifier.closeDetail,
+            onSpatialTarget: onSpatialTarget,
+            onUnregisterSpatialTarget: onUnregisterSpatialTarget,
           ),
         ),
       ],
@@ -409,6 +448,8 @@ class _DetailZoomBar extends StatelessWidget {
     required this.onReset,
     required this.onClose,
     this.vertical = false,
+    this.onSpatialTarget,
+    this.onUnregisterSpatialTarget,
   });
 
   final double zoom;
@@ -426,11 +467,20 @@ class _DetailZoomBar extends StatelessWidget {
 
   final bool vertical;
 
+  final ValueChanged<TvSpatialTarget>? onSpatialTarget;
+  final ValueChanged<String>? onUnregisterSpatialTarget;
+
   @override
   Widget build(BuildContext context) {
     final percent = (100 / zoom).round();
 
-    final zoomOut = _ZoomButton(icon: Icons.remove, onTap: onZoomOut);
+    final zoomOut = _ZoomButton(
+      id: 'chrome:detail-zoom-out',
+      icon: Icons.remove,
+      onTap: onZoomOut,
+      onSpatialTarget: onSpatialTarget,
+      onUnregisterSpatialTarget: onUnregisterSpatialTarget,
+    );
     final badge = AppTheme.glass(
       pill: true,
       radius: BorderRadius.circular(999),
@@ -444,13 +494,29 @@ class _DetailZoomBar extends StatelessWidget {
         ),
       ),
     );
-    final zoomIn = _ZoomButton(icon: Icons.add, onTap: onZoomIn);
-    final reset = _ZoomButton(icon: Icons.refresh, onTap: onReset, small: true);
+    final zoomIn = _ZoomButton(
+      id: 'chrome:detail-zoom-in',
+      icon: Icons.add,
+      onTap: onZoomIn,
+      onSpatialTarget: onSpatialTarget,
+      onUnregisterSpatialTarget: onUnregisterSpatialTarget,
+    );
+    final reset = _ZoomButton(
+      id: 'chrome:detail-reset',
+      icon: Icons.refresh,
+      onTap: onReset,
+      small: true,
+      onSpatialTarget: onSpatialTarget,
+      onUnregisterSpatialTarget: onUnregisterSpatialTarget,
+    );
     final close = _ZoomButton(
+      id: 'chrome:detail-close',
       icon: Icons.close,
       onTap: onClose,
       small: true,
       color: const Color(0xFFC7D2FE),
+      onSpatialTarget: onSpatialTarget,
+      onUnregisterSpatialTarget: onUnregisterSpatialTarget,
     );
 
     if (vertical) {
@@ -492,22 +558,36 @@ class _DetailZoomBar extends StatelessWidget {
 
 class _ZoomButton extends ConsumerWidget {
   const _ZoomButton({
+    required this.id,
     required this.icon,
     required this.onTap,
     this.small = false,
     this.color = Colors.white,
+    this.onSpatialTarget,
+    this.onUnregisterSpatialTarget,
   });
 
+  final String id;
   final IconData icon;
   final VoidCallback onTap;
   final bool small;
   final Color color;
+  final ValueChanged<TvSpatialTarget>? onSpatialTarget;
+  final ValueChanged<String>? onUnregisterSpatialTarget;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // One viewport-derived size for the compact buttons everywhere.
     final ds = DesignScale.sharedOf(context);
-    return TvFocusable(
+    return TvSpatialTargetWidget(
+      id: id,
+      control: id.contains('zoom')
+          ? (id.contains('in')
+                ? TvChromeControl.zoomIn
+                : TvChromeControl.zoomOut)
+          : TvChromeControl.other,
+      onTarget: onSpatialTarget ?? (_) {},
+      onUnregister: onUnregisterSpatialTarget ?? (_) {},
       onSelect: onTap,
       child: AppTheme.glass(
         pill: true,
