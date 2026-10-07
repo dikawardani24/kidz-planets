@@ -11,6 +11,19 @@ import 'scene_factories.dart';
 import 'scene_models.dart';
 import 'texture_provider.dart';
 
+/// Device-profiling isolation switches. All false in production builds.
+///
+/// Set via `--dart-define` to attribute frame/loading cost on hardware, e.g.
+/// `flutter run --profile --dart-define=KIDZ_NO_RINGS=true`. There is no
+/// runtime UI and no performance effect when unset (constant-folded).
+/// Recipe: baseline → `KIDZ_NO_TEXTURES` (decode/upload cost) →
+/// `KIDZ_NO_RINGS` (84 Saturn nodes) → `KIDZ_NO_ORBITS` (8 rings) and compare
+/// `scene.build` stats lines plus DevTools frame times. `KIDZ_NO_TEXTURES`
+/// exercises the production flat-tint fallback materials, not a test stub.
+const kSceneNoTextures = bool.fromEnvironment('KIDZ_NO_TEXTURES');
+const kSceneNoRings = bool.fromEnvironment('KIDZ_NO_RINGS');
+const kSceneNoOrbits = bool.fromEnvironment('KIDZ_NO_ORBITS');
+
 /// Builds and owns the imperative flutter_scene graph (SRP: scene only).
 ///
 /// Uses [Texture2D.fromAsset] via [TextureProvider] so no build hook /
@@ -44,6 +57,11 @@ class SolarSystemSceneBuilder {
   final Map<String, Node> orbitNodes = {};
   Node? starNode;
   final Node solarSystemRoot = Node(name: 'solar-system-root');
+
+  /// Renderable nodes created for Saturn's ring system (bands + strands +
+  /// edge layers + edge profiles). Logged in the build stats line so device
+  /// profiling can correlate node count with frame time.
+  int ringNodeCount = 0;
 
   /// Builds the Sun, the starfield and the planets; awaits every texture upload.
   ///
@@ -87,9 +105,13 @@ class SolarSystemSceneBuilder {
 
     onProgress(step / steps, 'Painting stars…');
     if (starNode == null) {
+      final starsSw = Stopwatch()..start();
       developer.log('scene.build: stars started', name: 'startup');
       await _buildStars(scene);
-      developer.log('scene.build: stars completed', name: 'startup');
+      developer.log(
+        'scene.build: stars completed in ${starsSw.elapsedMilliseconds}ms',
+        name: 'startup',
+      );
       // Let Flutter present the loading animation before the first expensive
       // planet/material batch starts.
       await _yieldToUi();
@@ -99,19 +121,23 @@ class SolarSystemSceneBuilder {
     for (final planet in primaryBodies) {
       onProgress(step / steps, 'Painting ${planet.name}…');
       if (!states.containsKey(planet.id)) {
+        final bodySw = Stopwatch()..start();
         developer.log(
           'scene.build: ${planet.id} started',
           name: 'startup',
         );
         await _buildPlanet(planet);
-        if (planet.hasRing) {
+        if (planet.hasRing && !kSceneNoRings) {
           await _buildSaturnRing(planet);
         }
-        if (!planet.isSun && !orbitNodes.containsKey(planet.id)) {
+        if (!planet.isSun &&
+            !kSceneNoOrbits &&
+            !orbitNodes.containsKey(planet.id)) {
           _buildOrbit(scene, planet);
         }
         developer.log(
-          'scene.build: ${planet.id} completed',
+          'scene.build: ${planet.id} completed '
+          'in ${bodySw.elapsedMilliseconds}ms',
           name: 'startup',
         );
         // Build one body per event-loop turn so progress UI and the renderer
@@ -120,7 +146,13 @@ class SolarSystemSceneBuilder {
       }
       step++;
     }
-    developer.log('scene.build: primary bodies ready', name: 'startup');
+    developer.log(
+      'scene.build: primary bodies ready '
+      '(bodies=${states.length} ringNodes=$ringNodeCount '
+      'orbits=${orbitNodes.length} textures=${_textures.cachedCount} '
+      'geometries=${_geometries.describeCache()})',
+      name: 'startup',
+    );
   }
 
   /// Adds the moons to a scene that [build] has already started.
@@ -139,6 +171,7 @@ class SolarSystemSceneBuilder {
     }
 
     final steps = pending.length;
+    final moonsSw = Stopwatch()..start();
     for (var i = 0; i < pending.length; i++) {
       final moon = pending[i];
       onProgress(i / steps, 'Painting ${moon.name}…');
@@ -149,6 +182,12 @@ class SolarSystemSceneBuilder {
     }
     _moonsBuilt = true;
     onProgress(1.0, 'Moons ready');
+    developer.log(
+      'scene.build: moons ready '
+      '(moons=${pending.length} in ${moonsSw.elapsedMilliseconds}ms '
+      'textures=${_textures.cachedCount})',
+      name: 'startup',
+    );
   }
 
   void _buildSunLight(Scene scene) {
@@ -267,6 +306,7 @@ class SolarSystemSceneBuilder {
             ..rotation = rotation;
       ring.raycastable = false;
       state.spinNode.add(ring);
+      ringNodeCount++;
     }
 
     for (final band in broad) {
@@ -398,6 +438,7 @@ class SolarSystemSceneBuilder {
             ..rotation = tilt;
       ring.raycastable = false;
       state.spinNode.add(ring);
+      ringNodeCount++;
     }
   }
 
@@ -484,6 +525,8 @@ class SolarSystemSceneBuilder {
   Future<void> _yieldToUi() => Future<void>.delayed(Duration.zero);
 
   Future<TextureSource?> _safeLoad(String asset) async {
+    // Profiling isolation: exercise the flat-tint fallback materials.
+    if (kSceneNoTextures) return null;
     try {
       return await _textures.get(asset);
     } catch (_) {

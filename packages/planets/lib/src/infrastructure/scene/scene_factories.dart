@@ -56,6 +56,10 @@ class GeometryFactory {
     () => SphereGeometry(radius: 220, segments: 32, rings: 16),
   );
 
+  /// One-line cache census for the `scene.build` stats log.
+  String describeCache() =>
+      'spheres=${_spheres.length} rings=${_rings.length} tori=${_tori.length}';
+
   void dispose() {
     _spheres.clear();
     _rings.clear();

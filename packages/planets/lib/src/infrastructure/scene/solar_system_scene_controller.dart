@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
@@ -183,6 +184,18 @@ abstract class SolarSystemSceneController {
   /// the budget mid-build would mix resolutions. Startup resolves the device
   /// capability tier and sets this once, before the solar-system task runs.
   void setMaxTextureDecodeWidth(int? maxWidth);
+
+  /// Pre-compiles the render pipelines and uploads the scene's GPU resources
+  /// behind the loading screen, so the Explorer's first visible frame does
+  /// not stall on shader compilation.
+  ///
+  /// Call once, after [ensureBuilt], with the current explorer state: the
+  /// warm-up frame uses the same overview camera the scene view will show, so
+  /// the compiled pipeline variants match the real first frame. Never throws:
+  /// a warm-up failure only means the first frame pays the compile cost the
+  /// old way (still hidden behind the intro by the startup gate). Safe to
+  /// repeat; later moon attachments reuse the same material pipelines.
+  Future<void> warmUpPipelines(ExplorerState ui);
   void dispose();
 }
 
@@ -217,6 +230,7 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   bool _built = false;
   Future<void>? _buildFuture;
   Future<void>? _moonsFuture;
+  bool _pipelinesWarmed = false;
   double _rotationVelocityX = 0.0;
   double _rotationVelocityY = 0.0;
   String? _rotationVelocityPlanetId;
@@ -470,6 +484,22 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
     final textures = _textures;
     if (textures is AssetTextureProvider) {
       textures.maxDecodeWidth = maxWidth;
+    }
+  }
+
+  @override
+  Future<void> warmUpPipelines(ExplorerState ui) async {
+    if (_pipelinesWarmed) return;
+    try {
+      await _scene.warmUp([RenderView(camera: buildCamera(ui))]);
+      _pipelinesWarmed = true;
+    } catch (error) {
+      // Optimization only: the startup gate already hides an unwarmed first
+      // frame behind the intro, so a warm-up failure must never fail startup.
+      developer.log(
+        'scene.warmUp skipped; first frame compiles on demand: $error',
+        name: 'startup',
+      );
     }
   }
 

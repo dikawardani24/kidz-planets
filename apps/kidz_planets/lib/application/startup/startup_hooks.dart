@@ -69,6 +69,12 @@ class RealSolarSystemStartupHooks extends SolarSystemStartupHooks {
         );
       },
     );
+    // Compile the render pipelines while the intro still owns the screen, so
+    // the Explorer's first visible frame — and the crossfade into it — does
+    // not stall on shader compilation on either phones or TVs. Runs at ~97%
+    // with the bar held honestly on real work, not spun on a timer.
+    reportStage(context, 0.97, message: StartupMessage.planets);
+    await controller.warmUpPipelines(ref.read(explorerControllerProvider));
     await yieldToIntro();
     reportStage(context, 1.0, message: StartupMessage.planets);
   }
