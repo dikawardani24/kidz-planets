@@ -75,11 +75,6 @@ class _StartupGateState extends ConsumerState<StartupGate>
     parent: _swap,
     curve: const Interval(0.4, 1.0, curve: Curves.easeInCubic),
   );
-  late final Animation<double> _zoomIn = CurvedAnimation(
-    parent: _swap,
-    curve: Curves.easeOutCubic,
-  );
-
   /// True once the Explorer should be in the tree. Latched, never reset:
   /// going back to the intro mid-exploration would strand the already-built
   /// scene behind a loading screen that has nothing left to load.
