@@ -79,8 +79,8 @@ void main() {
     },
   );
 
-  testWidgets('the handover is one animated zoom, not a cut: the CTA is dead on the way '
-      'out and the Explorer settles to full size', (tester) async {
+  testWidgets('the handover animates the intro only: the CTA is dead on the way '
+      'out and the Explorer stays static underneath', (tester) async {
     tester.view.physicalSize = const Size(800, 1400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -113,15 +113,12 @@ void main() {
     expect(find.text('explorer-ready'), findsOneWidget);
     expect(find.text('SPACE ADVENTURE'), findsNothing);
 
-    final scale = tester
+    // There is deliberately no Explorer ScaleTransition anymore. The only
+    // scale animation belongs to the intro, which is fading away by this point.
+    final scaleTransitions = tester
         .widgetList<ScaleTransition>(find.byType(ScaleTransition))
-        .map((t) => t.scale.value)
         .toList();
-    expect(
-      scale.where((s) => s > 1.0),
-      isEmpty,
-      reason: 'every page has settled back to full size by now',
-    );
+    expect(scaleTransitions, hasLength(1));
   });
 
   testWidgets(
