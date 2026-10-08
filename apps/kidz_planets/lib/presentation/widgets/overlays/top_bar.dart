@@ -6,6 +6,7 @@ import 'package:core/layout.dart';
 import 'package:core/platform.dart';
 import 'package:core/theme.dart';
 import 'package:kidz_planets/application/state/providers.dart';
+import 'package:kidz_planets/presentation/tv/tv_nav_target.dart';
 import 'package:kidz_planets/presentation/widgets/panels/mission_guide.dart';
 import 'package:planets/state.dart';
 
@@ -111,6 +112,7 @@ class ExplorerTopBar extends ConsumerWidget {
             Tooltip(
               message: t.tooltipAvatar,
               child: _CircleButton(
+                id: 'chrome:avatar',
                 icon: Icons.person_rounded,
                 color: Colors.white70,
                 onTap: () =>
@@ -123,6 +125,7 @@ class ExplorerTopBar extends ConsumerWidget {
                   ? t.tooltipHideLabels
                   : t.tooltipShowLabels,
               child: _CircleButton(
+                id: 'chrome:labels',
                 icon: ui.showLabels
                     ? Icons.label_outline
                     : Icons.label_off_outlined,
@@ -142,6 +145,7 @@ class ExplorerTopBar extends ConsumerWidget {
                   ? t.tooltipHideOrbits
                   : t.tooltipShowOrbits,
               child: _CircleButton(
+                id: 'chrome:orbits',
                 icon: ui.showOrbits
                     ? Icons.track_changes
                     : Icons.track_changes_outlined,
@@ -211,12 +215,14 @@ class LanguageButton extends ConsumerWidget {
 
 class _CircleButton extends StatelessWidget {
   const _CircleButton({
+    required this.id,
     required this.icon,
     required this.color,
     this.onTap,
     this.badge = false,
   });
 
+  final String id;
   final IconData icon;
   final Color color;
   final VoidCallback? onTap;
@@ -232,9 +238,10 @@ class _CircleButton extends StatelessWidget {
     final extent = ds.px(38);
     // TvFocusable keeps touch taps identical while making every top-bar
     // control — labels, play/pause, orbits — reachable from the TV remote.
-    return TvFocusable(
+    return TvNavTarget(
+      id: id,
+      control: TvChromeControl.other,
       onSelect: onTap,
-      consumeDirectionalKeys: false,
       child: Container(
         width: extent,
         height: extent,
