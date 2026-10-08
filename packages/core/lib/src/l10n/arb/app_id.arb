@@ -120,5 +120,13 @@
   "tvHintBrowse": "← → pilih planet • ↑ ↓ zum • OK pilih",
   "tvHintRotate": "← → ↑ ↓ putar • OK pilih • BACK kembali",
   "tvContinueExploring": "Lanjut Menjelajah",
-  "tvHomeSubtitle": "Jelajahi Tata Surya"
+  "tvHomeSubtitle": "Jelajahi Tata Surya",
+  "avatarPageTitle": "Avatar Saya",
+  "avatarPreviewHint": "Seret untuk memutar • Cubit untuk zum",
+  "avatarRocketName": "Roket",
+  "avatarAstronautName": "Astronot",
+  "avatarSelectCta": "Pilih Avatar",
+  "avatarCurrentBadge": "Aktif",
+  "tooltipAvatar": "Pilih avatarmu",
+  "avatarBack": "Kembali"
 }

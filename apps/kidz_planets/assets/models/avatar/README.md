@@ -1,10 +1,16 @@
-# Avatar Rocket GLB
+# Avatar GLB Bodies
 
-The companion now prefers a bundled GLB rocket at:
+The companion wears one bundled GLB body at a time, chosen on the Avatar page:
 
-`assets/models/avatar/rocket.glb`
+- `assets/models/avatar/rocket.glb` — the rocket (default, always available)
+- `assets/models/avatar/astronot.glb` — the astronaut
 
-The loader is deliberately fault-tolerant: if the GLB is unavailable or cannot be parsed, the existing procedural rocket remains visible.
+The loader is deliberately fault-tolerant: if a GLB is unavailable or cannot be parsed, the previously shown body stays visible.
+
+To add another avatar, drop its GLB here, add an `AvatarType` value with the
+bundle key, and follow the integration requirements below. Rocket-only
+attachments (exhaust plume, painted face) stay off for non-rocket bodies
+automatically.
 
 ## Intended asset
 
@@ -20,10 +26,12 @@ Source license: CC0 1.0.
 
 ## Integration requirements
 
-- Keep the final file named `rocket.glb`.
+- Keep the final files named `rocket.glb` / `astronot.glb` (the ids are
+  persisted, so a rename strands saved choices back on the rocket).
 - Keep it low-poly and mobile-friendly.
-- Keep the rocket centered around its local origin.
-- Keep +Y as the rocket's longitudinal axis.
+- Keep the body centered around its local origin, about one unit tall, so the
+  shared companion camera frames every avatar the same way.
+- Keep +Y as the body's longitudinal axis.
 - The existing `avatarRoot` controls rotation, squash and reaction transforms.
 - The existing exhaust and Flutter face overlay remain separate from the imported model.
 - Textures must be core glTF images (PNG or JPEG). Exporters such as trimesh

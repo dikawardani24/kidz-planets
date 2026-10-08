@@ -31,6 +31,11 @@ dependencies:
   # when a field actually changed.
   equatable: ^2.0.7
 
+  # Key-value persistence for the child's chosen avatar. The avatar feature
+  # owns the selection state behind an injectable store; this is the
+  # SharedPreferences-backed store the app installs at startup.
+  shared_preferences: ^2.5.5
+
   # The audio session the app configures at startup, so the child's own audio
   # keeps playing alongside the solar system.
   audio_session: ^0.2.4

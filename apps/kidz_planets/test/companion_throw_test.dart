@@ -30,6 +30,9 @@ class _FakeController implements AvatarSceneController {
   void ensureBuilt() {}
 
   @override
+  Future<void> setAvatarType(AvatarType type) async {}
+
+  @override
   void setImpactSquash(double scale) => squashes.add(scale);
 
   @override

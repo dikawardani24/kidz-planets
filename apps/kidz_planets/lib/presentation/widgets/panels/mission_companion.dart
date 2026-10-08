@@ -106,6 +106,9 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
         widget.controllerFactory?.call() ?? AvatarSceneControllerImpl();
     _avatar = ref.read(avatarControllerProvider.notifier);
     _hasSelection = ref.read(explorerControllerProvider).hasSelection;
+    // The opening body loads before the first frame is declared ready, so the
+    // companion never shows one avatar while meaning another.
+    unawaited(_controller.setAvatarType(ref.read(avatarSelectionProvider)));
 
     _frameClock = _FrameClock(vsync: this, onFrame: _onFlightFrame);
 
@@ -549,6 +552,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
     final ui = ref.watch(explorerControllerProvider);
     final mission = ref.watch(activeMissionProvider);
     final mood = ref.watch(appShellProvider.select((s) => s.avatarMood));
+    final avatarType = ref.watch(avatarSelectionProvider);
 
     // One centralized SFX trigger for the whole expressive state. Both
     // listeners resolve through the same `avatarCueFor`, which picks exactly
@@ -596,23 +600,31 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
       playResolvedCue();
     });
 
+    // Choosing an avatar on the Avatar page swaps the Explorer's body live:
+    // the builder stages the new model before the old one leaves, so the toy
+    // changes clothes without ever popping out of existence.
+    ref.listen<AvatarType>(avatarSelectionProvider, (previous, next) {
+      if (previous == next) return;
+      unawaited(_controller.setAvatarType(next));
+    });
+
     // A miss hands the remote to the rocket: encouragement is one OK away
     // instead of unreachable. Post-frame so the freshly mounted facts pill
     // (which autofocuses on every selection) loses deterministically rather
     // than racing it. Directly in build — listeners cannot live in the
     // LayoutBuilder below.
-    ref.listen<AvatarMood>(
-      appShellProvider.select((s) => s.avatarMood),
-      (previous, next) {
-        if (next == AvatarMood.wrong && previous != AvatarMood.wrong) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && ref.read(isTelevisionProvider)) {
-              _tvFocus.requestFocus();
-            }
-          });
-        }
-      },
-    );
+    ref.listen<AvatarMood>(appShellProvider.select((s) => s.avatarMood), (
+      previous,
+      next,
+    ) {
+      if (next == AvatarMood.wrong && previous != AvatarMood.wrong) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && ref.read(isTelevisionProvider)) {
+            _tvFocus.requestFocus();
+          }
+        });
+      }
+    });
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -827,8 +839,11 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
                               selectedPlanetId: ui.selectedPlanetId,
                             ),
                             // The face is Flutter paint over the 3D render, so it
-                            // must not swallow drags meant for the toy.
-                            if (_ready)
+                            // must not swallow drags meant for the toy. It is
+                            // also rocket-only: the painted face belongs to
+                            // the rocket's window, and the astronaut wears
+                            // none, so only the rocket's body carries one.
+                            if (_ready && avatarType == AvatarType.rocket)
                               AnimatedBuilder(
                                 // The face is driven by the same clock as the
                                 // physics, so the expression and the toy never

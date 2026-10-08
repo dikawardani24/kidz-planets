@@ -33,6 +33,14 @@ class AvatarBodyScale {
 
   /// Scale the imported rocket node is built with.
   static const double rocket = tuned * growth;
+
+  /// Scale the imported astronaut node is built with.
+  ///
+  /// The astronaut GLB is authored at roughly the same height as the rocket
+  /// (about one unit), so it shares the grown scale: the two read as the
+  /// same size toy in the same viewport, and switching bodies never
+  /// re-frames the companion.
+  static const double astronaut = tuned * growth;
 }
 
 /// The rocket's round window, in body space.

@@ -37,16 +37,30 @@ class AvatarSceneBuilder {
   /// Read through here rather than off [AvatarBodyScale] at the call site so a
   /// test can pin the one number the rest of the companion's layout is measured
   /// against without having to load the model to look at it.
-  double get bodyScale => AvatarBodyScale.rocket;
+  double get bodyScale => _type == AvatarType.astronaut
+      ? AvatarBodyScale.astronaut
+      : AvatarBodyScale.rocket;
+
+  /// Which body is currently worn.
+  ///
+  /// Set before [build] for the opening body and through [setAvatarType] for
+  /// every later switch. Only the model node, its scale and the rocket-only
+  /// attachments depend on it: pose, physics, reactions and sound are all
+  /// model-agnostic.
+  AvatarType _type = AvatarType.rocket;
 
   /// The layered particle plume, attached once the engine's shader library
   /// can supply the sprite materials it needs.
   AvatarExhaust? _exhaust;
 
-  /// Imported GLB rocket. The procedural model remains as a safe fallback if
+  /// Imported GLB body. The procedural model remains as a safe fallback if
   /// the bundled asset cannot be loaded on a device/build.
-  Node? _importedRocket;
-  bool _rocketLoadPending = false;
+  Node? _importedBody;
+  bool _bodyLoadPending = false;
+
+  /// Guards overlapping switches: a slow load that finishes after a newer
+  /// switch started must not put the stale body back on screen.
+  int _loadToken = 0;
 
   /// Set while that attach is in flight, so a burst of rebuilds cannot queue
   /// several plumes onto the same node.
@@ -120,43 +134,79 @@ class AvatarSceneBuilder {
       0,
     );
     bodyRoot.add(exhaustGroupNode);
-    unawaited(_attachImportedRocket());
+    _updateExhaustVisibility();
+    unawaited(_attachImportedBody());
     unawaited(_attachExhaust());
   }
 
-  /// Loads and normalizes the bundled low-poly rocket used by the companion.
+  /// Switches the worn body, loading the new model before the old one leaves.
+  ///
+  /// The swap is staged so the companion never pops to an empty viewport: the
+  /// previous body stays visible until its replacement is ready, and a load
+  /// failure keeps it indefinitely rather than stranding the child with no
+  /// companion. Safe to call before [build]; the choice is then simply
+  /// recorded and loaded when the body root arrives.
+  Future<void> setAvatarType(AvatarType type) async {
+    if (type == _type && _importedBody != null) return;
+    _type = type;
+    // Before build the body root is not in the scene yet and there is nothing
+    // to swap: _buildBody loads the recorded type when it arrives. Loading
+    // here as well would race it — a fast load that finishes first would be
+    // discarded as detached, and the build's own attach already returned on
+    // the pending flag, leaving no body at all.
+    if (bodyRoot.parent == null && _importedBody == null) return;
+    await _attachImportedBody();
+  }
+
+  /// Rocket-only attachments follow the body: the exhaust plume belongs to
+  /// an engine the astronaut does not have, and the painted face belongs to
+  /// the rocket's window.
+  void _updateExhaustVisibility() {
+    exhaustGroupNode.visible = _type == AvatarType.rocket;
+  }
+
+  /// Loads and normalizes the bundled body model for the current [_type].
   ///
   /// Kenney's source asset is authored inside a kit coordinate space, so its
   /// scene root is translated back to the avatar origin and scaled to match
-  /// the existing companion viewport. [AvatarBodyScale.rocket] owns that scale:
+  /// the existing companion viewport. The per-type scale owns that size:
   /// it is also what [AvatarPorthole.height] and the exhaust anchor are measured
   /// against, so the painted face stays on the window of whatever size the body
   /// is drawn at.
-  Future<void> _attachImportedRocket() async {
-    if (_rocketLoadPending || _importedRocket != null) return;
-    _rocketLoadPending = true;
+  Future<void> _attachImportedBody() async {
+    if (_bodyLoadPending) return;
+    _bodyLoadPending = true;
+    final token = ++_loadToken;
     try {
       await Scene.initializeStaticResources();
-      final rocket = await loadScene('assets/models/avatar/rocket.glb');
+      final body = await loadScene(_type.assetPath);
+      // A newer switch started while this one was in flight: drop the stale
+      // body rather than flashing it for a frame.
+      if (token != _loadToken) return;
       if (avatarRoot.parent == null) return;
 
-      rocket
-        ..name = 'avatar-glb-rocket'
+      body
+        ..name = 'avatar-glb-body'
         ..raycastable = false
         // rocket_baseA.glb is authored at (2, 0, 1.5) in the Kenney kit.
         // Center it around the same origin used by the old avatar; the size is
-        // AvatarBodyScale.rocket.
+        // the per-type body scale.
         ..position = vm.Vector3.zero()
         ..scale = vm.Vector3.all(bodyScale);
-      bodyRoot.add(rocket);
-      _importedRocket = rocket;
+      final previous = _importedBody;
+      bodyRoot.add(body);
+      _importedBody = body;
+      if (previous != null && previous.parent != null) {
+        previous.parent!.remove(previous);
+      }
+      _updateExhaustVisibility();
     } catch (error, stackTrace) {
       debugPrint(
-        'AvatarSceneBuilder: imported rocket unavailable; using procedural '
-        'fallback: $error\\n$stackTrace',
+        'AvatarSceneBuilder: imported body unavailable; keeping previous '
+        'body: $error\\n$stackTrace',
       );
     } finally {
-      _rocketLoadPending = false;
+      _bodyLoadPending = false;
     }
   }
 
@@ -395,7 +445,9 @@ class AvatarSceneBuilder {
         ? 0.12
         : _requestedThrottle;
     final exhaust = _exhaust;
-    if (exhaust != null) {
+    // A hidden plume is not stepped: the astronaut has no engine, so its
+    // particles would burn CPU for pixels that are never drawn.
+    if (exhaust != null && exhaustGroupNode.visible) {
       exhaust.plume
         ..setThrottle(target)
         ..tick(dt, flickerPhase: t);

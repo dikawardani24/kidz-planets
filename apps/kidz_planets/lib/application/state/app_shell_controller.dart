@@ -25,6 +25,7 @@ class AppShellState extends Equatable {
   const AppShellState({
     this.tab = AppTab.explore,
     this.avatarMood = AvatarMood.searching,
+    this.avatarPageVisible = false,
   });
 
   final AppTab tab;
@@ -35,14 +36,23 @@ class AppShellState extends Equatable {
   /// sounds like; only the shell knows why.
   final AvatarMood avatarMood;
 
-  AppShellState copyWith({AppTab? tab, AvatarMood? avatarMood}) =>
-      AppShellState(
-        tab: tab ?? this.tab,
-        avatarMood: avatarMood ?? this.avatarMood,
-      );
+  /// Whether the avatar selection page covers the screen. An overlay flag
+  /// rather than a fourth tab, so opening it never disturbs the current tab:
+  /// closing it returns the child to exactly where they were.
+  final bool avatarPageVisible;
+
+  AppShellState copyWith({
+    AppTab? tab,
+    AvatarMood? avatarMood,
+    bool? avatarPageVisible,
+  }) => AppShellState(
+    tab: tab ?? this.tab,
+    avatarMood: avatarMood ?? this.avatarMood,
+    avatarPageVisible: avatarPageVisible ?? this.avatarPageVisible,
+  );
 
   @override
-  List<Object?> get props => [tab, avatarMood];
+  List<Object?> get props => [tab, avatarMood, avatarPageVisible];
 }
 
 /// The composition root's controller.
@@ -84,6 +94,16 @@ class AppShellController extends StateNotifier<AppShellState> {
   void setTab(AppTab tab) {
     if (tab != AppTab.explore) _closeDetail();
     state = state.copyWith(tab: tab);
+  }
+
+  /// Opens the avatar selection page over the current tab.
+  void openAvatarPage() {
+    state = state.copyWith(avatarPageVisible: true);
+  }
+
+  /// Returns from the avatar selection page to the tab underneath, untouched.
+  void closeAvatarPage() {
+    state = state.copyWith(avatarPageVisible: false);
   }
 
   /// Grades a tap that the planets feature has already put into its own state.

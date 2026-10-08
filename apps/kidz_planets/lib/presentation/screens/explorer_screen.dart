@@ -9,6 +9,7 @@ import 'package:core/layout.dart';
 import 'package:core/platform.dart';
 import 'package:core/theme.dart';
 import 'package:kidz_planets/application/state/providers.dart';
+import 'package:kidz_planets/presentation/screens/avatar_screen.dart';
 import 'package:kidz_planets/presentation/tv/tv_controller_hint.dart';
 import 'package:kidz_planets/presentation/tv/tv_home_panel.dart';
 import 'package:kidz_planets/presentation/tv/tv_nav_bar.dart';
@@ -58,6 +59,9 @@ class ExplorerScreen extends ConsumerWidget {
     // unconditionally keeps the hook order stable across form factors.
     final isTv = ref.watch(isTelevisionProvider);
     final tvUi = ref.watch(tvExplorerControllerProvider);
+    final avatarPageVisible = ref.watch(
+      appShellProvider.select((s) => s.avatarPageVisible),
+    );
 
     // Mission progress and the explorer's own state used to be one object.
     // They are separate now, so both are observed here and the decisions that
@@ -281,16 +285,12 @@ class ExplorerScreen extends ConsumerWidget {
                           ),
                           onSpatialTarget: isTv
                               ? ref
-                                    .read(
-                                      tvExplorerControllerProvider.notifier,
-                                    )
+                                    .read(tvExplorerControllerProvider.notifier)
                                     .registerTarget
                               : null,
                           onUnregisterSpatialTarget: isTv
                               ? ref
-                                    .read(
-                                      tvExplorerControllerProvider.notifier,
-                                    )
+                                    .read(tvExplorerControllerProvider.notifier)
                                     .unregisterTarget
                               : null,
                         ),
@@ -311,6 +311,15 @@ class ExplorerScreen extends ConsumerWidget {
                                   .unregisterTarget
                             : null,
                       ),
+                    ),
+
+                  // Explore-mode zoom controls on the right edge, mirroring the
+                  // detail rails' camera buttons. Touch only: TV navigates with
+                  // its D-pad zoom chrome and would gain dead focus targets
+                  // from an on-screen rail.
+                  if (!ui.hasSelection && shell.tab == AppTab.explore && !isTv)
+                    Positioned.fill(
+                      child: ExploreZoomRail(viewSize: viewportSize),
                     ),
 
                   // TV home: large remote-first cards over the explore tab
@@ -342,6 +351,12 @@ class ExplorerScreen extends ConsumerWidget {
                   // celebration dialog. It is a permanent part of the mission UI,
                   // never hidden and never promoted into a dialog of its own.
                   const MissionCompanion(),
+
+                  // The avatar page covers everything above when open,
+                  // including the companion: it carries its own preview stage,
+                  // so the Explorer's toy simply waits underneath.
+                  if (avatarPageVisible)
+                    const Positioned.fill(child: AvatarScreen()),
                 ],
               );
             },

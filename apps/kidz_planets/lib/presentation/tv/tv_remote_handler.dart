@@ -155,6 +155,12 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
         ref.read(tvExplorerControllerProvider).homeVisible) {
       return KeyEventResult.handled;
     }
+    // The avatar page owns BACK while open: leaving it returns to the tab
+    // underneath rather than unwinding Explorer state behind the overlay.
+    if (remoteKey == TvRemoteKey.back && shell.avatarPageVisible) {
+      ref.read(appShellProvider.notifier).closeAvatarPage();
+      return KeyEventResult.handled;
+    }
     final layer = resolveTvInputLayer(
       modalOpen: celebrationVisible,
       missionOpen: shell.tab != AppTab.explore,

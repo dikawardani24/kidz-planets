@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:avatar/state.dart';
 import 'package:core/l10n.dart';
 import 'package:core/theme.dart';
 import 'package:planets/audio.dart';
 
 import 'dependency_injection/injection.dart';
+import 'infrastructure/services/avatar_selection_store.dart';
 import 'presentation/screens/startup_gate.dart';
 
 Future<void> main() async {
@@ -25,6 +28,12 @@ Future<void> main() async {
   // `core.sounds` startup tasks, after the first intro frame — not here. The
   // gate keeps the Explorer (and its narration/sound reads) out of the tree
   // until those tasks finish, so nothing can reach an unregistered service.
+  //
+  // The avatar choice hydrates here instead: preferences are ready before the
+  // first frame, so the selection provider below starts on the saved avatar
+  // with no async gap for the UI to guess through.
+  final prefs = await SharedPreferences.getInstance();
+  final avatarStore = SharedPreferencesAvatarSelectionStore(prefs);
   runApp(
     ProviderScope(
       // The features ship their own providers for these, which is right for a
@@ -37,6 +46,12 @@ Future<void> main() async {
         ),
         planetNarrationServiceProvider.overrideWith(
           (ref) => locator<PlanetNarrationService>(),
+        ),
+        // The avatar feature defaults to an in-memory selection; the app
+        // installs the persisted store, so the child's choice survives
+        // restarts while tests stay hermetic.
+        avatarSelectionProvider.overrideWith(
+          (ref) => AvatarSelectionController(store: avatarStore),
         ),
       ],
       child: const KidzPlanetsApp(),
