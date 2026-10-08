@@ -283,6 +283,90 @@ class DetailSideRails extends ConsumerWidget {
   }
 }
 
+/// Explore-mode zoom controls: zoom in/out and reset, on the right edge.
+///
+/// Detail mode gets its camera buttons from [DetailSideRails]; explore mode
+/// has nothing selected, so these drive the same scene APIs the pinch
+/// handlers use. Touch hosts only — TV has its own D-pad zoom chrome and would
+/// gain dead spatial targets from an on-screen rail.
+class ExploreZoomRail extends ConsumerWidget {
+  const ExploreZoomRail({super.key, required this.viewSize});
+
+  /// The current scene viewport, used as the zoom focal point when no body is
+  /// marked, so a step zooms the whole system instead of approaching a body.
+  final Size viewSize;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ds = DesignScale.sharedOf(context);
+    final scene = ref.read(solarSystemSceneControllerProvider);
+    final top =
+        MediaQuery.paddingOf(context).top + ds.px(kTopBarExtent) + ds.px(8);
+    return Stack(
+      children: [
+        Positioned(
+          right: 12,
+          top: top,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ZoomButton(
+                id: 'chrome:explore-zoom-in',
+                icon: Icons.add,
+                onTap: () => zoomExploreStep(ref, 1.18, viewSize: viewSize),
+              ),
+              const SizedBox(height: 7),
+              _ZoomButton(
+                id: 'chrome:explore-zoom-out',
+                icon: Icons.remove,
+                onTap: () => zoomExploreStep(ref, 1 / 1.18, viewSize: viewSize),
+              ),
+              // A wider gap than the zoom cluster, matching the detail rail so
+              // the two ways back to a known framing read as their own group.
+              const SizedBox(height: 13),
+              _ZoomButton(
+                id: 'chrome:explore-reset',
+                icon: Icons.refresh,
+                onTap: scene.resetOverview,
+                small: true,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One discrete zoom step in explore mode, mirroring the detail zoom buttons
+/// against the free camera instead of [ExplorerController.adjustDetailZoom].
+///
+/// A marked body owns the step: zoom toward it and report the approach, exactly
+/// like the pinch handler but with no gesture to measure. Without a mark the
+/// step zooms the whole system around the viewport centre. [scale] > 1 zooms
+/// in; each call moves the camera once.
+void zoomExploreStep(WidgetRef ref, double scale, {required Size viewSize}) {
+  final scene = ref.read(solarSystemSceneControllerProvider);
+  final markedId = ref.read(explorerControllerProvider).markedTargetId;
+  if (markedId != null) {
+    scene.pinchTowardBody(scale, markedId);
+    final camera = scene.buildCamera(ref.read(explorerControllerProvider));
+    ref
+        .read(explorerControllerProvider.notifier)
+        .reportMarkProgress(
+          scene.markZoomProgress(markedId, camera),
+          approaching: scale > 1.0,
+        );
+    return;
+  }
+  scene.pinchWithFocalPoint(
+    scale,
+    focalScreenPoint: viewSize.center(Offset.zero),
+    viewSize: viewSize,
+    camera: scene.buildCamera(ref.read(explorerControllerProvider)),
+  );
+}
+
 class _DetailContent extends StatelessWidget {
   const _DetailContent({
     required this.planet,

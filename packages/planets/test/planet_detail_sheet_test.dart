@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planets/data.dart';
+import 'package:planets/scene.dart';
 import 'package:planets/state.dart';
 import 'package:planets/widgets.dart';
 
 import 'helpers/localized_app.dart';
+import 'helpers/scene_stubs.dart';
 
 /// Mirrors the explorer's production placement: a 16px inset on both sides,
 /// 88px above the bottom nav, capped at 290 tall.
@@ -205,6 +207,103 @@ void main() {
       // `selectPlanet` arms a hint timer; let it fire so the test ends clean.
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
+    });
+  });
+
+  group('explore zoom rail', () {
+    // Mirror of the production state: no selection, so the detail rails stay
+    // hidden and the explore rail owns the right edge.
+    Future<ProviderContainer> pumpRail(
+      WidgetTester tester, {
+      String? markedTargetId,
+    }) async {
+      final scene = FakeSceneController();
+      await tester.pumpWidget(
+        localizedApp(
+          const Scaffold(
+            backgroundColor: Colors.black,
+            body: ExploreZoomRail(viewSize: Size(360, 640)),
+          ),
+          overrides: [
+            solarSystemSceneControllerProvider.overrideWithValue(scene),
+          ],
+        ),
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ExploreZoomRail)),
+      );
+      if (markedTargetId != null) {
+        container
+            .read(explorerControllerProvider.notifier)
+            .markTarget(markedTargetId);
+        await tester.pumpAndSettle();
+      }
+      return container;
+    }
+
+    double rigRadius(ProviderContainer container) =>
+        container.read(solarSystemSceneControllerProvider).rigState.radius;
+
+    testWidgets('explore mode gets zoom in, zoom out and reset', (
+      tester,
+    ) async {
+      await pumpRail(tester);
+
+      expect(find.byIcon(Icons.add), findsOneWidget);
+      expect(find.byIcon(Icons.remove), findsOneWidget);
+      expect(find.byIcon(Icons.refresh), findsOneWidget);
+      // Nothing is selected in explore mode, so there is nothing to close.
+      expect(find.byIcon(Icons.close), findsNothing);
+    });
+
+    testWidgets('zoom in moves the camera closer', (tester) async {
+      final container = await pumpRail(tester);
+      final before = rigRadius(container);
+
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+
+      expect(rigRadius(container), lessThan(before));
+    });
+
+    testWidgets('zoom out moves the camera away', (tester) async {
+      final container = await pumpRail(tester);
+      final before = rigRadius(container);
+
+      await tester.tap(find.byIcon(Icons.remove));
+      await tester.pumpAndSettle();
+
+      expect(rigRadius(container), greaterThan(before));
+    });
+
+    testWidgets('zooming toward a marked body still approaches it', (
+      tester,
+    ) async {
+      final container = await pumpRail(tester, markedTargetId: 'earth');
+      final before = rigRadius(container);
+
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+
+      expect(rigRadius(container), lessThan(before));
+      // The approach narration state advanced without a gesture measured.
+      expect(
+        container.read(explorerControllerProvider).markNarrationPlayed,
+        isFalse,
+      );
+    });
+
+    testWidgets('reset restores the overview framing', (tester) async {
+      final container = await pumpRail(tester);
+
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      expect(rigRadius(container), lessThan(46.0));
+
+      await tester.tap(find.byIcon(Icons.refresh));
+      await tester.pumpAndSettle();
+
+      expect(rigRadius(container), moreOrLessEquals(46.0));
     });
   });
 }

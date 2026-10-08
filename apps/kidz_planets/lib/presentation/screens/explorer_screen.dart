@@ -281,16 +281,12 @@ class ExplorerScreen extends ConsumerWidget {
                           ),
                           onSpatialTarget: isTv
                               ? ref
-                                    .read(
-                                      tvExplorerControllerProvider.notifier,
-                                    )
+                                    .read(tvExplorerControllerProvider.notifier)
                                     .registerTarget
                               : null,
                           onUnregisterSpatialTarget: isTv
                               ? ref
-                                    .read(
-                                      tvExplorerControllerProvider.notifier,
-                                    )
+                                    .read(tvExplorerControllerProvider.notifier)
                                     .unregisterTarget
                               : null,
                         ),
@@ -311,6 +307,15 @@ class ExplorerScreen extends ConsumerWidget {
                                   .unregisterTarget
                             : null,
                       ),
+                    ),
+
+                  // Explore-mode zoom controls on the right edge, mirroring the
+                  // detail rails' camera buttons. Touch only: TV navigates with
+                  // its D-pad zoom chrome and would gain dead focus targets
+                  // from an on-screen rail.
+                  if (!ui.hasSelection && shell.tab == AppTab.explore && !isTv)
+                    Positioned.fill(
+                      child: ExploreZoomRail(viewSize: viewportSize),
                     ),
 
                   // TV home: large remote-first cards over the explore tab
