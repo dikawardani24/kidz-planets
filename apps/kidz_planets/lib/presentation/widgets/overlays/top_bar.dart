@@ -135,6 +135,7 @@ class ExplorerTopBar extends ConsumerWidget {
             ),
             SizedBox(width: ds.px(6)),
             _CircleButton(
+              id: 'chrome:top-play-pause',
               icon: ui.running ? Icons.pause : Icons.play_arrow,
               color: AppTheme.accentSky,
               onTap: notifier.toggleRunning,
@@ -175,39 +176,65 @@ class LanguageButton extends ConsumerWidget {
         .resolve(Localizations.localeOf(context));
     return Tooltip(
       message: t.tooltipLanguage,
-      child: PopupMenuButton<String>(
-        tooltip: '',
-        onSelected: (code) =>
-            ref.read(localeControllerProvider.notifier).select(Locale(code)),
-        color: AppTheme.space800,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        itemBuilder: (context) => [
-          for (final (code, label) in [
-            ('en', t.languageEnglish),
-            ('id', t.languageIndonesian),
-          ])
-            PopupMenuItem(
-              value: code,
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: chosen?.languageCode == code
-                      ? FontWeight.w900
-                      : FontWeight.w500,
-                ),
+      child: Builder(
+        builder: (buttonContext) {
+          void openMenu() {
+            final box = buttonContext.findRenderObject() as RenderBox;
+            final topLeft = box.localToGlobal(Offset.zero);
+            showMenu<String>(
+              context: buttonContext,
+              position: RelativeRect.fromLTRB(
+                topLeft.dx,
+                topLeft.dy + box.size.height,
+                topLeft.dx + box.size.width,
+                topLeft.dy,
               ),
+              color: AppTheme.space800,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              items: [
+                for (final (code, label) in [
+                  ('en', t.languageEnglish),
+                  ('id', t.languageIndonesian),
+                ])
+                  PopupMenuItem(
+                    value: code,
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: chosen?.languageCode == code
+                            ? FontWeight.w900
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
+            ).then((code) {
+              if (code != null) {
+                ref
+                    .read(localeControllerProvider.notifier)
+                    .select(Locale(code));
+              }
+            });
+          }
+
+          return TvNavTarget(
+            id: 'chrome:language',
+            control: TvChromeControl.other,
+            onSelect: openMenu,
+            child: _CircleButton(
+              id: 'chrome:language-visual',
+              icon: Icons.translate_rounded,
+              color: current.languageCode == 'id'
+                  ? AppTheme.accentAmber
+                  : Colors.white70,
+              onTap: openMenu,
+              badge: current.languageCode == 'id',
             ),
-        ],
-        child: _CircleButton(
-          icon: Icons.translate_rounded,
-          color: current.languageCode == 'id'
-              ? AppTheme.accentAmber
-              : Colors.white70,
-          // A dot on the button is the only signal a pre-literate child gets
-          // that the app is not speaking their language.
-          badge: current.languageCode == 'id',
-        ),
+          );
+        },
       ),
     );
   }
