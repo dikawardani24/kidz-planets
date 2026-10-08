@@ -313,9 +313,17 @@ class ExplorerScreen extends ConsumerWidget {
                   // detail rails' camera buttons. Touch only: TV navigates with
                   // its D-pad zoom chrome and would gain dead focus targets
                   // from an on-screen rail.
-                  if (!ui.hasSelection && shell.tab == AppTab.explore && !isTv)
+                  if (!ui.hasSelection && shell.tab == AppTab.explore)
                     Positioned.fill(
-                      child: ExploreZoomRail(viewSize: viewportSize),
+                      child: ExploreZoomRail(
+                        viewSize: viewportSize,
+                        onSpatialTarget: isTv
+                            ? ref.read(tvExplorerControllerProvider.notifier).registerTarget
+                            : null,
+                        onUnregisterSpatialTarget: isTv
+                            ? ref.read(tvExplorerControllerProvider.notifier).unregisterTarget
+                            : null,
+                      ),
                     ),
 
                   // TV controller chrome: quiet pause/help pills that fade
@@ -324,8 +332,11 @@ class ExplorerScreen extends ConsumerWidget {
                   if (isTv && shell.tab == AppTab.explore)
                     const TvControllerChrome(),
 
-                  // Touch only: TV explores with the D-pad and has no tab bar.
-                  if (!isTv) const ExplorerBottomNav(),
+                  // The same tab bar remains the app's primary navigation on TV.
+                  // Its controls register into the TV chrome layer, so discovery
+                  // navigation never lands there accidentally, but BACK can enter
+                  // the chrome layer and the D-pad can move between its controls.
+                  const ExplorerBottomNav(),
 
                   if (progress.celebrationVisible)
                     Positioned.fill(
