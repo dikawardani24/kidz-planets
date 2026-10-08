@@ -12,8 +12,6 @@ class _FakeTask implements StartupTask {
     this.criticality = StartupCriticality.required,
     this.dependsOn = const {},
     this.failureMessage = '',
-    this.title = '',
-    this.message = StartupMessage.preparing,
   });
 
   @override
@@ -27,9 +25,9 @@ class _FakeTask implements StartupTask {
   @override
   final String failureMessage;
   @override
-  final String title;
+  final String title = '';
   @override
-  final StartupMessage message;
+  final StartupMessage message = StartupMessage.preparing;
 
   int runs = 0;
   bool shouldFail = false;
