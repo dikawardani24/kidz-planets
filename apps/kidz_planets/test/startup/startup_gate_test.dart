@@ -79,8 +79,8 @@ void main() {
     },
   );
 
-  testWidgets('the handover is one animated zoom, not a cut: the CTA is dead on the way '
-      'out and the Explorer settles to full size', (tester) async {
+  testWidgets('the handover animates the intro only: the CTA is dead on the way '
+      'out and the Explorer stays static underneath', (tester) async {
     tester.view.physicalSize = const Size(800, 1400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -113,85 +113,83 @@ void main() {
     expect(find.text('explorer-ready'), findsOneWidget);
     expect(find.text('SPACE ADVENTURE'), findsNothing);
 
-    final scale = tester
+    // There is deliberately no Explorer ScaleTransition anymore. The only
+    // scale animation belongs to the intro, which is fading away by this point.
+    final scaleTransitions = tester
         .widgetList<ScaleTransition>(find.byType(ScaleTransition))
-        .map((t) => t.scale.value)
         .toList();
-    expect(
-      scale.where((s) => s > 1.0),
-      isEmpty,
-      reason: 'every page has settled back to full size by now',
-    );
+    expect(scaleTransitions, hasLength(1));
   });
 
   testWidgets(
-      'the reveal waits for the Explorer first frame, not just the rocket',
-      (tester) async {
-    tester.view.physicalSize = const Size(800, 1400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    'the reveal waits for the Explorer first frame, not just the rocket',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
 
-    final hooks = FakeStartupHooks()
-      ..gateOn(SolarSystemStartupTaskId.solarSystem);
-    final container = ProviderContainer(overrides: [startupWith(hooks)]);
-    addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          locale: const Locale('en'),
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          supportedLocales: kSupportedLocales,
-          home: const StartupGate(explorerBuilder: _StubExplorer.new),
+      final hooks = FakeStartupHooks()
+        ..gateOn(SolarSystemStartupTaskId.solarSystem);
+      final container = ProviderContainer(overrides: [startupWith(hooks)]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: kSupportedLocales,
+            home: const StartupGate(explorerBuilder: _StubExplorer.new),
+          ),
         ),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
-    hooks.openGate(SolarSystemStartupTaskId.solarSystem);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-    expect(find.text("LET'S EXPLORE!"), findsOneWidget);
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      hooks.openGate(SolarSystemStartupTaskId.solarSystem);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text("LET'S EXPLORE!"), findsOneWidget);
 
-    // The primed scene is still compiling its first frame: the flag the real
-    // scene view flips on its first presented tick stays down.
-    container.read(explorerScenePresentedProvider.notifier).state = false;
+      // The primed scene is still compiling its first frame: the flag the real
+      // scene view flips on its first presented tick stays down.
+      container.read(explorerScenePresentedProvider.notifier).state = false;
 
-    await tester.tap(find.text("LET'S EXPLORE!"));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 700));
+      await tester.tap(find.text("LET'S EXPLORE!"));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
 
-    // The Explorer is already mounted underneath, but the reveal holds: the
-    // intro is still fully on screen, so the child never sees a compiling
-    // scene or a loading fallback mid-crossfade.
-    expect(find.text('explorer-ready'), findsOneWidget);
-    expect(find.text('SPACE ADVENTURE'), findsOneWidget);
-    // Time passing alone must not start the swap while the first frame is
-    // still owed: the handover is readiness-gated, not timer-driven.
-    await tester.pump(const Duration(milliseconds: 600));
-    expect(find.text('explorer-ready'), findsOneWidget);
-    expect(find.text('SPACE ADVENTURE'), findsOneWidget);
+      // The Explorer is already mounted underneath, but the reveal holds: the
+      // intro is still fully on screen, so the child never sees a compiling
+      // scene or a loading fallback mid-crossfade.
+      expect(find.text('explorer-ready'), findsOneWidget);
+      expect(find.text('SPACE ADVENTURE'), findsOneWidget);
+      // Time passing alone must not start the swap while the first frame is
+      // still owed: the handover is readiness-gated, not timer-driven.
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('explorer-ready'), findsOneWidget);
+      expect(find.text('SPACE ADVENTURE'), findsOneWidget);
 
-    // First frame presented: the handover runs and settles as usual. (The
-    // bare pump lets the freshly started ticker schedule before time moves;
-    // starting an animation outside a frame needs one in tests. Production
-    // frames run continuously, so this is test-only plumbing.)
-    container.read(explorerScenePresentedProvider.notifier).state = true;
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('explorer-ready'), findsOneWidget);
-    expect(find.text('SPACE ADVENTURE'), findsOneWidget);
-    await tester.pump(const Duration(milliseconds: 700));
-    await tester.pump();
+      // First frame presented: the handover runs and settles as usual. (The
+      // bare pump lets the freshly started ticker schedule before time moves;
+      // starting an animation outside a frame needs one in tests. Production
+      // frames run continuously, so this is test-only plumbing.)
+      container.read(explorerScenePresentedProvider.notifier).state = true;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('explorer-ready'), findsOneWidget);
+      expect(find.text('SPACE ADVENTURE'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pump();
 
-    expect(find.text('explorer-ready'), findsOneWidget);
-    expect(find.text('SPACE ADVENTURE'), findsNothing);
-  });
+      expect(find.text('explorer-ready'), findsOneWidget);
+      expect(find.text('SPACE ADVENTURE'), findsNothing);
+    },
+  );
 
   testWidgets('a failed startup keeps the child on the intro, never a blank '
       'screen', (tester) async {
@@ -210,7 +208,9 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text('Oh no!'), findsOneWidget);
+    // The modal error dialog shouts over the inline card; either way the
+    // child stays on the intro, never a blank screen.
+    expect(find.text('Oh no!'), findsNWidgets(2));
     expect(find.text('explorer-ready'), findsNothing);
   });
 }

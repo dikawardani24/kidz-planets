@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:kidz_planets/application/startup/startup_providers.dart';
@@ -56,21 +56,21 @@ void main() {
   testWidgets('the bar tracks real work and hits 100% only at the end', (
     tester,
   ) async {
-    // Everything but the moons runs: their slice of the bar is held, exactly
-    // as a real decode in progress would hold it.
-    final hooks = FakeStartupHooks()..gateOn(SolarSystemStartupTaskId.moons);
+    // Gating the first (serial) task holds the pipeline before any later
+    // level can overwrite the current-task copy: with every required task
+    // unfinished the bar is held and the completion CTA stays hidden —
+    // exactly as real startup work in progress would hold it. Moons are
+    // lazy and never gate the bar.
+    final hooks = FakeStartupHooks()..gateOn(SolarSystemStartupTaskId.core);
     await pumpIntro(tester, hooks);
 
-    // Phase copy and the quoted message card follow the running task.
-    expect(find.text('Moon is getting ready'), findsOneWidget);
-    expect(find.text('"Moon is getting ready... 🌕"'), findsOneWidget);
-    // Past the prototype's 68% beat, the Saturn badge has popped in.
-    expect(find.text('Saturn'), findsOneWidget);
     // Held work: never 100%, never the completion state.
     expect(find.text('100%'), findsNothing);
     expect(find.text("LET'S EXPLORE!"), findsNothing);
+    // Not stuck at zero either: the gated task reported and owns its slice.
+    expect(find.text('0%'), findsNothing);
 
-    hooks.openGate(SolarSystemStartupTaskId.moons);
+    hooks.openGate(SolarSystemStartupTaskId.core);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
@@ -88,18 +88,25 @@ void main() {
       ..failing.add(SolarSystemStartupTaskId.solarSystem);
     await pumpIntro(tester, hooks);
 
-    // The failure state: plain sentences, never the thrown exception.
-    expect(find.text('Oh no!'), findsOneWidget);
+    // The failure state: plain sentences, never the thrown exception. The
+    // modal dialog shouts over the inline card, so both read the same copy.
+    expect(find.text('Oh no!'), findsNWidgets(2));
     expect(
       find.text('Something went wrong while preparing your space adventure.'),
-      findsOneWidget,
+      findsNWidgets(2),
     );
-    expect(find.text('🔄 TRY AGAIN'), findsOneWidget);
+    expect(find.text('🔄 TRY AGAIN'), findsNWidgets(2));
     expect(find.textContaining('startup failure'), findsNothing);
     expect(find.text("LET'S EXPLORE!"), findsNothing);
 
     hooks.failing.clear();
-    await tester.tap(find.text('🔄 TRY AGAIN'));
+    // The dialog's retry: the route on top owns the dismissible one.
+    final dialogRetry = find.descendant(
+      of: find.byType(Dialog),
+      matching: find.text('🔄 TRY AGAIN'),
+    );
+    expect(dialogRetry, findsOneWidget);
+    await tester.tap(dialogRetry);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:planets/scene.dart';
 
+import '../../application/startup/startup_providers.dart';
 import 'explorer_screen.dart';
 import 'intro/intro_page.dart';
 
@@ -55,16 +56,17 @@ class _StartupGateState extends ConsumerState<StartupGate>
   /// to full size exactly as the intro is gone — the system coming to meet
   /// the rocket.
   static const double _introZoom = 1.7;
-  static const double _explorerZoom = 0.72;
 
   late final AnimationController _swap = AnimationController(
     vsync: this,
     duration: handover,
   );
-  late final Animation<double> _fadeIn = CurvedAnimation(
-    parent: _swap,
-    curve: const Interval(0.15, 0.7, curve: Curves.easeOut),
-  );
+  // The Explorer is already fully built and has presented a frame before
+  // the swap starts. Do not animate its opacity or scale during the handover:
+  // those animations force an additional compositing/transform workload while
+  // the 3D scene is rendering. The intro itself supplies the visual motion;
+  // the Explorer simply waits underneath and is revealed by the intro fading
+  // away.
   late final Animation<double> _zoomOut = CurvedAnimation(
     parent: _swap,
     curve: Curves.easeInCubic,
@@ -73,11 +75,6 @@ class _StartupGateState extends ConsumerState<StartupGate>
     parent: _swap,
     curve: const Interval(0.4, 1.0, curve: Curves.easeInCubic),
   );
-  late final Animation<double> _zoomIn = CurvedAnimation(
-    parent: _swap,
-    curve: Curves.easeOutCubic,
-  );
-
   /// True once the Explorer should be in the tree. Latched, never reset:
   /// going back to the intro mid-exploration would strand the already-built
   /// scene behind a loading screen that has nothing left to load.
@@ -101,6 +98,15 @@ class _StartupGateState extends ConsumerState<StartupGate>
     _swap.addStatusListener((status) {
       if (status != AnimationStatus.completed || !mounted) return;
       setState(() => _done = true);
+      // Moons are lazy: start decoding once the handover has fully landed,
+      // not when the swap starts. The swap frames already pay for shader
+      // compilation plus the 12 MB companion GLB parsing off the same thread
+      // pool — moon decode joining that window only raises the post-startup
+      // peak. Moons are invisible until the child zooms into a planet, so
+      // delaying them by the handover duration changes nothing visible.
+      ref
+          .read(startupCoordinatorProvider.notifier)
+          .warmLater(SolarSystemStartupTaskId.moons);
     });
   }
 
@@ -171,14 +177,11 @@ class _StartupGateState extends ConsumerState<StartupGate>
   /// The Explorer, painted *underneath* the intro's opaque background so it is
   /// invisible while it compiles, then revealed as the intro fades away.
   Widget _explorerLayer() {
-    final explorer = widget.explorerBuilder?.call() ?? const ExplorerScreen();
-    return FadeTransition(
-      opacity: _fadeIn,
-      child: ScaleTransition(
-        scale: Tween(begin: _explorerZoom, end: 1.0).animate(_zoomIn),
-        child: explorer,
-      ),
-    );
+    // The scene has already rendered its first frame before the swap begins.
+    // Keep this layer static during the transition so Flutter does not have
+    // to animate a full-screen 3D render target's opacity and transform on
+    // every handover frame. The intro layer above it provides the motion.
+    return widget.explorerBuilder?.call() ?? const ExplorerScreen();
   }
 
   /// The intro.

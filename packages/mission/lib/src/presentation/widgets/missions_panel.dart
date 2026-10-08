@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mission/state.dart';
 import 'package:core/l10n.dart';
+import 'package:core/platform.dart';
 import 'package:core/theme.dart';
 
 class MissionsPanel extends ConsumerWidget {
@@ -17,6 +18,9 @@ class MissionsPanel extends ConsumerWidget {
     final ui = ref.watch(missionProgressProvider);
     final completed = ui.missions.where((m) => m.completed).length;
     final activeId = ui.activeMissionId;
+    // First control takes focus on TV so the tab is usable the moment it
+    // opens: the remote would otherwise have nowhere to go.
+    final entryFocus = ref.watch(isTelevisionProvider);
     final progress = ui.missions.isEmpty ? 0.0 : completed / ui.missions.length;
     final t = AppLocalizations.of(context);
     return AppTheme.glass(
@@ -189,8 +193,9 @@ class MissionsPanel extends ConsumerWidget {
                           ],
                         ),
                       ),
-                      GestureDetector(
-                        onTap: m.completed || m.id != activeId
+                      TvFocusable(
+                        autofocus: entryFocus && m.id == activeId,
+                        onSelect: m.completed || m.id != activeId
                             ? null
                             : () {
                                 onOpenMission?.call(m.targetPlanetId);

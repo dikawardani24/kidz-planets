@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:core/l10n.dart';
+import 'package:core/platform.dart';
 import 'package:core/theme.dart';
 import 'package:kidz_planets/application/state/providers.dart';
 import 'package:planets/scene.dart';
@@ -18,6 +19,9 @@ class PlaygroundPanel extends ConsumerWidget {
     final t = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context);
     final bodyName = ref.watch(bodyNameResolverProvider);
+    // First control takes focus on TV so the tab is usable the moment it
+    // opens: the remote would otherwise have nowhere to go.
+    final entryFocus = ref.watch(isTelevisionProvider);
 
     void experiment(String id) {
       if (id == 'earth') scene.setPlanetOrbitRadius('earth', 8.0);
@@ -69,8 +73,8 @@ class PlaygroundPanel extends ConsumerWidget {
                     ],
                   ),
                 ),
-                GestureDetector(
-                  onTap: () {
+                TvFocusable(
+                  onSelect: () {
                     scene.setPlanetOrbitRadius('earth', 14.2);
                     notifier.resetPlayground();
                   },
@@ -244,6 +248,7 @@ class PlaygroundPanel extends ConsumerWidget {
             ),
             const SizedBox(height: 7),
             _Experiment(
+              autofocus: entryFocus,
               icon: '☀️',
               title: t.experimentSunTitle,
               subtitle: t.experimentSunSubtitle,
@@ -286,8 +291,8 @@ class _Toggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
-    return GestureDetector(
-      onTap: onTap,
+    return TvFocusable(
+      onSelect: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
@@ -330,14 +335,19 @@ class _Experiment extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.autofocus = false,
   });
   final String icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+
+  /// Takes focus on arrival so the remote can drive the tab from the top.
+  final bool autofocus;
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
+  Widget build(BuildContext context) => TvFocusable(
+    autofocus: autofocus,
+    onSelect: onTap,
     child: Container(
       margin: const EdgeInsets.only(bottom: 7),
       padding: const EdgeInsets.all(11),

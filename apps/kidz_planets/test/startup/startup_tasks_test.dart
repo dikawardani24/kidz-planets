@@ -24,7 +24,7 @@ void main() {
       StartupCoordinatorImpl(tasks: tasksWith(hooks));
 
   group('task table', () {
-    test('has the six expected tasks, all required', () {
+    test('has the six expected tasks; moons are lazy', () {
       final tasks = buildSolarSystemStartupTasks();
 
       expect(tasks.map((t) => t.id), [
@@ -35,23 +35,34 @@ void main() {
         SolarSystemStartupTaskId.sounds,
         SolarSystemStartupTaskId.moons,
       ]);
-      // Every task required: the bar must not reach 100% with any of them
-      // unfinished, which is what the prototype's 100% means.
-      expect(
-        tasks.map((t) => t.criticality),
-        everyElement(StartupCriticality.required),
-      );
+      final byId = {for (final task in tasks) task.id: task};
+      // Required tasks gate the Intro CTA; moons warm after Explorer presents.
+      expect(byId[SolarSystemStartupTaskId.moons]!.criticality,
+          StartupCriticality.lazy);
+      for (final id in [
+        SolarSystemStartupTaskId.core,
+        SolarSystemStartupTaskId.solarSystem,
+        SolarSystemStartupTaskId.missions,
+        SolarSystemStartupTaskId.companion,
+        SolarSystemStartupTaskId.sounds,
+      ]) {
+        expect(
+          byId[id]!.criticality,
+          StartupCriticality.required,
+          reason: id,
+        );
+      }
     });
 
-    test('weights sum to the declared total', () {
-      final sum = buildSolarSystemStartupTasks().fold<double>(
-        0,
-        (total, task) => total + task.weight,
-      );
+    test('required weights sum to the declared total', () {
+      final sum = buildSolarSystemStartupTasks()
+          .where((t) => t.criticality == StartupCriticality.required)
+          .fold<double>(0, (total, task) => total + task.weight);
       expect(sum, SolarSystemStartupWeights.total);
     });
 
-    test('moons wait for the scene; sounds wait for the session', () {
+    test('scene waits for session; moons wait for scene; sounds wait for session',
+        () {
       final byId = {
         for (final task in buildSolarSystemStartupTasks()) task.id: task,
       };
@@ -61,12 +72,12 @@ void main() {
       expect(byId[SolarSystemStartupTaskId.sounds]!.dependsOn, {
         SolarSystemStartupTaskId.core,
       });
-      // The other four are independent by construction and must say so:
-      // `const {}` is the claim, and an accidental dependency here would
-      // serialise the pipeline for no reason.
+      expect(byId[SolarSystemStartupTaskId.solarSystem]!.dependsOn, {
+        SolarSystemStartupTaskId.core,
+      });
+      // The remaining required tasks stay independent so they can overlap.
       for (final id in [
         SolarSystemStartupTaskId.core,
-        SolarSystemStartupTaskId.solarSystem,
         SolarSystemStartupTaskId.missions,
         SolarSystemStartupTaskId.companion,
       ]) {
@@ -88,7 +99,7 @@ void main() {
   });
 
   group('pipeline', () {
-    test('runs every task once and ends ready at 100%', () async {
+    test('runs every required task once and ends ready at 100%', () async {
       final hooks = FakeStartupHooks();
       final coordinator = coordinatorWith(hooks);
       addTearDown(coordinator.dispose);
@@ -105,9 +116,13 @@ void main() {
         SolarSystemStartupTaskId.missions,
         SolarSystemStartupTaskId.companion,
         SolarSystemStartupTaskId.sounds,
-        SolarSystemStartupTaskId.moons,
       });
-      // Scene before moons — the one order the table writes down.
+      // Moons are lazy: not part of the CTA barrier.
+      expect(hooks.calls, isNot(contains(SolarSystemStartupTaskId.moons)));
+
+      coordinator.warmLater(SolarSystemStartupTaskId.moons);
+      await Future<void>.delayed(Duration.zero);
+      expect(hooks.calls, contains(SolarSystemStartupTaskId.moons));
       expect(
         hooks.calls.indexOf(SolarSystemStartupTaskId.solarSystem),
         lessThan(hooks.calls.indexOf(SolarSystemStartupTaskId.moons)),

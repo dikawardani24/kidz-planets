@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:core/layout.dart';
 import 'package:core/l10n.dart';
+import 'package:core/platform.dart';
 
 /// The glass message card under the bar: the quoted status line.
 ///
@@ -17,10 +19,11 @@ class IntroMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
+    final ds = DesignScale.sharedOf(context);
     return Container(
       key: ValueKey(message),
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: ds.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         color: Colors.white.withValues(alpha: 0.08),
@@ -32,10 +35,10 @@ class IntroMessage extends StatelessWidget {
       child: Text(
         t.introMessage(message),
         textAlign: TextAlign.center,
-        style: const TextStyle(
-          fontSize: 13,
+        style: TextStyle(
+          fontSize: ds.font(13),
           fontWeight: FontWeight.w700,
-          color: Color(0xFFF3E8FF),
+          color: const Color(0xFFF3E8FF),
         ),
       ),
     );
@@ -49,16 +52,20 @@ class IntroMessage extends StatelessWidget {
 /// a rocket, one plain sentence (never an exception), and a big `TRY AGAIN`
 /// pill. Local copy comes from the ARB `introError*` keys.
 class IntroError extends StatelessWidget {
-  const IntroError({super.key, required this.onRetry});
+  const IntroError({super.key, required this.onRetry, this.autofocus = false});
 
   final VoidCallback onRetry;
+
+  /// Takes focus on arrival so the remote's OK retries without a touchscreen.
+  final bool autofocus;
 
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
+    final ds = DesignScale.sharedOf(context);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: ds.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         color: Colors.white.withValues(alpha: 0.08),
@@ -70,27 +77,31 @@ class IntroError extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('🚀', style: TextStyle(fontSize: 40)),
-          const SizedBox(height: 8),
+          Text('🚀', style: TextStyle(fontSize: ds.font(40))),
+          SizedBox(height: ds.px(8)),
           Text(
             t.introErrorTitle,
-            style: const TextStyle(
-              fontSize: 18,
+            style: TextStyle(
+              fontSize: ds.font(18),
               fontWeight: FontWeight.w800,
               color: Colors.white,
             ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: ds.px(4)),
           Text(
             t.introErrorBody,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 12, color: Color(0xFFD8B4FE)),
+            style: TextStyle(
+              fontSize: ds.font(12),
+              color: const Color(0xFFD8B4FE),
+            ),
           ),
-          const SizedBox(height: 12),
-          GestureDetector(
-            onTap: onRetry,
+          SizedBox(height: ds.px(12)),
+          TvFocusable(
+            autofocus: autofocus,
+            onSelect: onRetry,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
+              padding: ds.insets(horizontal: 26, vertical: 12),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(999),
                 gradient: const LinearGradient(
@@ -106,8 +117,8 @@ class IntroError extends StatelessWidget {
               ),
               child: Text(
                 '🔄 ${t.introRetry}',
-                style: const TextStyle(
-                  fontSize: 13,
+                style: TextStyle(
+                  fontSize: ds.font(13),
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
                 ),

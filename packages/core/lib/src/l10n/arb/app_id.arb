@@ -114,5 +114,11 @@
   "introEnterCta": "AYO JELAJAHI!",
   "introErrorTitle": "Oh tidak!",
   "introErrorBody": "Terjadi masalah saat menyiapkan petualangan antariksamu.",
-  "introRetry": "COBA LAGI"
+  "introRetry": "COBA LAGI",
+  "tvModeBrowse": "Jelajah",
+  "tvModeRotate": "Putar tampilan",
+  "tvHintBrowse": "← → pilih planet • ↑ ↓ zum • OK pilih",
+  "tvHintRotate": "← → ↑ ↓ putar • OK pilih • BACK kembali",
+  "tvContinueExploring": "Lanjut Menjelajah",
+  "tvHomeSubtitle": "Jelajahi Tata Surya"
 }

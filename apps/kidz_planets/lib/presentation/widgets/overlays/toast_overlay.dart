@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:core/layout.dart';
 import 'package:core/l10n.dart';
 import 'package:kidz_planets/application/state/providers.dart';
 import 'package:planets/data.dart';
@@ -17,26 +18,32 @@ class ToastOverlay extends ConsumerWidget {
     final t = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context);
     final bodyName = ref.watch(bodyNameResolverProvider);
+    // Toast type tracks the viewport scale, sitting clear of the scaled bar.
+    final ds = DesignScale.sharedOf(context);
     return Positioned(
-      top: 86,
+      top: ds.px(86),
       left: 0,
       right: 0,
       child: Column(
         children: [
           for (final toast in toasts)
             Container(
-              margin: const EdgeInsets.only(bottom: 8, left: 40, right: 40),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              margin: EdgeInsets.only(
+                bottom: ds.px(8),
+                left: ds.px(40),
+                right: ds.px(40),
+              ),
+              padding: ds.insets(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
                 color: const Color(0xFF14532D).withValues(alpha: 0.95),
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(ds.radius(999)),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
               ),
               child: Text(
                 _textFor(toast, t, locale, bodyName),
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 12,
+                style: TextStyle(
+                  fontSize: ds.font(12),
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),

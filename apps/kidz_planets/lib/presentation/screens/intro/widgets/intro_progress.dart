@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:core/layout.dart';
 import 'package:core/l10n.dart';
 
 /// The playful progress bar: phase label, percent, glowing gradient fill.
@@ -34,6 +35,7 @@ class IntroProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
+    final ds = DesignScale.sharedOf(context);
     final percent = (progress * 100).round().clamp(0, 100);
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -44,26 +46,26 @@ class IntroProgress extends StatelessWidget {
             Expanded(
               child: Text(
                 truncatePhase(phase),
-                style: const TextStyle(
-                  fontSize: 12,
+                style: TextStyle(
+                  fontSize: ds.font(12),
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFFD8B4FE),
+                  color: const Color(0xFFD8B4FE),
                 ),
               ),
             ),
             Text(
               t.introPercent(percent.toString()),
-              style: const TextStyle(
-                fontSize: 14,
+              style: TextStyle(
+                fontSize: ds.font(14),
                 fontWeight: FontWeight.w800,
-                color: Color(0xFFFDE047),
+                color: const Color(0xFFFDE047),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: ds.px(8)),
         Container(
-          height: 16,
+          height: ds.px(16),
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),

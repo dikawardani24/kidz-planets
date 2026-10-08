@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,19 @@ import 'package:planets/domain.dart';
 import 'scene_factories.dart';
 import 'scene_models.dart';
 import 'texture_provider.dart';
+
+/// Device-profiling isolation switches. All false in production builds.
+///
+/// Set via `--dart-define` to attribute frame/loading cost on hardware, e.g.
+/// `flutter run --profile --dart-define=KIDZ_NO_RINGS=true`. There is no
+/// runtime UI and no performance effect when unset (constant-folded).
+/// Recipe: baseline → `KIDZ_NO_TEXTURES` (decode/upload cost) →
+/// `KIDZ_NO_RINGS` (now 4 Saturn nodes) → `KIDZ_NO_ORBITS` (8 rings) and compare
+/// `scene.build` stats lines plus DevTools frame times. `KIDZ_NO_TEXTURES`
+/// exercises the production flat-tint fallback materials, not a test stub.
+const kSceneNoTextures = bool.fromEnvironment('KIDZ_NO_TEXTURES');
+const kSceneNoRings = bool.fromEnvironment('KIDZ_NO_RINGS');
+const kSceneNoOrbits = bool.fromEnvironment('KIDZ_NO_ORBITS');
 
 /// Builds and owns the imperative flutter_scene graph (SRP: scene only).
 ///
@@ -31,9 +45,23 @@ class SolarSystemSceneBuilder {
 
   /// Whether [buildMoons] has finished, so a second call is a no-op.
   bool _moonsBuilt = false;
+
+  /// Whether the solar-system root has already been attached to the scene.
+  ///
+  /// Lets a failed [build] resume without calling [Scene.add] twice.
+  bool _rootAttached = false;
+
+  /// Whether [buildMoons] has finished successfully.
+  bool get moonsBuilt => _moonsBuilt;
+
   final Map<String, Node> orbitNodes = {};
   Node? starNode;
   final Node solarSystemRoot = Node(name: 'solar-system-root');
+
+  /// Renderable nodes created for Saturn's ring system (one combined ring mesh
+  /// plus three physical edge profiles). Logged in the build stats line so
+  /// device profiling can correlate node count with frame time.
+  int ringNodeCount = 0;
 
   /// Builds the Sun, the starfield and the planets; awaits every texture upload.
   ///
@@ -59,8 +87,12 @@ class SolarSystemSceneBuilder {
     scene.environmentIntensity = 0.14;
     // All celestial bodies and their orbit paths live under one transform root.
     // Rotating this root is equivalent to physically turning the whole model.
-    scene.add(solarSystemRoot);
-    _buildSunLight(scene);
+    // Resume-safe: a failed build must not attach the root a second time.
+    if (!_rootAttached) {
+      scene.add(solarSystemRoot);
+      _buildSunLight(scene);
+      _rootAttached = true;
+    }
 
     final primaryBodies = planets.where((p) => !p.isMoon).toList();
 
@@ -72,26 +104,55 @@ class SolarSystemSceneBuilder {
     var step = 0;
 
     onProgress(step / steps, 'Painting stars…');
-    await _buildStars(scene);
-    // Let Flutter present the loading animation before the first expensive
-    // planet/material batch starts.
-    await _yieldToUi();
+    if (starNode == null) {
+      final starsSw = Stopwatch()..start();
+      developer.log('scene.build: stars started', name: 'startup');
+      await _buildStars(scene);
+      developer.log(
+        'scene.build: stars completed in ${starsSw.elapsedMilliseconds}ms',
+        name: 'startup',
+      );
+      // Let Flutter present the loading animation before the first expensive
+      // planet/material batch starts.
+      await _yieldToUi();
+    }
     step++;
 
     for (final planet in primaryBodies) {
       onProgress(step / steps, 'Painting ${planet.name}…');
-      await _buildPlanet(planet);
-      if (planet.hasRing) {
-        await _buildSaturnRing(planet);
+      if (!states.containsKey(planet.id)) {
+        final bodySw = Stopwatch()..start();
+        developer.log(
+          'scene.build: ${planet.id} started',
+          name: 'startup',
+        );
+        await _buildPlanet(planet);
+        if (planet.hasRing && !kSceneNoRings) {
+          await _buildSaturnRing(planet);
+        }
+        if (!planet.isSun &&
+            !kSceneNoOrbits &&
+            !orbitNodes.containsKey(planet.id)) {
+          _buildOrbit(scene, planet);
+        }
+        developer.log(
+          'scene.build: ${planet.id} completed '
+          'in ${bodySw.elapsedMilliseconds}ms',
+          name: 'startup',
+        );
+        // Build one body per event-loop turn so progress UI and the renderer
+        // can run between texture/mesh/material batches.
+        await _yieldToUi();
       }
-      if (!planet.isSun) {
-        _buildOrbit(scene, planet);
-      }
-      // Build one body per event-loop turn so progress UI and the renderer
-      // can run between texture/mesh/material batches.
-      await _yieldToUi();
       step++;
     }
+    developer.log(
+      'scene.build: primary bodies ready '
+      '(bodies=${states.length} ringNodes=$ringNodeCount '
+      'orbits=${orbitNodes.length} textures=${_textures.cachedCount} '
+      'geometries=${_geometries.describeCache()})',
+      name: 'startup',
+    );
   }
 
   /// Adds the moons to a scene that [build] has already started.
@@ -110,6 +171,7 @@ class SolarSystemSceneBuilder {
     }
 
     final steps = pending.length;
+    final moonsSw = Stopwatch()..start();
     for (var i = 0; i < pending.length; i++) {
       final moon = pending[i];
       onProgress(i / steps, 'Painting ${moon.name}…');
@@ -120,6 +182,12 @@ class SolarSystemSceneBuilder {
     }
     _moonsBuilt = true;
     onProgress(1.0, 'Moons ready');
+    developer.log(
+      'scene.build: moons ready '
+      '(moons=${pending.length} in ${moonsSw.elapsedMilliseconds}ms '
+      'textures=${_textures.cachedCount})',
+      name: 'startup',
+    );
   }
 
   void _buildSunLight(Scene scene) {
@@ -211,142 +279,23 @@ class SolarSystemSceneBuilder {
       _degreesToRadians(planet.tiltDegrees),
     );
 
-    // NASA's Cassini images show Saturn's rings as thousands of fine
-    // ringlets, not six thick colored hoops. Build a low-cost approximation:
-    // broad translucent ring regions underneath many very thin strands.
-    final broad = <({String id, double inner, double outer, double opacity})>[
-      (id: 'c', inner: 1.22, outer: 1.53, opacity: 0.16),
-      (id: 'b', inner: 1.54, outer: 1.96, opacity: 0.28),
-      (id: 'a', inner: 2.03, outer: 2.28, opacity: 0.20),
-    ];
+    // Keep Saturn visually rich without paying one scene node/draw/material
+    // submission for every ringlet. The broad bands, fine strands and their
+    // grazing-angle support planes are packed into one immutable mesh with
+    // per-vertex opacity. Only the three genuinely 3D edge profiles remain
+    // separate because they provide physical thickness at exact edge-on views.
+    final combined = Node(
+      mesh: Mesh(
+        _geometries.saturnRingSystem(planet.radius),
+        _materials.saturnCombinedRing(),
+      ),
+    )
+      ..name = '${planet.id}:ring:combined'
+      ..rotation = tilt;
+    combined.raycastable = false;
+    state.spinNode.add(combined);
+    ringNodeCount++;
 
-    void addRingLayer({
-      required String name,
-      required double inner,
-      required double outer,
-      required double opacity,
-      required vm.Quaternion rotation,
-    }) {
-      final ring =
-          Node(
-              mesh: Mesh(
-                _geometries.saturnBand(inner, outer),
-                _materials.saturnRing(opacity: opacity),
-              ),
-            )
-            ..name = name
-            ..rotation = rotation;
-      ring.raycastable = false;
-      state.spinNode.add(ring);
-    }
-
-    for (final band in broad) {
-      final inner = planet.radius * band.inner;
-      final outer = planet.radius * band.outer;
-
-      addRingLayer(
-        name: '${planet.id}:ring:base:${band.id}',
-        inner: inner,
-        outer: outer,
-        opacity: band.opacity,
-        rotation: tilt,
-      );
-
-      // RingGeometry is an infinitely thin plane. At an almost edge-on
-      // viewing angle its projected area can collapse to zero pixels and
-      // the ring appears to vanish. Two very subtle support layers keep a
-      // readable edge without changing the visible ring thickness at normal
-      // viewing angles.
-      const edgeAngle = 0.022;
-      addRingLayer(
-        name: '${planet.id}:ring:edge:+:${band.id}',
-        inner: inner,
-        outer: outer,
-        opacity: band.opacity * 0.18,
-        rotation:
-            tilt * vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), edgeAngle),
-      );
-      addRingLayer(
-        name: '${planet.id}:ring:edge:-:${band.id}',
-        inner: inner,
-        outer: outer,
-        opacity: band.opacity * 0.18,
-        rotation:
-            tilt * vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), -edgeAngle),
-      );
-    }
-
-    // Fine structure: irregular spacing and opacity makes the ring read as
-    // particle-rich ice instead of a handful of perfect flat hoops.
-    const strands = <({double radius, double width, double opacity})>[
-      (radius: 1.255, width: 0.010, opacity: 0.18),
-      (radius: 1.285, width: 0.006, opacity: 0.32),
-      (radius: 1.335, width: 0.012, opacity: 0.20),
-      (radius: 1.375, width: 0.006, opacity: 0.34),
-      (radius: 1.415, width: 0.009, opacity: 0.22),
-      (radius: 1.465, width: 0.014, opacity: 0.30),
-      (radius: 1.515, width: 0.008, opacity: 0.26),
-      (radius: 1.575, width: 0.012, opacity: 0.42),
-      (radius: 1.625, width: 0.007, opacity: 0.26),
-      (radius: 1.685, width: 0.015, opacity: 0.48),
-      (radius: 1.755, width: 0.009, opacity: 0.30),
-      (radius: 1.825, width: 0.018, opacity: 0.54),
-      (radius: 1.885, width: 0.010, opacity: 0.34),
-      // Cassini Division: deliberately no geometry from ~1.96 to ~2.03.
-      (radius: 2.045, width: 0.008, opacity: 0.28),
-      (radius: 2.085, width: 0.012, opacity: 0.42),
-      (radius: 2.135, width: 0.007, opacity: 0.30),
-      (radius: 2.185, width: 0.015, opacity: 0.46),
-      (radius: 2.235, width: 0.009, opacity: 0.30),
-      (radius: 2.275, width: 0.006, opacity: 0.18),
-      // F ring and faint outer material.
-      (radius: 2.335, width: 0.012, opacity: 0.38),
-      (radius: 2.352, width: 0.004, opacity: 0.52),
-      (radius: 2.405, width: 0.004, opacity: 0.10),
-      (radius: 2.445, width: 0.006, opacity: 0.07),
-    ];
-
-    for (var i = 0; i < strands.length; i++) {
-      final strand = strands[i];
-      final inner = planet.radius * (strand.radius - strand.width / 2);
-      final outer = planet.radius * (strand.radius + strand.width / 2);
-
-      addRingLayer(
-        name: '${planet.id}:ring:strand:$i',
-        inner: inner,
-        outer: outer,
-        opacity: strand.opacity,
-        rotation: tilt,
-      );
-
-      // Keep the finest ringlets visible at extreme angles too. These are
-      // intentionally much fainter than the real strand so they read as an
-      // optical edge rather than as a second set of rings.
-      const edgeAngle = 0.022;
-      addRingLayer(
-        name: '${planet.id}:ring:strand:edge:+:$i',
-        inner: inner,
-        outer: outer,
-        opacity: strand.opacity * 0.18,
-        rotation:
-            tilt * vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), edgeAngle),
-      );
-      addRingLayer(
-        name: '${planet.id}:ring:strand:edge:-:$i',
-        inner: inner,
-        outer: outer,
-        opacity: strand.opacity * 0.18,
-        rotation:
-            tilt * vm.Quaternion.axisAngle(vm.Vector3(1, 0, 0), -edgeAngle),
-      );
-      if (i % 4 == 3) {
-        await _yieldToUi();
-      }
-    }
-
-    // Flat bands have zero projected area at an exact edge-on angle.
-    // Keep three very thin physical edge profiles so the ring system
-    // remains visible instead of snapping completely out of sight.
     const edgeProfiles = <({double radius, double tube, double opacity})>[
       (radius: 1.40, tube: 0.020, opacity: 0.34),
       (radius: 1.78, tube: 0.022, opacity: 0.42),
@@ -355,23 +304,24 @@ class SolarSystemSceneBuilder {
 
     for (var i = 0; i < edgeProfiles.length; i++) {
       final edge = edgeProfiles[i];
-      final ring =
-          Node(
-              mesh: Mesh(
-                _geometries.saturnEdgeRing(
-                  planet.radius * edge.radius,
-                  planet.radius * edge.tube,
-                ),
-                _materials.saturnRing(opacity: edge.opacity),
-              ),
-            )
-            ..name = '${planet.id}:ring:edge:$i'
-            ..rotation = tilt;
+      final ring = Node(
+        mesh: Mesh(
+          _geometries.saturnEdgeRing(
+            planet.radius * edge.radius,
+            planet.radius * edge.tube,
+          ),
+          _materials.saturnRing(opacity: edge.opacity),
+        ),
+      )
+        ..name = '${planet.id}:ring:edge:$i'
+        ..rotation = tilt;
       ring.raycastable = false;
       state.spinNode.add(ring);
+      ringNodeCount++;
     }
-  }
 
+    await _yieldToUi();
+  }
   void _buildOrbit(Scene scene, Planet planet) {
     final node =
         Node(
@@ -455,6 +405,8 @@ class SolarSystemSceneBuilder {
   Future<void> _yieldToUi() => Future<void>.delayed(Duration.zero);
 
   Future<TextureSource?> _safeLoad(String asset) async {
+    // Profiling isolation: exercise the flat-tint fallback materials.
+    if (kSceneNoTextures) return null;
     try {
       return await _textures.get(asset);
     } catch (_) {

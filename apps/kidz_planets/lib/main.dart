@@ -60,6 +60,17 @@ class KidzPlanetsApp extends ConsumerWidget {
       ),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: kSupportedLocales,
+      // Explicit remote-OK mapping: several Android TV devices deliver
+      // DPAD_CENTER/ENTER in ways that never reach the default shortcut
+      // table, which strands every D-pad control. Declared once here so all
+      // focusable controls (intro CTA included) activate from the remote.
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.numpadEnter): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.gameButtonA): ActivateIntent(),
+      },
       home: const StartupGate(),
     );
   }

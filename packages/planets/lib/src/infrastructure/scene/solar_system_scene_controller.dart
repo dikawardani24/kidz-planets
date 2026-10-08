@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
@@ -175,6 +176,26 @@ abstract class SolarSystemSceneController {
   /// distance/orientation) for the jump-to-Sun recovery button. Any running
   /// zoom flight is cancelled first.
   void resetOverview();
+
+  /// Budgets texture decoding for constrained devices (see
+  /// [AssetTextureProvider.maxDecodeWidth]).
+  ///
+  /// Call before [ensureBuilt]; the cache is keyed by asset path, so changing
+  /// the budget mid-build would mix resolutions. Startup resolves the device
+  /// capability tier and sets this once, before the solar-system task runs.
+  void setMaxTextureDecodeWidth(int? maxWidth);
+
+  /// Pre-compiles the render pipelines and uploads the scene's GPU resources
+  /// behind the loading screen, so the Explorer's first visible frame does
+  /// not stall on shader compilation.
+  ///
+  /// Call once, after [ensureBuilt], with the current explorer state: the
+  /// warm-up frame uses the same overview camera the scene view will show, so
+  /// the compiled pipeline variants match the real first frame. Never throws:
+  /// a warm-up failure only means the first frame pays the compile cost the
+  /// old way (still hidden behind the intro by the startup gate). Safe to
+  /// repeat; later moon attachments reuse the same material pipelines.
+  Future<void> warmUpPipelines(ExplorerState ui);
   void dispose();
 }
 
@@ -209,6 +230,7 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   bool _built = false;
   Future<void>? _buildFuture;
   Future<void>? _moonsFuture;
+  bool _pipelinesWarmed = false;
   double _rotationVelocityX = 0.0;
   double _rotationVelocityY = 0.0;
   String? _rotationVelocityPlanetId;
@@ -228,43 +250,72 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
     required List<Planet> planets,
     required void Function(double fraction, String label) onProgress,
   }) {
-    _buildFuture ??= () async {
-      // The full catalogue, moons included, goes to the animator and the label
-      // projector even though only the planets are built here: both read the
-      // builder's state map per frame and pick the moons up the moment the lazy
-      // build adds them.
-      await _builder.build(
-        scene: _scene,
-        planets: planets,
-        onProgress: onProgress,
-      );
-      _animator = SolarSystemAnimator(
-        clock: _clock,
-        builder: _builder,
-        planets: planets,
-      );
-      _animator!.attach();
-      _projector = LabelProjector(builder: _builder, planets: planets);
-      _rigState
-        ..theta = 0.0
-        ..phi = 0.32
-        ..radius = OrbitCameraRig.kOverviewRadius
-        ..fovRadians = 0.85;
-      _built = true;
+    if (_built) return Future<void>.value();
+    final inFlight = _buildFuture;
+    if (inFlight != null) return inFlight;
+
+    // Memoize the in-flight future so concurrent callers join one build.
+    // On failure, clear the memo so coordinator retry() can rebuild: a sticky
+    // failed Future would make every retry re-await the same error forever.
+    final run = () async {
+      try {
+        // The full catalogue, moons included, goes to the animator and the label
+        // projector even though only the planets are built here: both read the
+        // builder's state map per frame and pick the moons up the moment the lazy
+        // build adds them.
+        await _builder.build(
+          scene: _scene,
+          planets: planets,
+          onProgress: onProgress,
+        );
+        _animator?.detach();
+        _animator = SolarSystemAnimator(
+          clock: _clock,
+          builder: _builder,
+          planets: planets,
+        );
+        _animator!.attach();
+        _projector = LabelProjector(builder: _builder, planets: planets);
+        if (!_built) {
+          _rigState
+            ..theta = 0.0
+            ..phi = 0.32
+            ..radius = OrbitCameraRig.kOverviewRadius
+            ..fovRadians = 0.85;
+        }
+        _built = true;
+      } catch (_) {
+        _buildFuture = null;
+        rethrow;
+      }
     }();
-    return _buildFuture!;
+    _buildFuture = run;
+    return run;
   }
 
   @override
   Future<void> ensureMoonsBuilt({
     required List<Planet> moons,
     required void Function(double fraction, String label) onProgress,
-  }) => _moonsFuture ??= () async {
-    await _builder.buildMoons(moons: moons, onProgress: onProgress);
-  }();
+  }) {
+    if (_builder.moonsBuilt) return Future<void>.value();
+    final inFlight = _moonsFuture;
+    if (inFlight != null) return inFlight;
+
+    final run = () async {
+      try {
+        await _builder.buildMoons(moons: moons, onProgress: onProgress);
+      } catch (_) {
+        _moonsFuture = null;
+        rethrow;
+      }
+    }();
+    _moonsFuture = run;
+    return run;
+  }
 
   @override
-  bool get areMoonsBuilt => _moonsFuture != null;
+  bool get areMoonsBuilt => _builder.moonsBuilt;
 
   @override
   int get cachedTextureCount => _textures.cachedCount;
@@ -426,6 +477,30 @@ class SolarSystemSceneControllerImpl implements SolarSystemSceneController {
   void resetOverview() {
     _rig.cancelZoomFlight();
     _rig.resetOverview();
+  }
+
+  @override
+  void setMaxTextureDecodeWidth(int? maxWidth) {
+    final textures = _textures;
+    if (textures is AssetTextureProvider) {
+      textures.maxDecodeWidth = maxWidth;
+    }
+  }
+
+  @override
+  Future<void> warmUpPipelines(ExplorerState ui) async {
+    if (_pipelinesWarmed) return;
+    try {
+      await _scene.warmUp([RenderView(camera: buildCamera(ui))]);
+      _pipelinesWarmed = true;
+    } catch (error) {
+      // Optimization only: the startup gate already hides an unwarmed first
+      // frame behind the intro, so a warm-up failure must never fail startup.
+      developer.log(
+        'scene.warmUp skipped; first frame compiles on demand: $error',
+        name: 'startup',
+      );
+    }
   }
 
   @override

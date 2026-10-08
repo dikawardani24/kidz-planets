@@ -13,10 +13,17 @@ import 'package:kidz_planets/application/startup/solar_system_startup_tasks.dart
 /// ones; only the feature work behind each hook is scripted. That is exactly
 /// the seam the composition root wires real implementations into, so the
 /// widget tests exercise the production pipeline end to end minus the GPU.
+///
+/// Hang guards are off: scripted gates intentionally never finish, and a
+/// pending watchdog timer fails a widget test at teardown. Production builds
+/// the same table with the default timeouts.
 Override startupWith(FakeStartupHooks hooks) =>
     startupCoordinatorProvider.overrideWith(
       (ref) => StartupCoordinatorNotifier(
-        tasks: buildSolarSystemStartupTasks(hooks: hooks),
+        tasks: buildSolarSystemStartupTasks(
+          hooks: hooks,
+          timeoutFor: (_) => null,
+        ),
       ),
     );
 

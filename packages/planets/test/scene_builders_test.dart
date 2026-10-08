@@ -175,6 +175,27 @@ void main() {
       );
     });
   });
+
+  group('scene build stats', () {
+    test('a fresh builder reports zero ring nodes', () {
+      expect(makeSceneBuilder().ringNodeCount, 0);
+    });
+
+    test('geometry cache census starts empty', () {
+      expect(
+        GeometryFactory().describeCache(),
+        'spheres=0 rings=0 tori=0',
+      );
+    });
+  });
+
+  group('profiling isolation switches', () {
+    test('all default to off in production builds', () {
+      expect(kSceneNoTextures, isFalse);
+      expect(kSceneNoRings, isFalse);
+      expect(kSceneNoOrbits, isFalse);
+    });
+  });
 }
 
 /// Unsigned rotation magnitude in radians, independent of the axis.

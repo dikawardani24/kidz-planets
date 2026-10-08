@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:core/layout.dart';
 import 'package:core/l10n.dart';
+import 'package:core/platform.dart';
 import 'package:core/theme.dart';
 import 'package:planets/planets.dart';
 
@@ -36,14 +37,34 @@ class PlanetDetailSheet extends ConsumerWidget {
 /// Opens the full facts view as a modal dialog. The dialog owns its available
 /// space, so orientation changes do not constrain the facts card to the scene.
 class DetailDescriptionToggle extends ConsumerWidget {
-  const DetailDescriptionToggle({super.key, required this.planet});
+  const DetailDescriptionToggle({
+    super.key,
+    required this.planet,
+    this.onSpatialTarget,
+    this.onUnregisterSpatialTarget,
+  });
 
   final Planet planet;
 
+  /// Publishes the pill into the app's TV spatial registry (null in
+  /// standalone hosts). Arrows bubble to the unified spatial navigator.
+  final ValueChanged<TvSpatialTarget>? onSpatialTarget;
+  final ValueChanged<String>? onUnregisterSpatialTarget;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return GestureDetector(
-      onTap: () {
+    // On TV the facts pill takes initial focus after a selection, so a second
+    // OK opens the existing facts dialog: no separate detail step needed.
+    // Sizing is purely viewport-derived, like every other pill here.
+    final isTv = ref.watch(isTelevisionProvider);
+    final ds = DesignScale.sharedOf(context);
+    return TvSpatialTargetWidget(
+      id: 'chrome:show-facts',
+      control: TvChromeControl.other,
+      onTarget: onSpatialTarget ?? (_) {},
+      onUnregister: onUnregisterSpatialTarget ?? (_) {},
+      autofocus: isTv,
+      onSelect: () {
         showGeneralDialog<void>(
           context: context,
           barrierDismissible: true,
@@ -79,17 +100,21 @@ class DetailDescriptionToggle extends ConsumerWidget {
       },
       child: AppTheme.glass(
         pill: true,
-        radius: BorderRadius.circular(999),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        child: const Row(
+        radius: BorderRadius.circular(ds.radius(999)),
+        padding: ds.insets(horizontal: 12, vertical: 7),
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.keyboard_arrow_up, size: 15, color: AppTheme.accentSky),
-            SizedBox(width: 4),
+            Icon(
+              Icons.keyboard_arrow_up,
+              size: ds.px(15),
+              color: AppTheme.accentSky,
+            ),
+            SizedBox(width: ds.px(4)),
             Text(
               'Show facts',
               style: TextStyle(
-                fontSize: 9,
+                fontSize: ds.font(9),
                 fontWeight: FontWeight.w800,
                 color: Colors.white,
               ),
@@ -102,17 +127,32 @@ class DetailDescriptionToggle extends ConsumerWidget {
 }
 
 class DetailSideRails extends ConsumerWidget {
-  const DetailSideRails({super.key});
+  const DetailSideRails({
+    super.key,
+    this.onSpatialTarget,
+    this.onUnregisterSpatialTarget,
+  });
+
+  /// Publishes one control into the app's TV spatial registry.
+  ///
+  /// Null in standalone feature hosts (widget tests, previews): the rails
+  /// keep their touch behavior and shared focus treatment either way.
+  final ValueChanged<TvSpatialTarget>? onSpatialTarget;
+  final ValueChanged<String>? onUnregisterSpatialTarget;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Every dimension derives from the viewport scale; the top offset tracks
+    // the scaled bar height so the rails never slide under it.
+    final ds = DesignScale.sharedOf(context);
     final ui = ref.watch(explorerControllerProvider);
     if (!ui.hasSelection) {
       return const SizedBox.shrink();
     }
     final planet = ref.watch(planetByIdProvider(ui.selectedPlanetId!));
     final notifier = ref.read(explorerControllerProvider.notifier);
-    final top = bannerTopFor(MediaQuery.paddingOf(context)) + 8;
+    final top =
+        MediaQuery.paddingOf(context).top + ds.px(kTopBarExtent) + ds.px(8);
 
     return Stack(
       children: [
@@ -123,94 +163,97 @@ class DetailSideRails extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              GestureDetector(
-                onTap: () =>
+              TvSpatialTargetWidget(
+                id: 'chrome:listen',
+                control: TvChromeControl.playPause,
+                onTarget: onSpatialTarget ?? (_) {},
+                onUnregister: onUnregisterSpatialTarget ?? (_) {},
+                onSelect: () =>
                     ref.read(planetNarrationServiceProvider).replay(planet),
                 child: AppTheme.glass(
                   pill: true,
-                  radius: BorderRadius.circular(999),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  child: const Row(
+                  radius: BorderRadius.circular(ds.radius(999)),
+                  padding: ds.insets(horizontal: 10, vertical: 8),
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         Icons.volume_up_rounded,
-                        size: 14,
+                        size: ds.px(14),
                         color: AppTheme.accentSky,
                       ),
-                      SizedBox(width: 5),
+                      SizedBox(width: ds.px(5)),
                       Text(
                         'Listen',
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: ds.font(10),
                           fontWeight: FontWeight.w800,
-                          color: Color(0xFFDDEAFE),
+                          color: const Color(0xFFDDEAFE),
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(height: 6),
-              GestureDetector(
-                onTap: () =>
+              SizedBox(height: ds.px(6)),
+              TvSpatialTargetWidget(
+                id: 'chrome:sound',
+                control: TvChromeControl.playPause,
+                onTarget: onSpatialTarget ?? (_) {},
+                onUnregister: onUnregisterSpatialTarget ?? (_) {},
+                onSelect: () =>
                     ref.read(planetSoundServiceProvider).playBody(planet),
                 child: AppTheme.glass(
                   pill: true,
                   radius: BorderRadius.circular(999),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  child: const Row(
+                  padding: ds.insets(horizontal: 10, vertical: 8),
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         Icons.graphic_eq_rounded,
-                        size: 14,
+                        size: ds.px(14),
                         color: AppTheme.accentAmber,
                       ),
-                      SizedBox(width: 5),
+                      SizedBox(width: ds.px(5)),
                       Text(
                         'Sound',
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: ds.font(10),
                           fontWeight: FontWeight.w800,
-                          color: Color(0xFFFFE7A3),
+                          color: const Color(0xFFFFE7A3),
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(height: 6),
-              GestureDetector(
-                onTap: notifier.toggleDetailCard,
+              SizedBox(height: ds.px(6)),
+              TvSpatialTargetWidget(
+                id: 'chrome:play-mode',
+                control: TvChromeControl.other,
+                onTarget: onSpatialTarget ?? (_) {},
+                onUnregister: onUnregisterSpatialTarget ?? (_) {},
+                onSelect: notifier.toggleDetailCard,
                 child: AppTheme.glass(
                   pill: true,
-                  radius: BorderRadius.circular(999),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  child: const Row(
+                  radius: BorderRadius.circular(ds.radius(999)),
+                  padding: ds.insets(horizontal: 10, vertical: 8),
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         Icons.gamepad,
-                        size: 14,
+                        size: ds.px(14),
                         color: AppTheme.accentAmber,
                       ),
-                      SizedBox(width: 5),
+                      SizedBox(width: ds.px(5)),
                       Text(
                         'Play Mode',
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: ds.font(10),
                           fontWeight: FontWeight.w800,
-                          color: Color(0xFFFFE7A3),
+                          color: const Color(0xFFFFE7A3),
                         ),
                       ),
                     ],
@@ -231,6 +274,8 @@ class DetailSideRails extends ConsumerWidget {
             onZoomIn: () => notifier.adjustDetailZoom(-.25),
             onReset: notifier.resetDetailView,
             onClose: notifier.closeDetail,
+            onSpatialTarget: onSpatialTarget,
+            onUnregisterSpatialTarget: onUnregisterSpatialTarget,
           ),
         ),
       ],
@@ -307,8 +352,8 @@ class _DetailContent extends StatelessWidget {
                     ],
                   ),
                 ),
-                GestureDetector(
-                  onTap: onClose,
+                TvFocusable(
+                  onSelect: onClose,
                   child: AppTheme.glass(
                     pill: true,
                     radius: BorderRadius.circular(999),
@@ -357,8 +402,8 @@ class _DetailContent extends StatelessWidget {
               runSpacing: 6,
               children: [
                 for (final entry in body.hotspots)
-                  GestureDetector(
-                    onTap: () => onHotspot(entry.hotspot),
+                  TvFocusable(
+                    onSelect: () => onHotspot(entry.hotspot),
                     child: AppTheme.glass(
                       pill: true,
                       radius: BorderRadius.circular(999),
@@ -403,6 +448,8 @@ class _DetailZoomBar extends StatelessWidget {
     required this.onReset,
     required this.onClose,
     this.vertical = false,
+    this.onSpatialTarget,
+    this.onUnregisterSpatialTarget,
   });
 
   final double zoom;
@@ -420,11 +467,20 @@ class _DetailZoomBar extends StatelessWidget {
 
   final bool vertical;
 
+  final ValueChanged<TvSpatialTarget>? onSpatialTarget;
+  final ValueChanged<String>? onUnregisterSpatialTarget;
+
   @override
   Widget build(BuildContext context) {
     final percent = (100 / zoom).round();
 
-    final zoomOut = _ZoomButton(icon: Icons.remove, onTap: onZoomOut);
+    final zoomOut = _ZoomButton(
+      id: 'chrome:detail-zoom-out',
+      icon: Icons.remove,
+      onTap: onZoomOut,
+      onSpatialTarget: onSpatialTarget,
+      onUnregisterSpatialTarget: onUnregisterSpatialTarget,
+    );
     final badge = AppTheme.glass(
       pill: true,
       radius: BorderRadius.circular(999),
@@ -438,13 +494,29 @@ class _DetailZoomBar extends StatelessWidget {
         ),
       ),
     );
-    final zoomIn = _ZoomButton(icon: Icons.add, onTap: onZoomIn);
-    final reset = _ZoomButton(icon: Icons.refresh, onTap: onReset, small: true);
+    final zoomIn = _ZoomButton(
+      id: 'chrome:detail-zoom-in',
+      icon: Icons.add,
+      onTap: onZoomIn,
+      onSpatialTarget: onSpatialTarget,
+      onUnregisterSpatialTarget: onUnregisterSpatialTarget,
+    );
+    final reset = _ZoomButton(
+      id: 'chrome:detail-reset',
+      icon: Icons.refresh,
+      onTap: onReset,
+      small: true,
+      onSpatialTarget: onSpatialTarget,
+      onUnregisterSpatialTarget: onUnregisterSpatialTarget,
+    );
     final close = _ZoomButton(
+      id: 'chrome:detail-close',
       icon: Icons.close,
       onTap: onClose,
       small: true,
       color: const Color(0xFFC7D2FE),
+      onSpatialTarget: onSpatialTarget,
+      onUnregisterSpatialTarget: onUnregisterSpatialTarget,
     );
 
     if (vertical) {
@@ -484,28 +556,44 @@ class _DetailZoomBar extends StatelessWidget {
   }
 }
 
-class _ZoomButton extends StatelessWidget {
+class _ZoomButton extends ConsumerWidget {
   const _ZoomButton({
+    required this.id,
     required this.icon,
     required this.onTap,
     this.small = false,
     this.color = Colors.white,
+    this.onSpatialTarget,
+    this.onUnregisterSpatialTarget,
   });
 
+  final String id;
   final IconData icon;
   final VoidCallback onTap;
   final bool small;
   final Color color;
+  final ValueChanged<TvSpatialTarget>? onSpatialTarget;
+  final ValueChanged<String>? onUnregisterSpatialTarget;
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
+  Widget build(BuildContext context, WidgetRef ref) {
+    // One viewport-derived size for the compact buttons everywhere.
+    final ds = DesignScale.sharedOf(context);
+    return TvSpatialTargetWidget(
+      id: id,
+      control: id.contains('zoom')
+          ? (id.contains('in')
+                ? TvChromeControl.zoomIn
+                : TvChromeControl.zoomOut)
+          : TvChromeControl.other,
+      onTarget: onSpatialTarget ?? (_) {},
+      onUnregister: onUnregisterSpatialTarget ?? (_) {},
+      onSelect: onTap,
       child: AppTheme.glass(
         pill: true,
-        radius: BorderRadius.circular(999),
-        padding: EdgeInsets.all(small ? 7 : 8),
-        child: Icon(icon, size: small ? 13 : 16, color: color),
+        radius: BorderRadius.circular(ds.radius(999)),
+        padding: ds.all(small ? 7 : 8),
+        child: Icon(icon, size: ds.px(small ? 13 : 16), color: color),
       ),
     );
   }

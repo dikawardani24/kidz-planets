@@ -5,8 +5,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:avatar/audio.dart';
 import 'package:core/l10n.dart';
+import 'package:core/layout.dart';
+import 'package:core/platform.dart';
 import 'package:core/theme.dart';
 import 'package:kidz_planets/application/state/providers.dart';
+import 'package:kidz_planets/presentation/tv/tv_controller_hint.dart';
+import 'package:kidz_planets/presentation/tv/tv_home_panel.dart';
+import 'package:kidz_planets/presentation/tv/tv_nav_bar.dart';
+import 'package:kidz_planets/presentation/tv/tv_providers.dart';
+import 'package:kidz_planets/presentation/tv/tv_quick_select_drawer.dart';
+import 'package:kidz_planets/presentation/tv/tv_remote_handler.dart';
 import 'package:kidz_planets/presentation/widgets/overlays/bottom_nav.dart';
 import 'package:kidz_planets/presentation/widgets/overlays/toast_overlay.dart';
 import 'package:kidz_planets/presentation/widgets/overlays/top_bar.dart';
@@ -45,6 +53,11 @@ class ExplorerScreen extends ConsumerWidget {
     final ui = ref.watch(explorerControllerProvider);
     final shell = ref.watch(appShellProvider);
     final progress = ref.watch(missionProgressProvider);
+    // Single TV branch for this screen: everything below keys off [isTv].
+    // The TV controller itself is inert on touch devices, so watching it
+    // unconditionally keeps the hook order stable across form factors.
+    final isTv = ref.watch(isTelevisionProvider);
+    final tvUi = ref.watch(tvExplorerControllerProvider);
 
     // Mission progress and the explorer's own state used to be one object.
     // They are separate now, so both are observed here and the decisions that
@@ -168,7 +181,9 @@ class ExplorerScreen extends ConsumerWidget {
       final explorer = ref.read(explorerControllerProvider.notifier);
       if (!explorer.isMarkNarrationDue) return;
       if (!canStartPlanetAudio(
-        celebrationVisible: ref.read(missionProgressProvider).celebrationVisible,
+        celebrationVisible: ref
+            .read(missionProgressProvider)
+            .celebrationVisible,
       )) {
         return;
       }
@@ -179,7 +194,7 @@ class ExplorerScreen extends ConsumerWidget {
       explorer.acknowledgeMarkNarration();
     });
 
-    return Scaffold(
+    final scaffold = Scaffold(
       backgroundColor: AppTheme.space950,
       resizeToAvoidBottomInset: false,
       body: OrientationBuilder(
@@ -190,6 +205,19 @@ class ExplorerScreen extends ConsumerWidget {
               // LayoutBuilder then supplies the new viewport dimensions.
               final isLandscape = orientation == Orientation.landscape;
               final horizontalInset = isLandscape ? 24.0 : 0.0;
+              final viewportSize = Size(
+                constraints.maxWidth,
+                constraints.maxHeight,
+              );
+              if (isTv) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (context.mounted) {
+                    ref
+                        .read(tvExplorerControllerProvider.notifier)
+                        .updateViewportSize(viewportSize);
+                  }
+                });
+              }
 
               // The scene is intentionally allowed to use the entire viewport.
               // The previous 390px width cap made landscape render as a narrow
@@ -217,7 +245,9 @@ class ExplorerScreen extends ConsumerWidget {
                       right: horizontalInset + 12,
                       top: isLandscape ? 68 : 64,
                       bottom: isLandscape ? 72 : 66,
-                      child: const PlaygroundPanel(),
+                      child: isTv
+                          ? const _TvPanelFrame(child: PlaygroundPanel())
+                          : const PlaygroundPanel(),
                     ),
 
                   if (shell.tab == AppTab.missions)
@@ -226,7 +256,17 @@ class ExplorerScreen extends ConsumerWidget {
                       right: horizontalInset + 12,
                       top: isLandscape ? 68 : 64,
                       bottom: isLandscape ? 72 : 66,
-                      child: const MissionsPanel(),
+                      // On TV the Go pill jumps straight to its planet: same
+                      // selection (camera, narration, grading) as tapping the
+                      // body itself, so missions stay fully remote-driven.
+                      child: isTv
+                          ? _TvPanelFrame(
+                              child: MissionsPanel(
+                                onOpenMission: (planetId) =>
+                                    _openMissionTarget(ref, planetId),
+                              ),
+                            )
+                          : const MissionsPanel(),
                     ),
 
                   if (ui.hasSelection && shell.tab == AppTab.explore)
@@ -239,14 +279,55 @@ class ExplorerScreen extends ConsumerWidget {
                           planet: ref.watch(
                             planetByIdProvider(ui.selectedPlanetId!),
                           ),
+                          onSpatialTarget: isTv
+                              ? ref
+                                    .read(
+                                      tvExplorerControllerProvider.notifier,
+                                    )
+                                    .registerTarget
+                              : null,
+                          onUnregisterSpatialTarget: isTv
+                              ? ref
+                                    .read(
+                                      tvExplorerControllerProvider.notifier,
+                                    )
+                                    .unregisterTarget
+                              : null,
                         ),
                       ),
                     ),
 
                   if (ui.hasSelection && shell.tab == AppTab.explore)
-                    const Positioned.fill(child: DetailSideRails()),
+                    Positioned.fill(
+                      child: DetailSideRails(
+                        onSpatialTarget: isTv
+                            ? ref
+                                  .read(tvExplorerControllerProvider.notifier)
+                                  .registerTarget
+                            : null,
+                        onUnregisterSpatialTarget: isTv
+                            ? ref
+                                  .read(tvExplorerControllerProvider.notifier)
+                                  .unregisterTarget
+                            : null,
+                      ),
+                    ),
 
-                  const ExplorerBottomNav(),
+                  // TV home: large remote-first cards over the explore tab
+                  // until the child picks a destination or a body.
+                  if (isTv &&
+                      shell.tab == AppTab.explore &&
+                      !ui.hasSelection &&
+                      tvUi.homeVisible)
+                    const Positioned.fill(child: TvHomePanel()),
+
+                  // TV controller chrome: mode pill + auto-hiding hints.
+                  if (isTv && shell.tab == AppTab.explore && !tvUi.homeVisible)
+                    const TvControllerChrome(),
+
+                  if (isTv) const TvQuickSelectDrawer(),
+
+                  if (isTv) const TvNavBar() else const ExplorerBottomNav(),
 
                   if (progress.celebrationVisible)
                     Positioned.fill(
@@ -268,6 +349,48 @@ class ExplorerScreen extends ConsumerWidget {
         },
       ),
     );
+    // The remote handler owns D-pad input on TV and keyboard/remote testing,
+    // providing seamless D-pad navigation across all devices.
+    return TvRemoteHandler(child: scaffold);
+  }
+}
+
+/// Jumps to a mission's target planet from the TV missions tab.
+///
+/// One shared selection path: the shell grades it, the explorer narrates it,
+/// the camera focuses it — identical to tapping the body in the scene.
+void _openMissionTarget(WidgetRef ref, String planetId) {
+  ref.read(appShellProvider.notifier).setTab(AppTab.explore);
+  ref.read(tvExplorerControllerProvider.notifier).dismissHome();
+  ref.read(explorerControllerProvider.notifier).selectPlanet(planetId);
+}
+
+/// Frames a tab panel for TV: centered readable column with viewport-scaled
+/// text.
+///
+/// The panels are shared with phones, so instead of forking their layouts the
+/// TV constrains their width (from the TV reference) and scales text by the
+/// shared viewport factor. Both panels scroll, which absorbs the vertical
+/// growth; rows use flexible text columns, so nothing clips horizontally.
+class _TvPanelFrame extends StatelessWidget {
+  const _TvPanelFrame({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final tv = DesignScale.tvOf(context);
+    final shared = DesignScale.sharedOf(context);
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: tv.px(980)),
+        child: MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(shared.factor)),
+          child: child,
+        ),
+      ),
+    );
   }
 }
 
@@ -282,78 +405,95 @@ class _CelebrationModal extends ConsumerWidget {
     final t = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context);
     final bodyName = ref.watch(bodyNameResolverProvider);
+    // TvFocusable keeps the touch tap identical while giving the TV remote a
+    // focused Continue button the moment the celebration appears. Every size
+    // derives from the viewport scale; the width is a viewport fraction so
+    // the dialog fits phones and 4K alike.
+    final isTv = ref.watch(isTelevisionProvider);
+    final ds = DesignScale.sharedOf(context);
+    final badgeExtent = ds.px(80);
+    final maxWidth = (MediaQuery.sizeOf(context).width * 0.6).clamp(
+      380.0,
+      900.0,
+    );
     return Container(
       color: AppTheme.space950.withValues(alpha: .85),
       child: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppTheme.accentAmber.withValues(alpha: .20),
-                  border: Border.all(color: AppTheme.accentAmber, width: 2),
-                ),
-                alignment: Alignment.center,
-                child: const Text('🎉', style: TextStyle(fontSize: 38)),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                title.resolve(t, locale, bodyName: bodyName),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 23,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                description.resolve(t, locale, bodyName: bodyName),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 12,
-                  height: 1.4,
-                  color: Color(0xFFC7D2FE),
-                ),
-              ),
-              const SizedBox(height: 22),
-              GestureDetector(
-                onTap: () =>
-                    ref.read(appShellProvider.notifier).closeCelebration(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 26,
-                    vertical: 12,
-                  ),
-                  decoration: const BoxDecoration(
-                    borderRadius: BorderRadius.all(Radius.circular(999)),
-                    gradient: LinearGradient(
-                      colors: [AppTheme.accentIndigo, Color(0xFF7C3AED)],
+          padding: ds.all(24),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: badgeExtent,
+                  height: badgeExtent,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppTheme.accentAmber.withValues(alpha: .20),
+                    border: Border.all(
+                      color: AppTheme.accentAmber,
+                      width: ds.px(2),
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Color(0x664F46E5),
-                        blurRadius: 18,
-                        offset: Offset(0, 7),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text('🎉', style: TextStyle(fontSize: ds.font(38))),
+                ),
+                SizedBox(height: ds.px(16)),
+                Text(
+                  title.resolve(t, locale, bodyName: bodyName),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: ds.font(23),
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(height: ds.px(4)),
+                Text(
+                  description.resolve(t, locale, bodyName: bodyName),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: ds.font(12),
+                    height: 1.4,
+                    color: const Color(0xFFC7D2FE),
+                  ),
+                ),
+                SizedBox(height: ds.px(22)),
+                TvFocusable(
+                  autofocus: isTv,
+                  onSelect: () =>
+                      ref.read(appShellProvider.notifier).closeCelebration(),
+                  child: Container(
+                    padding: ds.insets(horizontal: 26, vertical: 12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.all(
+                        Radius.circular(ds.radius(999)),
                       ),
-                    ],
-                  ),
-                  child: const Text(
-                    'Continue Exploring 🚀',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
+                      gradient: const LinearGradient(
+                        colors: [AppTheme.accentIndigo, Color(0xFF7C3AED)],
+                      ),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x664F46E5),
+                          blurRadius: 18,
+                          offset: Offset(0, 7),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      'Continue Exploring 🚀',
+                      style: TextStyle(
+                        fontSize: ds.font(12),
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

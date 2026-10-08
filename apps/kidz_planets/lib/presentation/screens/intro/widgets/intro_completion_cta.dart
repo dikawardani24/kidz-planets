@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:core/layout.dart';
 import 'package:core/l10n.dart';
+import 'package:core/platform.dart';
 
 /// The completion CTA: the prototype's bouncing gradient button.
 ///
@@ -10,9 +12,19 @@ import 'package:core/l10n.dart';
 /// and glow match the mock; the bounce is a slow scale loop rather than a
 /// translation so the button never overlaps its neighbours mid-bounce.
 class IntroCompletionCta extends StatefulWidget {
-  const IntroCompletionCta({super.key, required this.onEnter});
+  const IntroCompletionCta({
+    super.key,
+    required this.onEnter,
+    this.autofocus = false,
+  });
 
   final VoidCallback onEnter;
+
+  /// Takes focus on arrival so the remote's OK enters without a touchscreen.
+  ///
+  /// Without this the TV stalls at 100%: the CTA is visible but no D-pad
+  /// press can ever reach a bare `GestureDetector`.
+  final bool autofocus;
 
   @override
   State<IntroCompletionCta> createState() => _IntroCompletionCtaState();
@@ -40,16 +52,21 @@ class _IntroCompletionCtaState extends State<IntroCompletionCta>
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
-    return ScaleTransition(
-      scale: Tween(
-        begin: 1.0,
-        end: 1.04,
-      ).animate(CurvedAnimation(parent: _bounce, curve: Curves.easeInOut)),
-      child: GestureDetector(
-        onTap: widget.onEnter,
+    // Viewport-derived sizing; touch and remote share the one button.
+    final ds = DesignScale.sharedOf(context);
+    // TvFocusable keeps the touch tap identical while letting the TV remote
+    // activate the button through the focus system.
+    return TvFocusable(
+      autofocus: widget.autofocus,
+      onSelect: widget.onEnter,
+      child: ScaleTransition(
+        scale: Tween(
+          begin: 1.0,
+          end: 1.04,
+        ).animate(CurvedAnimation(parent: _bounce, curve: Curves.easeInOut)),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          padding: ds.insets(vertical: 16, horizontal: 24),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             gradient: const LinearGradient(
@@ -70,18 +87,21 @@ class _IntroCompletionCtaState extends State<IntroCompletionCta>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('🚀', style: TextStyle(fontSize: 24)),
-              const SizedBox(width: 12),
-              Text(
-                t.introEnterCta,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF020617),
+              Text('🚀', style: TextStyle(fontSize: ds.font(24))),
+              SizedBox(width: ds.px(12)),
+              Flexible(
+                child: Text(
+                  t.introEnterCta,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: ds.font(18),
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF020617),
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
-              const Text('➡️', style: TextStyle(fontSize: 18)),
+              SizedBox(width: ds.px(12)),
+              Text('➡️', style: TextStyle(fontSize: ds.font(18))),
             ],
           ),
         ),

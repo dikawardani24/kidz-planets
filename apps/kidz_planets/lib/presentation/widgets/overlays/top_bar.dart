@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:core/l10n.dart';
 import 'package:core/layout.dart';
+import 'package:core/platform.dart';
 import 'package:core/theme.dart';
 import 'package:kidz_planets/application/state/providers.dart';
 import 'package:kidz_planets/presentation/widgets/panels/mission_guide.dart';
@@ -27,26 +28,28 @@ class ExplorerTopBar extends ConsumerWidget {
     final ui = ref.watch(explorerControllerProvider);
     final notifier = ref.read(explorerControllerProvider.notifier);
     final t = AppLocalizations.of(context);
+    // Visible TV-mode confirmation for support ("is the TV build active?").
+    final isTv = ref.watch(isTelevisionProvider);
+    // Every dimension derives from the viewport scale: phones render today's
+    // pixels (factor 1.0), larger screens scale proportionally.
+    final ds = DesignScale.sharedOf(context);
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+        padding: EdgeInsets.fromLTRB(ds.px(16), ds.px(10), ds.px(16), ds.px(2)),
         child: Row(
           children: [
             Flexible(
               child: AppTheme.glass(
                 pill: true,
                 radius: BorderRadius.circular(999),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
+                padding: ds.insets(horizontal: 12, vertical: 6),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 28,
-                      height: 28,
+                      width: ds.px(28),
+                      height: ds.px(28),
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: LinearGradient(
@@ -58,32 +61,53 @@ class ExplorerTopBar extends ConsumerWidget {
                         ),
                       ),
                       alignment: Alignment.center,
-                      child: const Icon(
+                      child: Icon(
                         Icons.wb_sunny,
-                        size: 14,
+                        size: ds.px(14),
                         color: Colors.white,
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: ds.px(8)),
                     Flexible(
                       child: Text(
                         t.topBarTitle,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14,
+                        style: TextStyle(
+                          fontSize: ds.font(14),
                           fontWeight: FontWeight.w800,
                           letterSpacing: .2,
                           color: Colors.white,
                         ),
                       ),
                     ),
+                    if (isTv) ...[
+                      SizedBox(width: ds.px(8)),
+                      Container(
+                        padding: ds.insets(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(ds.radius(999)),
+                          border: Border.all(
+                            color: AppTheme.accentAmber,
+                            width: ds.px(1.5),
+                          ),
+                        ),
+                        child: Text(
+                          'TV',
+                          style: TextStyle(
+                            fontSize: ds.font(10),
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.accentAmber,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: ds.px(8)),
             LanguageButton(),
-            const SizedBox(width: 6),
+            SizedBox(width: ds.px(6)),
             Tooltip(
               message: ui.showLabels
                   ? t.tooltipHideLabels
@@ -96,13 +120,13 @@ class ExplorerTopBar extends ConsumerWidget {
                 onTap: notifier.toggleLabels,
               ),
             ),
-            const SizedBox(width: 6),
+            SizedBox(width: ds.px(6)),
             _CircleButton(
               icon: ui.running ? Icons.pause : Icons.play_arrow,
               color: AppTheme.accentSky,
               onTap: notifier.toggleRunning,
             ),
-            const SizedBox(width: 6),
+            SizedBox(width: ds.px(6)),
             Tooltip(
               message: ui.showOrbits
                   ? t.tooltipHideOrbits
@@ -192,11 +216,17 @@ class _CircleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
+    // One viewport-derived size: 38px on the reference phone, proportional
+    // everywhere else. Circles stay circles at every scale.
+    final ds = DesignScale.sharedOf(context);
+    final extent = ds.px(38);
+    // TvFocusable keeps touch taps identical while making every top-bar
+    // control — labels, play/pause, orbits — reachable from the TV remote.
+    return TvFocusable(
+      onSelect: onTap,
       child: Container(
-        width: 38,
-        height: 38,
+        width: extent,
+        height: extent,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: Colors.black.withValues(alpha: 0.38),
@@ -207,14 +237,14 @@ class _CircleButton extends StatelessWidget {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            Icon(icon, size: 18, color: color),
+            Icon(icon, size: ds.px(18), color: color),
             if (badge)
               Positioned(
                 right: -4,
                 top: -4,
                 child: Container(
-                  width: 9,
-                  height: 9,
+                  width: ds.px(9),
+                  height: ds.px(9),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: AppTheme.accentAmber,
@@ -247,10 +277,12 @@ class ExplorerInteractionOverlays extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ui = ref.watch(explorerControllerProvider);
     final t = AppLocalizations.of(context);
-    final top = bannerTopFor(MediaQuery.paddingOf(context));
+    // Scaled with the bar itself: fixed offsets would drift as the bar grows.
+    final ds = DesignScale.sharedOf(context);
+    final top = MediaQuery.paddingOf(context).top + ds.px(kTopBarExtent);
     if (ui.hasSelection && ui.spinHintVisible) {
       return _Banner(
-        top: top + 14,
+        top: top + ds.px(14),
         borderColor: const Color(0x66F59E0B),
         background: const Color(0xD9040712),
         textColor: const Color(0xFFFFE7A3),
@@ -258,9 +290,9 @@ class ExplorerInteractionOverlays extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(t.bannerSwipeToSpin),
-            const SizedBox(width: 8),
+            SizedBox(width: ds.px(8)),
             const Text('•', style: TextStyle(color: AppTheme.accentViolet)),
-            const SizedBox(width: 8),
+            SizedBox(width: ds.px(8)),
             Text(t.bannerZoom),
           ],
         ),
@@ -268,15 +300,15 @@ class ExplorerInteractionOverlays extends ConsumerWidget {
     }
     if (ui.playModeBannerVisible) {
       return _Banner(
-        top: top + 14,
+        top: top + ds.px(14),
         borderColor: const Color(0x80F59E0B),
         background: const Color(0xE6040712),
         textColor: const Color(0xFFFFE7A3),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.gamepad, size: 13, color: AppTheme.accentAmber),
-            const SizedBox(width: 6),
+            Icon(Icons.gamepad, size: ds.px(13), color: AppTheme.accentAmber),
+            SizedBox(width: ds.px(6)),
             Text(t.bannerPlayMode),
           ],
         ),
@@ -289,7 +321,7 @@ class ExplorerInteractionOverlays extends ConsumerWidget {
       final activeMission = ref.watch(activeMissionProvider);
       if (activeMission != null) {
         return _Banner(
-          top: top + 8,
+          top: top + ds.px(8),
           interactive: true,
           onTap: () => showMissionDialog(context, ref),
           borderColor: const Color(0x665B8CFF),
@@ -298,15 +330,15 @@ class ExplorerInteractionOverlays extends ConsumerWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.explore, size: 13, color: AppTheme.accentSky),
-              const SizedBox(width: 7),
+              Icon(Icons.explore, size: ds.px(13), color: AppTheme.accentSky),
+              SizedBox(width: ds.px(7)),
               Text(t.bannerMission(activeMission.id, activeMission.title)),
             ],
           ),
         );
       }
       return _Banner(
-        top: top + 12,
+        top: top + ds.px(12),
         borderColor: const Color(0x664F46E5),
         background: const Color(0xBF010206),
         textColor: const Color(0xDDBFC6FF),
@@ -337,33 +369,40 @@ class _Banner extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => Positioned(
-    top: top,
-    left: 0,
-    right: 0,
-    child: Center(
-      child: GestureDetector(
-        onTap: interactive ? onTap : null,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: borderColor),
-            boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 14)],
-          ),
-          child: DefaultTextStyle.merge(
-            style: TextStyle(
-              color: textColor,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
+  Widget build(BuildContext context) {
+    final ds = DesignScale.sharedOf(context);
+    return Positioned(
+      top: top,
+      left: 0,
+      right: 0,
+      child: Center(
+        // Focusable so the TV remote can open the mission; touch taps behave
+        // exactly as before.
+        child: TvFocusable(
+          onSelect: interactive ? onTap : null,
+          child: Container(
+            padding: ds.insets(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(ds.radius(999)),
+              border: Border.all(color: borderColor),
+              boxShadow: const [
+                BoxShadow(color: Colors.black54, blurRadius: 14),
+              ],
             ),
-            child: child,
+            child: DefaultTextStyle.merge(
+              style: TextStyle(
+                color: textColor,
+                fontSize: ds.font(10),
+                fontWeight: FontWeight.w700,
+              ),
+              child: child,
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class ExplorerControlPills extends ConsumerWidget {
@@ -373,16 +412,17 @@ class ExplorerControlPills extends ConsumerWidget {
     final ui = ref.watch(explorerControllerProvider);
     final notifier = ref.read(explorerControllerProvider.notifier);
     final t = AppLocalizations.of(context);
+    final ds = DesignScale.sharedOf(context);
     return AppTheme.glass(
       pill: true,
-      radius: BorderRadius.circular(999),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      radius: BorderRadius.circular(ds.radius(999)),
+      padding: ds.insets(horizontal: 8, vertical: 6),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.speed, size: 14, color: AppTheme.accentSky),
+          Icon(Icons.speed, size: ds.px(14), color: AppTheme.accentSky),
           SizedBox(
-            width: 105,
+            width: ds.px(105),
             child: Slider(
               value: ui.speed.clamp(0, 4),
               min: 0,
@@ -395,13 +435,13 @@ class ExplorerControlPills extends ConsumerWidget {
           ),
           Text(
             t.speedLabel(ui.speed.toStringAsFixed(1)),
-            style: const TextStyle(
-              fontSize: 10,
+            style: TextStyle(
+              fontSize: ds.font(10),
               fontWeight: FontWeight.w800,
               color: AppTheme.accentAmber,
             ),
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: ds.px(6)),
         ],
       ),
     );

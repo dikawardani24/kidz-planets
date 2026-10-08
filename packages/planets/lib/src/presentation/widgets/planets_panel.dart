@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:core/l10n.dart';
+import 'package:core/platform.dart';
 import 'package:core/theme.dart';
 import 'package:planets/data.dart';
 import 'package:planets/domain.dart';
@@ -168,8 +169,8 @@ class _PlanetCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final body = localizedPlanet(planet, Localizations.localeOf(context));
-    return GestureDetector(
-      onTap: () {
+    return TvFocusable(
+      onSelect: () {
         onDismiss?.call();
         ref.read(explorerControllerProvider.notifier).selectPlanet(planet.id);
       },
