@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:core/l10n.dart';
 import 'package:core/layout.dart';
+import 'package:core/platform.dart';
+import 'package:kidz_planets/presentation/tv/tv_nav_target.dart';
 import 'package:core/theme.dart';
 import 'package:kidz_planets/application/state/providers.dart';
 
@@ -26,6 +28,7 @@ class ExplorerBottomNav extends ConsumerWidget {
       child: Row(
         children: [
           _NavItem(
+            id: 'chrome:tab-explore',
             icon: Icons.public,
             label: t.navExplore,
             selected: tab == AppTab.explore,
@@ -33,6 +36,7 @@ class ExplorerBottomNav extends ConsumerWidget {
                 ref.read(appShellProvider.notifier).setTab(AppTab.explore),
           ),
           _NavItem(
+            id: 'chrome:tab-playground',
             icon: Icons.science_outlined,
             label: t.navPlayground,
             selected: tab == AppTab.playground,
@@ -40,6 +44,7 @@ class ExplorerBottomNav extends ConsumerWidget {
                 ref.read(appShellProvider.notifier).setTab(AppTab.playground),
           ),
           _NavItem(
+            id: 'chrome:tab-missions',
             icon: Icons.rocket_launch_outlined,
             label: t.navMissions,
             selected: tab == AppTab.missions,
@@ -61,12 +66,14 @@ class ExplorerBottomNav extends ConsumerWidget {
 
 class _NavItem extends StatelessWidget {
   const _NavItem({
+    required this.id,
     required this.icon,
     required this.label,
     required this.selected,
     required this.onTap,
   });
 
+  final String id;
   final IconData icon;
   final String label;
   final bool selected;
@@ -74,9 +81,13 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Expanded(
-    child: GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
+    child: TvNavTarget(
+      id: id,
+      control: TvChromeControl.other,
+      onSelect: onTap,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(
           horizontal: 12,
