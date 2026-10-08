@@ -42,11 +42,15 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   @override
   void initState() {
     super.initState();
-    // A fresh mount means a fresh first frame is still owed: tell the
-    // startup handover to wait for this view's first presented tick rather
-    // than revealing a compiling scene mid-crossfade.
-    ref.read(explorerScenePresentedProvider.notifier).state = false;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureBuilt());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // A fresh mount means a fresh first frame is still owed: tell the
+      // startup handover to wait for this view's first presented tick rather
+      // than revealing a compiling scene mid-crossfade. Done here, not in
+      // initState, because this view can mount inside a layout callback
+      // (the explorer's LayoutBuilder) where Riverpod forbids provider writes.
+      ref.read(explorerScenePresentedProvider.notifier).state = false;
+      _ensureBuilt();
+    });
   }
 
   Future<void> _ensureBuilt() async {
