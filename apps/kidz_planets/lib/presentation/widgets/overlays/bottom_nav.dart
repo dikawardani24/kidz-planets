@@ -14,6 +14,7 @@ class ExplorerBottomNav extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tab = ref.watch(appShellProvider.select((s) => s.tab));
+    final isTv = ref.watch(isTelevisionProvider);
     final t = AppLocalizations.of(context);
     final isLandscape =
         MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height;
@@ -32,6 +33,7 @@ class ExplorerBottomNav extends ConsumerWidget {
             icon: Icons.public,
             label: t.navExplore,
             selected: tab == AppTab.explore,
+            isTv: isTv,
             onTap: () =>
                 ref.read(appShellProvider.notifier).setTab(AppTab.explore),
           ),
@@ -40,6 +42,7 @@ class ExplorerBottomNav extends ConsumerWidget {
             icon: Icons.science_outlined,
             label: t.navPlayground,
             selected: tab == AppTab.playground,
+            isTv: isTv,
             onTap: () =>
                 ref.read(appShellProvider.notifier).setTab(AppTab.playground),
           ),
@@ -48,6 +51,7 @@ class ExplorerBottomNav extends ConsumerWidget {
             icon: Icons.rocket_launch_outlined,
             label: t.navMissions,
             selected: tab == AppTab.missions,
+            isTv: isTv,
             onTap: () =>
                 ref.read(appShellProvider.notifier).setTab(AppTab.missions),
           ),
@@ -70,6 +74,7 @@ class _NavItem extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.selected,
+    required this.isTv,
     required this.onTap,
   });
 
@@ -77,17 +82,14 @@ class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool selected;
+  final bool isTv;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Expanded(
-    child: TvNavTarget(
-      id: id,
-      control: TvChromeControl.other,
-      onSelect: onTap,
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
+  Widget build(BuildContext context) {
+    final item = GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(
           horizontal: 12,
@@ -119,6 +121,16 @@ class _NavItem extends StatelessWidget {
           ],
         ),
       ),
-    ),
-  ),
-);
+    );
+    return Expanded(
+      child: isTv
+          ? TvNavTarget(
+              id: id,
+              control: TvChromeControl.other,
+              onSelect: onTap,
+              child: item,
+            )
+          : item,
+    );
+  }
+}
