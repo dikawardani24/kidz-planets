@@ -109,6 +109,16 @@ class ExplorerTopBar extends ConsumerWidget {
             LanguageButton(),
             SizedBox(width: ds.px(6)),
             Tooltip(
+              message: t.tooltipAvatar,
+              child: _CircleButton(
+                icon: Icons.person_rounded,
+                color: Colors.white70,
+                onTap: () =>
+                    ref.read(appShellProvider.notifier).openAvatarPage(),
+              ),
+            ),
+            SizedBox(width: ds.px(6)),
+            Tooltip(
               message: ui.showLabels
                   ? t.tooltipHideLabels
                   : t.tooltipShowLabels,

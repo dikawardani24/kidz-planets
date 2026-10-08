@@ -338,5 +338,37 @@
   "tvHintBrowse": "← → pick a planet • ↑ ↓ zoom • OK select",
   "tvHintRotate": "← → ↑ ↓ spin • OK select • BACK back",
   "tvContinueExploring": "Continue Exploring",
-  "tvHomeSubtitle": "Explore the Solar System"
+  "tvHomeSubtitle": "Explore the Solar System",
+  "avatarPageTitle": "My Avatar",
+  "@avatarPageTitle": {
+    "description": "Heading of the avatar selection page."
+  },
+  "avatarPreviewHint": "Drag to spin • Pinch to zoom",
+  "@avatarPreviewHint": {
+    "description": "Hint under the 3D avatar preview."
+  },
+  "avatarRocketName": "Rocket",
+  "@avatarRocketName": {
+    "description": "Name of the rocket avatar choice."
+  },
+  "avatarAstronautName": "Astronaut",
+  "@avatarAstronautName": {
+    "description": "Name of the astronaut avatar choice."
+  },
+  "avatarSelectCta": "Select Avatar",
+  "@avatarSelectCta": {
+    "description": "Button that saves the previewed avatar choice."
+  },
+  "avatarCurrentBadge": "Current",
+  "@avatarCurrentBadge": {
+    "description": "Badge on the already-saved avatar choice."
+  },
+  "tooltipAvatar": "Choose your avatar",
+  "@tooltipAvatar": {
+    "description": "Tooltip of the top-bar avatar button."
+  },
+  "avatarBack": "Back",
+  "@avatarBack": {
+    "description": "Button that leaves the avatar page without saving."
+  }
 }

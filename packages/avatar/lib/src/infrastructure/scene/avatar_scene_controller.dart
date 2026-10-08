@@ -28,6 +28,12 @@ abstract class AvatarSceneController {
     AvatarIdleAction idleAction,
     String? selectedPlanetId,
   );
+
+  /// Switches the worn body without rebuilding the scene.
+  ///
+  /// The builder stages the swap (new model first, old model out), so callers
+  /// just await this and keep ticking: no reattach, no shader recompile.
+  Future<void> setAvatarType(AvatarType type);
   void applyPose(AvatarState pose);
 
   /// Deforms the body for the moment after an impact. See
@@ -87,6 +93,9 @@ class AvatarSceneControllerImpl implements AvatarSceneController {
     _built = true;
     _builder.build(_scene);
   }
+
+  @override
+  Future<void> setAvatarType(AvatarType type) => _builder.setAvatarType(type);
 
   @override
   void tick(
