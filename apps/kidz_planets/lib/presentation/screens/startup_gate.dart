@@ -56,16 +56,17 @@ class _StartupGateState extends ConsumerState<StartupGate>
   /// to full size exactly as the intro is gone — the system coming to meet
   /// the rocket.
   static const double _introZoom = 1.7;
-  static const double _explorerZoom = 0.72;
 
   late final AnimationController _swap = AnimationController(
     vsync: this,
     duration: handover,
   );
-  late final Animation<double> _fadeIn = CurvedAnimation(
-    parent: _swap,
-    curve: const Interval(0.15, 0.7, curve: Curves.easeOut),
-  );
+  // The Explorer is already fully built and has presented a frame before
+  // the swap starts. Do not animate its opacity or scale during the handover:
+  // those animations force an additional compositing/transform workload while
+  // the 3D scene is rendering. The intro itself supplies the visual motion;
+  // the Explorer simply waits underneath and is revealed by the intro fading
+  // away.
   late final Animation<double> _zoomOut = CurvedAnimation(
     parent: _swap,
     curve: Curves.easeInCubic,
@@ -181,14 +182,11 @@ class _StartupGateState extends ConsumerState<StartupGate>
   /// The Explorer, painted *underneath* the intro's opaque background so it is
   /// invisible while it compiles, then revealed as the intro fades away.
   Widget _explorerLayer() {
-    final explorer = widget.explorerBuilder?.call() ?? const ExplorerScreen();
-    return FadeTransition(
-      opacity: _fadeIn,
-      child: ScaleTransition(
-        scale: Tween(begin: _explorerZoom, end: 1.0).animate(_zoomIn),
-        child: explorer,
-      ),
-    );
+    // The scene has already rendered its first frame before the swap begins.
+    // Keep this layer static during the transition so Flutter does not have
+    // to animate a full-screen 3D render target's opacity and transform on
+    // every handover frame. The intro layer above it provides the motion.
+    return widget.explorerBuilder?.call() ?? const ExplorerScreen();
   }
 
   /// The intro.
