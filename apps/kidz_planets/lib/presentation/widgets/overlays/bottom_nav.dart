@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:core/l10n.dart';
 import 'package:core/layout.dart';
 import 'package:core/platform.dart';
-import 'package:kidz_planets/presentation/tv/tv_nav_target.dart';
 import 'package:core/theme.dart';
+import 'package:kidz_planets/presentation/tv/tv_nav_target.dart';
 import 'package:kidz_planets/application/state/providers.dart';
 
 class ExplorerBottomNav extends ConsumerWidget {
@@ -120,5 +120,5 @@ class _NavItem extends StatelessWidget {
         ),
       ),
     ),
-  );
-}
+  ),
+);
