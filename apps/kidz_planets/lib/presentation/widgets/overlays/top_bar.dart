@@ -220,19 +220,14 @@ class LanguageButton extends ConsumerWidget {
             });
           }
 
-          return TvNavTarget(
+          return _CircleButton(
             id: 'chrome:language',
-            control: TvChromeControl.other,
-            onSelect: openMenu,
-            child: _CircleButton(
-              id: 'chrome:language-visual',
-              icon: Icons.translate_rounded,
-              color: current.languageCode == 'id'
-                  ? AppTheme.accentAmber
-                  : Colors.white70,
-              onTap: openMenu,
-              badge: current.languageCode == 'id',
-            ),
+            icon: Icons.translate_rounded,
+            color: current.languageCode == 'id'
+                ? AppTheme.accentAmber
+                : Colors.white70,
+            onTap: openMenu,
+            badge: current.languageCode == 'id',
           );
         },
       ),
