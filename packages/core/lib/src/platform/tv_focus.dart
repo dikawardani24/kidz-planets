@@ -30,7 +30,7 @@ class TvFocusable extends StatefulWidget {
   /// What happens on SELECT/OK (remote) or tap (touch/mouse fallback).
   final VoidCallback? onSelect;
 
-  /// The content, drawn with the Kidz Planets focus ring when focused.
+  /// The content, drawn with the Planetaria focus ring when focused.
   final Widget child;
 
   /// External node for custom traversal order. Owned by the caller then.
@@ -157,7 +157,7 @@ class TvFocusContainer extends StatelessWidget {
   }
 }
 
-/// The consistent Kidz Planets TV focus treatment.
+/// The consistent Planetaria TV focus treatment.
 ///
 /// Focused: amber ring + soft amber glow + slight scale, on the existing
 /// `space700` glass language. Unfocused: the child untouched, so screens do

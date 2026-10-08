@@ -1,4 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Planetaria launch splash: deep-space background with the centered planet
+     mark. The background matches the Flutter intro screen (#060417) so the
+     handover from the native splash to the first Flutter frame is seamless,
+     and gravity="center" keeps the mark unstretched on every aspect ratio. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/launch_bg" />
+
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/planetaria_mark" />
+    </item>
 </layer-list>

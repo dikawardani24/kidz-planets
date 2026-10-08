@@ -1,4 +1,4 @@
-/// Localization for Kidz Planets: the generated [AppLocalizations] delegate and
+/// Localization for Planetaria: the generated [AppLocalizations] delegate and
 /// the app's own message envelope.
 ///
 /// Generated classes are public API here rather than hidden behind an export so

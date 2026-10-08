@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- Planetaria launch splash (API 21+): same artwork as the base drawable so
+     cold start looks identical on every OS version. Previously this variant
+     used ?android:colorBackground (near-white), which flashed light before
+     the dark Flutter intro painted. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="?android:colorBackground" />
+    <item android:drawable="@color/launch_bg" />
 
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
+    <item>
         <bitmap
             android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+            android:src="@drawable/planetaria_mark" />
+    </item>
 </layer-list>

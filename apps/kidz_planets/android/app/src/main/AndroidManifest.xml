@@ -9,10 +9,11 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
     <application
-        android:label="kidz_planets"
+        android:label="Planetaria"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:banner="@mipmap/ic_launcher">
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:banner="@drawable/tv_banner">
         <activity
             android:name=".MainActivity"
             android:exported="true"

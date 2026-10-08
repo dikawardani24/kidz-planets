@@ -1,6 +1,6 @@
 {
   "@@locale": "en",
-  "appTitle": "Space Explorer - Kidz Planets",
+  "appTitle": "Planetaria",
   "@appTitle": {
     "description": "Application title shown in the task switcher."
   },
@@ -11,7 +11,7 @@
   "languageEnglish": "English",
   "languageIndonesian": "Bahasa Indonesia",
   "tooltipLanguage": "Change language",
-  "topBarTitle": "NASA Space Explorer",
+  "topBarTitle": "Planetaria",
   "tooltipShowLabels": "Show object labels",
   "tooltipHideLabels": "Hide object labels",
   "tooltipShowOrbits": "Show orbit paths",
@@ -179,7 +179,7 @@
   "companionHot": "Phew! It is scorching hot! ☀️",
   "companionThinking": "Hmm... exploring ideas!",
   "toastSandboxReady": "Sandbox Ready! Run interactive NASA 3D experiments below.",
-  "introBrandTag": "Kidz Planets Adventure",
+  "introBrandTag": "Planetaria Adventure",
   "@introBrandTag": {
     "description": "Small pill above the intro title."
   },

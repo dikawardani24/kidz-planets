@@ -43,7 +43,7 @@ void main() {
     await pumpIntro(tester, hooks);
 
     // Branding, title, rocket and bar — the prototype's hierarchy.
-    expect(find.text('Kidz Planets Adventure'), findsOneWidget);
+    expect(find.text('Planetaria Adventure'), findsOneWidget);
     expect(find.text('SPACE ADVENTURE'), findsOneWidget);
     expect(find.text('🚀'), findsOneWidget);
     expect(find.text('0%'), findsOneWidget);

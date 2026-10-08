@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
-/// Proportional scaling for the Kidz Planets chrome: one uniform factor from
+/// Proportional scaling for the Planetaria chrome: one uniform factor from
 /// the actual viewport, applied to every dimension of a composition.
 ///
 /// Reference design, scaled to the available viewport:

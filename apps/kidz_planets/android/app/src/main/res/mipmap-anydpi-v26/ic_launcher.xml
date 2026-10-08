@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Planetaria adaptive launcher icon: deep-space background with the
+     ringed-planet foreground. The planet itself sits inside the 66dp safe
+     circle; only the ring tips use the bleed zone, so every OEM mask keeps
+     the mark recognizable. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>

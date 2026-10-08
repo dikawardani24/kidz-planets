@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="launch_bg">#010206</color>
+    <!-- Native splash background. Matches the Flutter intro screen so the
+         native-to-Flutter handover has no color flash. -->
+    <color name="launch_bg">#060417</color>
+    <!-- Adaptive-icon background: the deep-space base the planet foreground
+         floats over. -->
+    <color name="ic_launcher_background">#101638</color>
 </resources>

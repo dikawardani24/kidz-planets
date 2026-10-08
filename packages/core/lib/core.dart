@@ -1,4 +1,4 @@
-/// Shared infrastructure for the Kidz Planets workspace.
+/// Shared infrastructure for the Planetaria workspace.
 ///
 /// Core owns localization, theme, audio abstractions, the simulation clock and
 /// the startup contract: the things more than one feature package genuinely

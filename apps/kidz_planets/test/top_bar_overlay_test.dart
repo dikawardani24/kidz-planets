@@ -38,7 +38,7 @@ double topOf(WidgetTester tester, String text) =>
     tester.getRect(find.text(text)).top;
 
 double topBarBottom(WidgetTester tester) =>
-    tester.getRect(find.text('NASA Space Explorer')).bottom;
+    tester.getRect(find.text('Planetaria')).bottom;
 
 void main() {
   testWidgets('mission banner is shown while a mission is active', (
