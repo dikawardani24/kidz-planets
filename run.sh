@@ -132,7 +132,7 @@ do_build_apk() {
       *) extra+=("$arg") ;;
     esac
   done
-  echo "==> flutter build apk $mode $split ${extra[*]}"
+  echo "==> flutter build apk $mode $split${extra[@]+ ${extra[*]}}"
   # shellcheck disable=SC2086
   if [ "${#extra[@]}" -eq 0 ]; then
     (cd "$APP_DIR" && flutter build apk $mode $split)
