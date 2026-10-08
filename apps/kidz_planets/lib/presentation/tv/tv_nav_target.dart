@@ -28,7 +28,7 @@ class TvNavTarget extends ConsumerWidget {
   final TvChromeControl control;
   final bool autofocus;
   final Widget Function(BuildContext context, bool focused, Widget child)?
-      builder;
+  builder;
   final bool scaleOnFocus;
 
   @override

@@ -728,6 +728,7 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
             focusNode: _tvFocus,
             onSelect: _interactByTap,
             scaleOnFocus: false,
+            consumeDirectionalKeys: false,
             onFocusChange: (focused) =>
                 ref.read(tvAvatarFocusedProvider.notifier).state = focused,
             child: child,

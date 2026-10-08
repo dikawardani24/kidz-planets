@@ -89,6 +89,9 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
         'TvRemoteHandler: television=${ref.read(isTelevisionProvider)}',
       );
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scope.requestFocus();
+    });
   }
 
   @override
@@ -146,15 +149,6 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
     final celebrationVisible = ref.read(
       missionProgressProvider.select((s) => s.celebrationVisible),
     );
-    // The TV home is the root: BACK there stays put instead of leaving the
-    // app out from under a child reaching for the remote.
-    if (remoteKey == TvRemoteKey.back &&
-        shell.tab == AppTab.explore &&
-        !explorer.hasSelection &&
-        !celebrationVisible &&
-        ref.read(tvExplorerControllerProvider).homeVisible) {
-      return KeyEventResult.handled;
-    }
     // The avatar page owns BACK while open: leaving it returns to the tab
     // underneath rather than unwinding Explorer state behind the overlay.
     if (remoteKey == TvRemoteKey.back && shell.avatarPageVisible) {
@@ -187,6 +181,7 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
             back.celebrationVisible ||
             explorer.hasSelection ||
             explorer.markedTargetId != null ||
+            ref.read(tvExplorerControllerProvider).chromeFocused ||
             back.missionsOpen,
       );
       switch (focusAction) {
@@ -196,6 +191,7 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
           return KeyEventResult.handled;
         case TvBackFocusAction.toChrome:
           ref.read(tvChromeScopeProvider).requestFocus();
+          controller.enterChrome();
           _log(remoteKey, layer, true, 'focus-to-chrome');
           return KeyEventResult.handled;
         case TvBackFocusAction.unwind:
@@ -235,11 +231,6 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
         ref.read(appShellProvider.notifier).closeCelebration(),
     exitMissions: () {
       ref.read(appShellProvider.notifier).setTab(AppTab.explore);
-      // Coming back to explore with empty hands lands on home, not on an
-      // empty scene with no obvious next step.
-      if (!ref.read(explorerControllerProvider).hasSelection) {
-        ref.read(tvExplorerControllerProvider.notifier).showHome();
-      }
     },
   );
 

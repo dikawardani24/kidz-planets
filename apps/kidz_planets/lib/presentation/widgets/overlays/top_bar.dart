@@ -234,6 +234,7 @@ class _CircleButton extends StatelessWidget {
     // control — labels, play/pause, orbits — reachable from the TV remote.
     return TvFocusable(
       onSelect: onTap,
+      consumeDirectionalKeys: false,
       child: Container(
         width: extent,
         height: extent,
@@ -390,6 +391,7 @@ class _Banner extends StatelessWidget {
         // exactly as before.
         child: TvFocusable(
           onSelect: interactive ? onTap : null,
+          consumeDirectionalKeys: false,
           child: Container(
             padding: ds.insets(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(

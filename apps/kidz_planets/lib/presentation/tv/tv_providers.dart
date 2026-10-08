@@ -7,6 +7,7 @@ import 'package:planets/audio.dart';
 import 'package:planets/scene.dart';
 import 'package:planets/state.dart';
 
+import 'tv_discovery_graph.dart';
 import 'tv_explorer_controller.dart';
 
 /// Production [TvSceneOps]: the same scene controller the touch UI drives.
@@ -52,6 +53,13 @@ class SolarSystemSceneOps implements TvSceneOps {
   void resetOverview() => _scene.resetOverview();
 
   @override
+  void startZoomToDetail(String planetId, PerspectiveCamera camera) =>
+      _scene.startZoomToDetail(planetId, camera);
+
+  @override
+  bool get zoomFlightActive => _scene.zoomFlightActive;
+
+  @override
   Offset? projectBodyCenter(
     String planetId,
     PerspectiveCamera camera,
@@ -88,10 +96,14 @@ final tvChromeScopeProvider = Provider<FocusScopeNode>((ref) {
 /// [ExplorerController] state.
 final tvExplorerControllerProvider =
     StateNotifierProvider<TvExplorerController, TvExplorerUiState>((ref) {
+      final bodies = ref.watch(planetsProvider);
       final controller = TvExplorerController(
         explorer: ref.watch(explorerControllerProvider.notifier),
         scene: ref.watch(tvSceneOpsProvider),
-        bodyIds: ref.watch(planetsProvider).map((p) => p.id).toList(),
+        bodyIds: bodies.map((p) => p.id).toList(),
+        // LEFT/RIGHT order and parent↔moon steps come from the catalogue:
+        // the UI never hardcodes which body follows which.
+        discovery: TvDiscoveryGraph.fromPlanets(bodies),
         replayNarration: (planetId) {
           final planet = ref.read(planetByIdProvider(planetId));
           ref.read(planetNarrationServiceProvider).speakPlanet(planet);

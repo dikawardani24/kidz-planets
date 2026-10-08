@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:planets/state.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
+import 'package:kidz_planets/presentation/tv/tv_discovery_graph.dart';
 import 'package:kidz_planets/presentation/tv/tv_explorer_controller.dart';
 
 /// Camera-free stand-in for the scene: records motion, scripts thresholds.
@@ -20,6 +21,10 @@ class FakeSceneOps implements TvSceneOps {
   final List<(double, double)> viewRotations = [];
   final List<(String, double, double)> objectRotations = [];
   final List<(double, String)> pinches = [];
+
+  /// Bodies OK asked to visit, in order: the smooth flight requests.
+  final List<String> flightRequests = [];
+  bool flightActive = false;
   int cancelFlights = 0;
   int resets = 0;
 
@@ -54,10 +59,22 @@ class FakeSceneOps implements TvSceneOps {
       progress;
 
   @override
-  void cancelZoomFlight() => cancelFlights++;
+  void cancelZoomFlight() {
+    cancelFlights++;
+    flightActive = false;
+  }
 
   @override
   void resetOverview() => resets++;
+
+  @override
+  void startZoomToDetail(String planetId, PerspectiveCamera camera) {
+    flightRequests.add(planetId);
+    flightActive = true;
+  }
+
+  @override
+  bool get zoomFlightActive => flightActive;
 
   @override
   Offset? projectBodyCenter(
@@ -85,6 +102,8 @@ void main() {
   (ExplorerController, FakeSceneOps, TvExplorerController) setup({
     List<String> bodyIds = bodies,
     Duration selectDebounce = Duration.zero,
+    Duration chromeTimeout = const Duration(seconds: 4),
+    TvDiscoveryGraph? discovery,
   }) {
     final explorer = ExplorerController(clock: SimulationClock());
     final scene = FakeSceneOps();
@@ -93,8 +112,10 @@ void main() {
       explorer: explorer,
       scene: scene,
       bodyIds: bodyIds,
+      discovery: discovery,
       replayNarration: narrated.add,
       selectDebounce: selectDebounce,
+      chromeTimeout: chromeTimeout,
     );
     addTearDown(() {
       tv.dispose();
@@ -102,6 +123,31 @@ void main() {
     });
     return (explorer, scene, tv);
   }
+
+  /// Graph mirroring the catalogue shape: primaries in orbit order with the
+  /// real parent<->moon families attached.
+  TvDiscoveryGraph moonGraph() => TvDiscoveryGraph(
+    primaries: const ['sun', 'earth', 'mars', 'jupiter', 'saturn'],
+    childrenByParent: const {
+      'earth': ['moon'],
+      'mars': ['phobos', 'deimos'],
+      'jupiter': ['io', 'europa', 'ganymede', 'callisto'],
+    },
+    parentById: const {
+      'sun': null,
+      'earth': null,
+      'mars': null,
+      'jupiter': null,
+      'saturn': null,
+      'moon': 'earth',
+      'phobos': 'mars',
+      'deimos': 'mars',
+      'io': 'jupiter',
+      'europa': 'jupiter',
+      'ganymede': 'jupiter',
+      'callisto': 'jupiter',
+    },
+  );
 
   bool down(
     TvExplorerController tv,
@@ -136,12 +182,16 @@ void main() {
       expect(explorer.state.markedTargetId, 'venus');
     });
 
-    test('OK with no mark parks the cursor; OK again selects', () {
-      final (explorer, _, tv) = setup();
+    test('OK visits the target with one smooth flight, no two-step mark', () {
+      final (explorer, scene, tv) = setup();
+      // First OK: parks on the first discovery and starts the flight.
       down(tv, TvRemoteKey.center, TvInputLayer.explorer);
       expect(explorer.state.markedTargetId, 'mercury');
+      expect(scene.flightRequests, ['mercury']);
       expect(explorer.state.hasSelection, isFalse);
-      down(tv, TvRemoteKey.center, TvInputLayer.explorer);
+      // The scene tick finishes the flight by opening detail at the reached
+      // distance (simulated here); the child never sees a mark/select split.
+      explorer.selectPlanet('mercury');
       expect(explorer.state.selectedPlanetId, 'mercury');
     });
 
@@ -152,16 +202,17 @@ void main() {
       expect(explorer.state.selectedPlanetId, 'earth');
     });
 
-    test('rapid double OK is debounced', () {
-      final (explorer, _, tv) = setup(
+    test('rapid double OK starts exactly one flight', () {
+      final (explorer, scene, tv) = setup(
         selectDebounce: const Duration(seconds: 10),
       );
       down(tv, TvRemoteKey.center, TvInputLayer.explorer);
       expect(explorer.state.markedTargetId, 'mercury');
-      // The follow-up press lands inside the debounce window, so no
-      // selection fires: one press, one outcome.
+      expect(scene.flightRequests, ['mercury']);
+      // The follow-up press lands inside the debounce window, so no second
+      // flight fires: one press, one outcome.
       down(tv, TvRemoteKey.center, TvInputLayer.explorer);
-      expect(explorer.state.markedTargetId, 'mercury');
+      expect(scene.flightRequests, ['mercury']);
       expect(explorer.state.hasSelection, isFalse);
     });
 
@@ -176,19 +227,116 @@ void main() {
     });
   });
 
-  group('spatial navigation (one D-pad model)', () {
-    test('all four arrows move the cursor, never zoom or rotate', () {
-      final (explorer, scene, tv) = setup();
+  group('discovery relationships (moons via their planet)', () {
+    test('LEFT/RIGHT walks primaries in orbit order', () {
+      final (explorer, _, tv) = setup(discovery: moonGraph());
+      explorer.markTarget('sun');
+      down(tv, TvRemoteKey.right, TvInputLayer.explorer);
+      expect(explorer.state.markedTargetId, 'earth');
+      down(tv, TvRemoteKey.right, TvInputLayer.explorer);
+      expect(explorer.state.markedTargetId, 'mars');
+    });
+
+    test('DOWN enters the first moon, UP returns to the parent', () {
+      final (explorer, _, tv) = setup(discovery: moonGraph());
       explorer.markTarget('earth');
       down(tv, TvRemoteKey.down, TvInputLayer.explorer);
-      expect(explorer.state.markedTargetId, isNot('earth'));
-      tv.advance(1 / 60);
-      expect(scene.pinches, isEmpty);
-      expect(scene.viewRotations, isEmpty);
+      expect(explorer.state.markedTargetId, 'moon');
       down(tv, TvRemoteKey.up, TvInputLayer.explorer);
+      expect(explorer.state.markedTargetId, 'earth');
+    });
+
+    test('DOWN tours a moon family, sideways steps between siblings', () {
+      final (explorer, _, tv) = setup(discovery: moonGraph());
+      explorer.markTarget('jupiter');
+      down(tv, TvRemoteKey.down, TvInputLayer.explorer);
+      expect(explorer.state.markedTargetId, 'io');
+      down(tv, TvRemoteKey.down, TvInputLayer.explorer);
+      expect(explorer.state.markedTargetId, 'europa');
+      down(tv, TvRemoteKey.right, TvInputLayer.explorer);
+      expect(explorer.state.markedTargetId, 'ganymede');
+      down(tv, TvRemoteKey.left, TvInputLayer.explorer);
+      expect(explorer.state.markedTargetId, 'europa');
+      down(tv, TvRemoteKey.up, TvInputLayer.explorer);
+      expect(explorer.state.markedTargetId, 'jupiter');
+    });
+
+    test('no meaningful relation means stay, never jump to UI', () {
+      final (explorer, scene, tv) = setup(discovery: moonGraph());
+      tv.registerTarget(
+        TvRegisteredTarget(
+          id: 'chrome:play-pause',
+          center: const Offset(100, 1900),
+          onActivate: () {},
+        ),
+      );
+      // UP from a planet and DOWN from a moonless... Saturn has no moons in
+      // this graph, and a lone moon has no sideways sibling.
+      explorer.markTarget('mars');
+      down(tv, TvRemoteKey.up, TvInputLayer.explorer);
+      expect(explorer.state.markedTargetId, 'mars');
+      explorer.markTarget('moon');
+      down(tv, TvRemoteKey.right, TvInputLayer.explorer);
+      expect(explorer.state.markedTargetId, 'moon');
+      down(tv, TvRemoteKey.down, TvInputLayer.explorer);
+      expect(explorer.state.markedTargetId, 'moon');
+      // Staying put never lands on chrome.
+      expect(tv.state.spatialFocusId, isNot('chrome:play-pause'));
+      expect(scene.pinches, isEmpty);
+    });
+
+    test('OK on a moon visits the moon itself', () {
+      final (explorer, scene, tv) = setup(discovery: moonGraph());
+      explorer.markTarget('earth');
+      down(tv, TvRemoteKey.down, TvInputLayer.explorer);
+      expect(explorer.state.markedTargetId, 'moon');
+      down(tv, TvRemoteKey.center, TvInputLayer.explorer);
+      expect(scene.flightRequests.last, 'moon');
+    });
+  });
+
+  group('spatial navigation (discovery owns the D-pad)', () {
+    test('LEFT/RIGHT moves the cursor; UP/DOWN without relations stays', () {
+      final (explorer, scene, tv) = setup();
+      explorer.markTarget('earth');
+      down(tv, TvRemoteKey.right, TvInputLayer.explorer);
+      expect(explorer.state.markedTargetId, 'mars');
+      // No parent/child relations in a flat list: UP/DOWN stay put instead
+      // of jumping somewhere unrelated.
+      down(tv, TvRemoteKey.down, TvInputLayer.explorer);
+      expect(explorer.state.markedTargetId, 'mars');
+      down(tv, TvRemoteKey.up, TvInputLayer.explorer);
+      expect(explorer.state.markedTargetId, 'mars');
       tv.advance(1 / 60);
       expect(scene.pinches, isEmpty);
       expect(scene.viewRotations, isEmpty);
+    });
+
+    test('discovery navigation never focuses chrome controls', () {
+      final (explorer, _, tv) = setup();
+      var calls = 0;
+      tv.registerTarget(
+        TvRegisteredTarget(
+          id: 'chrome:zoom-in',
+          center: const Offset(100, 100),
+          onActivate: () => calls++,
+        ),
+      );
+      explorer.markTarget('earth');
+      for (final key in TvRemoteKey.values) {
+        if (key == TvRemoteKey.center ||
+            key == TvRemoteKey.back ||
+            key == TvRemoteKey.playPause) {
+          continue;
+        }
+        down(tv, key, TvInputLayer.explorer);
+        expect(tv.state.spatialFocusId, isNot('chrome:zoom-in'));
+      }
+      expect(calls, 0);
+      // Discovery OK visits the body; it never fires chrome activations.
+      down(tv, TvRemoteKey.center, TvInputLayer.explorer);
+      expect(calls, 0);
+      expect(explorer.state.markedTargetId, isNot('chrome:zoom-in'));
     });
 
     test('selecting a planet never enters rotate mode', () {
@@ -200,7 +348,7 @@ void main() {
       expect(tv.state.mode, TvControlMode.browse);
     });
 
-    test('OK on a chrome target fires its activation, not body logic', () {
+    test('OK on a chrome target fires only in the UI layer', () {
       final (explorer, _, tv) = setup();
       var calls = 0;
       tv.registerTarget(
@@ -212,9 +360,34 @@ void main() {
       );
       explorer.markTarget('earth');
       tv.updateSpatialFocusForTest('chrome:zoom-in');
+      // Discovery owns the D-pad: OK visits the body, chrome stays silent.
+      down(tv, TvRemoteKey.center, TvInputLayer.explorer);
+      expect(calls, 0);
+      // The UI layer owns chrome: OK fires its activation, not body logic.
+      explorer.closeDetail();
+      tv.enterChrome();
+      tv.updateSpatialFocusForTest('chrome:zoom-in');
       down(tv, TvRemoteKey.center, TvInputLayer.explorer);
       expect(calls, 1);
       expect(explorer.state.hasSelection, isFalse);
+    });
+
+    test('BACK leaves the UI layer before anything else behind it', () {
+      final (_, _, tv) = setup();
+      tv.enterChrome();
+      expect(tv.state.chromeFocused, isTrue);
+      expect(tv.handleBack(quietBack()), TvBackOutcome.exitedChrome);
+      expect(tv.state.chromeFocused, isFalse);
+      expect(tv.handleBack(quietBack()), TvBackOutcome.unhandled);
+    });
+
+    test('quiet controls fade after inactivity and return on input', () async {
+      final (_, _, tv) = setup(chromeTimeout: const Duration(milliseconds: 20));
+      expect(tv.state.chromeVisible, isTrue);
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      expect(tv.state.chromeVisible, isFalse);
+      down(tv, TvRemoteKey.right, TvInputLayer.explorer);
+      expect(tv.state.chromeVisible, isTrue);
     });
   });
 
@@ -463,13 +636,14 @@ void main() {
       expect(tv.state.hintVisible, isTrue);
     });
 
-    test('home dismisses and returns', () {
+    test('explore starts directly in the solar system, no home menu', () {
       final (_, _, tv) = setup();
-      expect(tv.state.homeVisible, isTrue);
-      tv.dismissHome();
+      // No category home on TV: the child lands in the system itself.
       expect(tv.state.homeVisible, isFalse);
       tv.showHome();
       expect(tv.state.homeVisible, isTrue);
+      tv.dismissHome();
+      expect(tv.state.homeVisible, isFalse);
     });
 
     test('ensureCursor parks on the first body only when empty-handed', () {
