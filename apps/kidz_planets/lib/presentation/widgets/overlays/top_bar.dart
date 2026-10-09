@@ -6,6 +6,7 @@ import 'package:core/layout.dart';
 import 'package:core/platform.dart';
 import 'package:core/theme.dart';
 import 'package:kidz_planets/application/state/providers.dart';
+import 'package:kidz_planets/presentation/tv/tv_nav_target.dart';
 import 'package:kidz_planets/presentation/widgets/panels/mission_guide.dart';
 import 'package:planets/state.dart';
 
@@ -111,6 +112,7 @@ class ExplorerTopBar extends ConsumerWidget {
             Tooltip(
               message: t.tooltipAvatar,
               child: _CircleButton(
+                id: 'chrome:avatar',
                 icon: Icons.person_rounded,
                 color: Colors.white70,
                 onTap: () =>
@@ -123,6 +125,7 @@ class ExplorerTopBar extends ConsumerWidget {
                   ? t.tooltipHideLabels
                   : t.tooltipShowLabels,
               child: _CircleButton(
+                id: 'chrome:labels',
                 icon: ui.showLabels
                     ? Icons.label_outline
                     : Icons.label_off_outlined,
@@ -132,6 +135,7 @@ class ExplorerTopBar extends ConsumerWidget {
             ),
             SizedBox(width: ds.px(6)),
             _CircleButton(
+              id: 'chrome:top-play-pause',
               icon: ui.running ? Icons.pause : Icons.play_arrow,
               color: AppTheme.accentSky,
               onTap: notifier.toggleRunning,
@@ -142,6 +146,7 @@ class ExplorerTopBar extends ConsumerWidget {
                   ? t.tooltipHideOrbits
                   : t.tooltipShowOrbits,
               child: _CircleButton(
+                id: 'chrome:orbits',
                 icon: ui.showOrbits
                     ? Icons.track_changes
                     : Icons.track_changes_outlined,
@@ -171,52 +176,75 @@ class LanguageButton extends ConsumerWidget {
         .resolve(Localizations.localeOf(context));
     return Tooltip(
       message: t.tooltipLanguage,
-      child: PopupMenuButton<String>(
-        tooltip: '',
-        onSelected: (code) =>
-            ref.read(localeControllerProvider.notifier).select(Locale(code)),
-        color: AppTheme.space800,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        itemBuilder: (context) => [
-          for (final (code, label) in [
-            ('en', t.languageEnglish),
-            ('id', t.languageIndonesian),
-          ])
-            PopupMenuItem(
-              value: code,
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: chosen?.languageCode == code
-                      ? FontWeight.w900
-                      : FontWeight.w500,
-                ),
+      child: Builder(
+        builder: (buttonContext) {
+          void openMenu() {
+            final box = buttonContext.findRenderObject() as RenderBox;
+            final topLeft = box.localToGlobal(Offset.zero);
+            showMenu<String>(
+              context: buttonContext,
+              position: RelativeRect.fromLTRB(
+                topLeft.dx,
+                topLeft.dy + box.size.height,
+                topLeft.dx + box.size.width,
+                topLeft.dy,
               ),
-            ),
-        ],
-        child: _CircleButton(
-          icon: Icons.translate_rounded,
-          color: current.languageCode == 'id'
-              ? AppTheme.accentAmber
-              : Colors.white70,
-          // A dot on the button is the only signal a pre-literate child gets
-          // that the app is not speaking their language.
-          badge: current.languageCode == 'id',
-        ),
+              color: AppTheme.space800,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              items: [
+                for (final (code, label) in [
+                  ('en', t.languageEnglish),
+                  ('id', t.languageIndonesian),
+                ])
+                  PopupMenuItem(
+                    value: code,
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: chosen?.languageCode == code
+                            ? FontWeight.w900
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
+            ).then((code) {
+              if (code != null) {
+                ref
+                    .read(localeControllerProvider.notifier)
+                    .select(Locale(code));
+              }
+            });
+          }
+
+          return _CircleButton(
+            id: 'chrome:language',
+            icon: Icons.translate_rounded,
+            color: current.languageCode == 'id'
+                ? AppTheme.accentAmber
+                : Colors.white70,
+            onTap: openMenu,
+            badge: current.languageCode == 'id',
+          );
+        },
       ),
     );
   }
 }
 
-class _CircleButton extends StatelessWidget {
+class _CircleButton extends ConsumerWidget {
   const _CircleButton({
+    required this.id,
     required this.icon,
     required this.color,
     this.onTap,
     this.badge = false,
   });
 
+  final String id;
   final IconData icon;
   final Color color;
   final VoidCallback? onTap;
@@ -225,49 +253,61 @@ class _CircleButton extends StatelessWidget {
   final bool badge;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // One viewport-derived size: 38px on the reference phone, proportional
     // everywhere else. Circles stay circles at every scale.
     final ds = DesignScale.sharedOf(context);
     final extent = ds.px(38);
-    // TvFocusable keeps touch taps identical while making every top-bar
-    // control — labels, play/pause, orbits — reachable from the TV remote.
-    return TvFocusable(
-      onSelect: onTap,
-      child: Container(
-        width: extent,
-        height: extent,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.black.withValues(alpha: 0.38),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-          boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 12)],
-        ),
-        alignment: Alignment.center,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Icon(icon, size: ds.px(18), color: color),
-            if (badge)
-              Positioned(
-                right: -4,
-                top: -4,
-                child: Container(
-                  width: ds.px(9),
-                  height: ds.px(9),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppTheme.accentAmber,
-                    border: Border.all(
-                      color: Colors.black.withValues(alpha: .5),
-                      width: 1,
-                    ),
+    final circle = Container(
+      width: extent,
+      height: extent,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.black.withValues(alpha: 0.38),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 12)],
+      ),
+      alignment: Alignment.center,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(icon, size: ds.px(18), color: color),
+          if (badge)
+            Positioned(
+              right: -4,
+              top: -4,
+              child: Container(
+                width: ds.px(9),
+                height: ds.px(9),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppTheme.accentAmber,
+                  border: Border.all(
+                    color: Colors.black.withValues(alpha: .5),
+                    width: 1,
                   ),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
+    );
+    // One wrapper per platform: TvNavTarget registers with the TV spatial
+    // registry and renders the focus ring on TV; TvFocusable keeps touch taps
+    // identical on mobile without registering a chrome target the touch UI
+    // would never use.
+    if (!ref.watch(isTelevisionProvider)) {
+      return TvFocusable(
+        onSelect: onTap,
+        consumeDirectionalKeys: false,
+        child: circle,
+      );
+    }
+    return TvNavTarget(
+      id: id,
+      control: TvChromeControl.other,
+      onSelect: onTap,
+      child: circle,
     );
   }
 }
@@ -359,7 +399,31 @@ class ExplorerInteractionOverlays extends ConsumerWidget {
   }
 }
 
-class _Banner extends StatelessWidget {
+/// One wrapper per platform for the mission banner: the TV spatial registry
+/// when the banner is actually actionable on TV, otherwise the plain focus
+/// treatment (which stays disabled until [onSelect] is set, so the
+/// non-interactive hints never enter the navigation graph).
+Widget _bannerFocus({
+  required bool isTelevision,
+  required VoidCallback? onSelect,
+  required Widget child,
+}) {
+  if (isTelevision && onSelect != null) {
+    return TvNavTarget(
+      id: 'chrome:mission-banner',
+      control: TvChromeControl.other,
+      onSelect: onSelect,
+      child: child,
+    );
+  }
+  return TvFocusable(
+    onSelect: onSelect,
+    consumeDirectionalKeys: false,
+    child: child,
+  );
+}
+
+class _Banner extends ConsumerWidget {
   const _Banner({
     required this.top,
     required this.borderColor,
@@ -379,7 +443,7 @@ class _Banner extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final ds = DesignScale.sharedOf(context);
     return Positioned(
       top: top,
@@ -387,8 +451,11 @@ class _Banner extends StatelessWidget {
       right: 0,
       child: Center(
         // Focusable so the TV remote can open the mission; touch taps behave
-        // exactly as before.
-        child: TvFocusable(
+        // exactly as before. On TV the interactive banner joins the spatial
+        // registry beside the other chrome; otherwise — and everywhere on
+        // mobile — it keeps the plain focus wrapper.
+        child: _bannerFocus(
+          isTelevision: ref.watch(isTelevisionProvider),
           onSelect: interactive ? onTap : null,
           child: Container(
             padding: ds.insets(horizontal: 14, vertical: 6),

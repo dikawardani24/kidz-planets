@@ -7,6 +7,7 @@ import 'package:planets/audio.dart';
 import 'package:planets/scene.dart';
 import 'package:planets/state.dart';
 
+import 'tv_discovery_graph.dart';
 import 'tv_explorer_controller.dart';
 
 /// Production [TvSceneOps]: the same scene controller the touch UI drives.
@@ -52,6 +53,13 @@ class SolarSystemSceneOps implements TvSceneOps {
   void resetOverview() => _scene.resetOverview();
 
   @override
+  void startZoomToDetail(String planetId, PerspectiveCamera camera) =>
+      _scene.startZoomToDetail(planetId, camera);
+
+  @override
+  bool get zoomFlightActive => _scene.zoomFlightActive;
+
+  @override
   Offset? projectBodyCenter(
     String planetId,
     PerspectiveCamera camera,
@@ -88,10 +96,14 @@ final tvChromeScopeProvider = Provider<FocusScopeNode>((ref) {
 /// [ExplorerController] state.
 final tvExplorerControllerProvider =
     StateNotifierProvider<TvExplorerController, TvExplorerUiState>((ref) {
+      final bodies = ref.watch(planetsProvider);
       final controller = TvExplorerController(
         explorer: ref.watch(explorerControllerProvider.notifier),
         scene: ref.watch(tvSceneOpsProvider),
-        bodyIds: ref.watch(planetsProvider).map((p) => p.id).toList(),
+        bodyIds: bodies.map((p) => p.id).toList(),
+        // LEFT/RIGHT order and parent↔moon steps come from the catalogue:
+        // the UI never hardcodes which body follows which.
+        discovery: TvDiscoveryGraph.fromPlanets(bodies),
         replayNarration: (planetId) {
           final planet = ref.read(planetByIdProvider(planetId));
           ref.read(planetNarrationServiceProvider).speakPlanet(planet);
@@ -101,11 +113,20 @@ final tvExplorerControllerProvider =
       // chrome Rotate control only. Selecting a planet keeps navigating.
       // Leaving detail returns an armed rotate mode to browse so arrows
       // navigate again instead of spinning an empty scene.
+      //
+      // A detail *does* hand the D-pad to UI focus mode: the detail chrome
+      // (facts pill, listen/sound, zoom rail, close) is registered UI, and
+      // without the hand-off the facts pill could autofocus while discovery
+      // still owned OK — the ring would say "button" while OK replayed the
+      // narration. UI mode is its own BACK layer, so leaving the detail does
+      // not take it with the detail.
       ref.listen<ExplorerState>(explorerControllerProvider, (prev, next) {
         final was = prev?.hasSelection ?? false;
         if (was == next.hasSelection) return;
         if (!next.hasSelection) {
           controller.exitDetailCleanup();
+        } else if (ref.read(isTelevisionProvider)) {
+          controller.enterChrome(preferId: 'chrome:show-facts');
         }
       });
       return controller;

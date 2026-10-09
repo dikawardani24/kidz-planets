@@ -1,3 +1,4 @@
+import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 import 'tv_focus.dart';
@@ -11,6 +12,24 @@ import 'tv_spatial_nav.dart';
 /// Renders [child] with the shared TV focus treatment; arrows bubble to the
 /// unified spatial navigator via `consumeDirectionalKeys: false`, OK still
 /// activates through [onSelect].
+///
+/// Registration is lifecycle-safe and usability-gated, which is what makes
+/// "every *visible, actionable* control is reachable" true instead of
+/// aspirational:
+///
+/// - a target registers only once it is laid out with a real, non-empty box;
+/// - [onSelect] == null (disabled) never registers;
+/// - an ignoring `IgnorePointer` ancestor or a fully transparent opacity
+///   ancestor (the fading controller chrome, for example) unregisters it —
+///   invisible controls drop out of the navigation graph;
+/// - the id is re-reported every frame, so screen-space centers track layout
+///   movement (scroll, rotation, sibling animation) without a rebuild;
+/// - dispose unregisters the id that was actually last registered, so a widget
+///   whose id changed across rebuilds cannot leak a stale entry.
+///
+/// One focus owner: this widget holds the single [FocusNode] (external via
+/// [focusNode] or owned) and hands it to the one [TvFocusable] below it. There
+/// is no second focus system between the registry and the button.
 class TvSpatialTargetWidget extends StatefulWidget {
   const TvSpatialTargetWidget({
     super.key,
@@ -23,6 +42,8 @@ class TvSpatialTargetWidget extends StatefulWidget {
     this.autofocus = false,
     this.builder,
     this.scaleOnFocus = true,
+    this.focusNode,
+    this.onFocusChange,
   });
 
   final String id;
@@ -36,6 +57,13 @@ class TvSpatialTargetWidget extends StatefulWidget {
   builder;
   final bool scaleOnFocus;
 
+  /// Externally owned node (the companion keeps its own for its layer handoff).
+  /// Owned by the caller then; this widget only reads and reports it.
+  final FocusNode? focusNode;
+
+  /// Notified when focus arrives at or leaves this target.
+  final ValueChanged<bool>? onFocusChange;
+
   @override
   State<TvSpatialTargetWidget> createState() => _TvSpatialTargetWidgetState();
 }
@@ -43,23 +71,80 @@ class TvSpatialTargetWidget extends StatefulWidget {
 class _TvSpatialTargetWidgetState extends State<TvSpatialTargetWidget> {
   final GlobalKey _key = GlobalKey();
   FocusNode? _ownedNode;
+  bool _disposed = false;
 
-  FocusNode get _node => _ownedNode ??= FocusNode();
+  /// The id currently present in the registry, if any. Dispose and id changes
+  /// unregister *this*, never a freshly assigned [TvSpatialTargetWidget.id].
+  String? _registeredId;
+
+  FocusNode get _node =>
+      widget.focusNode ??
+      (_ownedNode ??= FocusNode(debugLabel: 'tvTarget:${widget.id}'));
+
+  @override
+  void initState() {
+    super.initState();
+    // Re-report on every frame while mounted: positions and usability change
+    // through layout and ancestor state (fade, scroll, rotation) without this
+    // widget rebuilding, and a stale center would aim the D-pad at nothing.
+    // The loop only runs when frames already happen — it schedules none.
+    _scheduleReport();
+  }
 
   @override
   void dispose() {
-    try {
-      widget.onUnregister(widget.id);
-    } catch (_) {}
+    _disposed = true;
+    _unregister();
     _ownedNode?.dispose();
     super.dispose();
+  }
+
+  void _scheduleReport() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _disposed) return;
+      _report();
+      _scheduleReport();
+    });
+  }
+
+  void _unregister() {
+    final id = _registeredId;
+    if (id == null) return;
+    _registeredId = null;
+    try {
+      widget.onUnregister(id);
+    } catch (_) {}
+  }
+
+  /// Whether the control may participate in TV navigation right now:
+  /// laid out with a real box, actionable, and not hidden by an ancestor.
+  bool _usable(RenderBox box) {
+    if (widget.onSelect == null) return false;
+    if (!box.hasSize || box.size.isEmpty) return false;
+    RenderObject? node = box;
+    while (node != null) {
+      if (node is RenderIgnorePointer && node.ignoring) return false;
+      if (node is RenderOpacity && node.opacity <= 0.0) return false;
+      if (node is RenderAnimatedOpacity && node.opacity.value <= 0.0) {
+        return false;
+      }
+      node = node.parent;
+    }
+    return true;
   }
 
   void _report() {
     if (!mounted) return;
     final box = _key.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null || !box.hasSize) return;
+    if (box == null || !box.hasSize || !_usable(box)) {
+      _unregister();
+      return;
+    }
     final rect = box.localToGlobal(Offset.zero) & box.size;
+    // An id change on the same state must not leave the old id behind.
+    if (_registeredId != null && _registeredId != widget.id) {
+      _unregister();
+    }
     try {
       widget.onTarget(
         TvSpatialTarget(
@@ -70,18 +155,19 @@ class _TvSpatialTargetWidgetState extends State<TvSpatialTargetWidget> {
           onActivate: widget.onSelect,
         ),
       );
+      _registeredId = widget.id;
     } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) => _report());
     return KeyedSubtree(
       key: _key,
       child: TvFocusable(
         focusNode: _node,
         autofocus: widget.autofocus,
         onSelect: widget.onSelect,
+        onFocusChange: widget.onFocusChange,
         builder: widget.builder,
         scaleOnFocus: widget.scaleOnFocus,
         consumeDirectionalKeys: false,

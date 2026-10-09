@@ -15,6 +15,7 @@ import 'package:avatar/widgets.dart';
 import 'package:core/l10n.dart';
 import 'package:core/platform.dart';
 import 'package:kidz_planets/application/state/providers.dart';
+import 'package:kidz_planets/presentation/tv/tv_nav_target.dart';
 import 'package:kidz_planets/presentation/tv/tv_providers.dart';
 import 'package:planets/data.dart';
 import 'package:planets/state.dart';
@@ -719,12 +720,17 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
 
         final t = AppLocalizations.of(context);
         // On TV the throwable toy is parked: the same tap interaction is
-        // offered as a focusable stop instead, and focus ownership tells the
-        // remote handler to yield arrow input to the avatar layer.
+        // offered as a registered spatial stop instead, and focus ownership
+        // tells the remote handler to yield arrow input to the avatar layer
+        // (outside UI focus mode — inside it the companion is simply the next
+        // spatial target). TvNavTarget is the single wrapper: it renders the
+        // focus ring, reports layout into the registry, and owns OK.
         final isTv = ref.watch(isTelevisionProvider);
         Widget focusForTv(Widget child) {
           if (!isTv) return child;
-          return TvFocusable(
+          return TvNavTarget(
+            id: 'chrome:companion',
+            control: TvChromeControl.other,
             focusNode: _tvFocus,
             onSelect: _interactByTap,
             scaleOnFocus: false,

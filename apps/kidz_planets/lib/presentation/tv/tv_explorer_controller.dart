@@ -14,6 +14,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:core/platform.dart';
 import 'package:planets/state.dart';
 
+import 'tv_discovery_graph.dart';
+
 /// What BACK needs from the shell, which the explorer must not know about.
 ///
 /// The controller decides the order (celebration > detail > mark > missions);
@@ -38,6 +40,7 @@ enum TvBackOutcome {
   closedDetail,
   clearedMark,
   exitedMissions,
+  exitedChrome,
   unhandled,
 }
 
@@ -56,6 +59,15 @@ abstract class TvSceneOps {
   double markZoomProgress(String planetId, PerspectiveCamera camera);
   void cancelZoomFlight();
   void resetOverview();
+
+  /// Starts the smooth zoom-to-detail flight toward [planetId] from [camera]'s
+  /// eye. Unknown ids are ignored. The scene view finishes the flight by
+  /// opening detail at the reached distance — the same flight the touch
+  /// double-tap starts, so TV and mobile share one camera path.
+  void startZoomToDetail(String planetId, PerspectiveCamera camera);
+
+  /// Whether a zoom-to-detail flight is currently running.
+  bool get zoomFlightActive;
   Offset? projectBodyCenter(
     String planetId,
     PerspectiveCamera camera,
@@ -68,8 +80,10 @@ class TvExplorerUiState extends Equatable {
   const TvExplorerUiState({
     this.mode = TvControlMode.browse,
     this.hintVisible = true,
-    this.homeVisible = true,
+    this.homeVisible = false,
     this.quickSelectVisible = false,
+    this.chromeFocused = false,
+    this.chromeVisible = true,
     this.spatialFocusId,
   });
 
@@ -77,6 +91,18 @@ class TvExplorerUiState extends Equatable {
   final bool hintVisible;
   final bool homeVisible;
   final bool quickSelectVisible;
+
+  /// Whether the D-pad currently drives the secondary UI layer instead of
+  /// the solar system. Discovery navigation never enters this on its own:
+  /// only an explicit [TvExplorerController.enterChrome] (or the BACK
+  /// shuttle offering the cluster) arms it, and BACK leaves it.
+  final bool chromeFocused;
+
+  /// Whether the quiet secondary controls (pause, help) are shown. Fades
+  /// after [TvExplorerController.chromeTimeout] of no control input so the
+  /// scene stays unobstructed; any navigation press brings them briefly back.
+  /// The discovery highlight itself never fades with this.
+  final bool chromeVisible;
 
   /// Id of the currently selected interactive target (3D body or chrome id).
   /// Null means nothing selected yet. Always visible via mark/focus visuals.
@@ -87,12 +113,16 @@ class TvExplorerUiState extends Equatable {
     bool? hintVisible,
     bool? homeVisible,
     bool? quickSelectVisible,
+    bool? chromeFocused,
+    bool? chromeVisible,
     Object? spatialFocusId = _sentinel,
   }) => TvExplorerUiState(
     mode: mode ?? this.mode,
     hintVisible: hintVisible ?? this.hintVisible,
     homeVisible: homeVisible ?? this.homeVisible,
     quickSelectVisible: quickSelectVisible ?? this.quickSelectVisible,
+    chromeFocused: chromeFocused ?? this.chromeFocused,
+    chromeVisible: chromeVisible ?? this.chromeVisible,
     spatialFocusId: identical(spatialFocusId, _sentinel)
         ? this.spatialFocusId
         : spatialFocusId as String?,
@@ -104,6 +134,8 @@ class TvExplorerUiState extends Equatable {
     hintVisible,
     homeVisible,
     quickSelectVisible,
+    chromeFocused,
+    chromeVisible,
     spatialFocusId,
   ];
 }
@@ -129,11 +161,15 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     this.replayNarration,
     this.selectDebounce = const Duration(milliseconds: 350),
     this.hintTimeout = const Duration(seconds: 6),
+    this.chromeTimeout = const Duration(seconds: 4),
+    TvDiscoveryGraph? discovery,
   }) : _explorer = explorer,
        _scene = scene,
        _bodyIds = List.unmodifiable(bodyIds),
+       _discovery = discovery ?? TvDiscoveryGraph.fromIds(bodyIds),
        super(const TvExplorerUiState()) {
     _showHintTemporarily();
+    _pokeChrome();
   }
 
   /// Pixels/second the view rotates at full tilt. A full sweep takes ~2.5s:
@@ -156,11 +192,19 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
   /// How long the controller hint stays up after appearing.
   final Duration hintTimeout;
 
+  /// How long the quiet secondary controls stay up after a press.
+  final Duration chromeTimeout;
+
+  /// Relationship-first navigation model (primaries sideways, moons via
+  /// their parent). Derived from the planet catalogue, never hardcoded.
+  final TvDiscoveryGraph _discovery;
+
   final Set<TvRemoteKey> _held = {};
   double _velX = 0;
   double _velY = 0;
   DateTime? _lastSelectAt;
   Timer? _hintTimer;
+  Timer? _chromeTimer;
 
   /// Registered Flutter chrome targets (zoom +/-, play/pause, help, ...),
   /// keyed by stable id. 3D bodies come from [_bodyIds] + scene projection;
@@ -173,9 +217,10 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
 
   /// Handles a remote button press. Returns true when consumed.
   ///
-  /// One spatial model: in navigate (browse) mode every arrow moves the
-  /// cursor to the nearest interactive target (3D body or chrome control);
-  /// OK activates it. Rotate mode only spins the camera while held and is
+  /// Two separated layers: discovery arrows walk the celestial graph (never
+  /// chrome), while the UI layer owns its own chrome-only steps once armed
+  /// via [enterChrome]. OK visits the discovery target with one smooth
+  /// camera flight. Rotate mode only spins the camera while held and is
   /// opt-in from chrome — never entered automatically on selection.
   bool handleKeyDown(
     TvRemoteKey key,
@@ -193,6 +238,7 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     if (key == TvRemoteKey.playPause) {
       if (isRepeat) return true;
       _explorer.toggleRunning();
+      _pokeChrome();
       return true;
     }
     final action = _actionFor(key);
@@ -215,9 +261,11 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     switch (action) {
       case TvExplorerAction.navigate:
         _navigateSpatial(key);
+        _pokeChrome();
         return true;
       case TvExplorerAction.select:
         _select();
+        _pokeChrome();
         return true;
       case TvExplorerAction.rotateLeft:
       case TvExplorerAction.rotateRight:
@@ -323,6 +371,13 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     _chromeTargets.remove(id);
   }
 
+  /// Ids currently in the navigation graph — for tests asserting that every
+  /// visible, actionable control registers and that hidden or disposed
+  /// controls leave it.
+  @visibleForTesting
+  Iterable<String> get registeredTargetIds =>
+      List.unmodifiable(_chromeTargets.keys);
+
   /// Parks the body cursor on the first body when nothing is marked or
   /// selected, so the next OK always does something real.
   void ensureCursor() {
@@ -349,58 +404,114 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     state = state.copyWith(spatialFocusId: id);
   }
 
-  /// One spatial D-pad step: nearest interactive target (3D body or
-  /// registered chrome control) in [directionKey]'s direction.
+  /// One spatial D-pad step.
   ///
-  /// Bodies project live from the scene; chrome centers come from
-  /// [TvNavTarget] layout. Shared scoring ([nearestInDirection]) keeps one
-  /// model — no separate planet/widget modes.
+  /// Two separated layers share one remote but never one step:
+  ///
+  /// - Discovery (default): the D-pad walks the [TvDiscoveryGraph] —
+  ///   primaries sideways, moons through their parent. Chrome controls are
+  ///   never candidates here, so ordinary exploring cannot land on zoom,
+  ///   settings, or any other UI.
+  /// - UI ([chromeFocused]): the D-pad walks the registered chrome controls
+  ///   only, entered explicitly via [enterChrome] and left with BACK.
   void _navigateSpatial(TvRemoteKey directionKey) {
-    final ui = _explorer.state;
-    final size = viewportSize;
-    // No viewport (unit tests): fall back to catalogue order so stepping
-    // stays deterministic.
-    if (size == null || size.isEmpty || _bodyIds.isEmpty) {
-      _stepCatalogueOrder(directionKey);
+    if (state.chromeFocused) {
+      _navigateChrome(directionKey);
       return;
     }
-    final camera = _scene.buildCamera(ui);
+    final ui = _explorer.state;
     final currentId =
         ui.selectedPlanetId ?? ui.markedTargetId ?? state.spatialFocusId;
-    final currentCenter = currentId == null
-        ? null
-        : _centerFor(currentId, camera, size);
-    final origin = currentCenter ?? Offset(size.width / 2, size.height / 2);
-    final direction = tvDirectionForKey(directionKey.name);
+    final nextId = _discovery.step(currentId, directionKey);
+    // No meaningful related object: stay put. Never jump to unrelated UI
+    // just to make every press do something.
+    if (nextId == null) return;
+    _focusDiscovery(nextId);
+  }
 
-    final candidates = <TvSpatialCandidate>[];
-    for (final id in _bodyIds) {
-      if (id == currentId) continue;
-      final pos = _scene.projectBodyCenter(id, camera, size);
-      if (pos == null) continue;
-      candidates.add((id: id, center: pos));
-    }
-    for (final target in _chromeTargets.values) {
-      if (!target.enabled || target.id == currentId) continue;
-      candidates.add((id: target.id, center: target.center));
-    }
+  /// Chrome-layer step: nearest registered control in the arrow's direction.
+  /// Bodies are never candidates here, mirroring the discovery isolation.
+  void _navigateChrome(TvRemoteKey directionKey) {
+    final size = viewportSize;
+    if (size == null || size.isEmpty || _chromeTargets.isEmpty) return;
+    final currentId = state.spatialFocusId;
+    final origin = _originForChrome(size);
+    final direction = tvDirectionForKey(directionKey.name);
+    final candidates = <TvSpatialCandidate>[
+      for (final target in _chromeTargets.values)
+        if (target.enabled && target.id != currentId)
+          (id: target.id, center: target.center),
+    ];
     final nextId = nearestInDirection(
       origin: origin,
       direction: direction,
       candidates: candidates,
       excludeId: currentId,
     );
-    if (nextId == null) {
-      _stepCatalogueOrder(directionKey);
-      return;
-    }
-    _focusTarget(nextId);
+    if (nextId == null) return;
+    _focusChrome(nextId);
   }
 
-  Offset? _centerFor(String id, PerspectiveCamera camera, Size size) {
-    final chrome = _chromeTargets[id];
-    if (chrome != null) return chrome.center;
-    return _scene.projectBodyCenter(id, camera, size);
+  Offset _originForChrome(Size size) {
+    // The control that *looks* focused (real Flutter focus) wins over the
+    // stored cursor: autofocus can move focus without the controller knowing
+    // (the facts pill on detail open), and the ring is what the child reads.
+    final currentId = _activeChromeId();
+    final chrome = currentId == null ? null : _chromeTargets[currentId];
+    return chrome?.center ?? Offset(size.width / 2, size.height / 2);
+  }
+
+  /// The chrome target OK must act on: the one holding real focus when it is
+  /// registered and enabled, otherwise the stored spatial cursor.
+  String? _activeChromeId() {
+    final focused = _primaryFocusedChromeId();
+    if (focused != null) return focused;
+    final stored = state.spatialFocusId;
+    if (stored == null) return null;
+    final target = _chromeTargets[stored];
+    return (target != null && target.enabled) ? stored : null;
+  }
+
+  /// The registered chrome target that currently owns Flutter focus, if any.
+  String? _primaryFocusedChromeId() {
+    for (final target in _chromeTargets.values) {
+      if (target.enabled && _chromeHasPrimaryFocus(target)) return target.id;
+    }
+    return null;
+  }
+
+  /// Candidates the chrome layer may currently navigate to.
+  Iterable<TvRegisteredTarget> get _enabledChromeTargets =>
+      _chromeTargets.values.where((target) => target.enabled);
+
+  /// Best first stop when UI focus mode begins or the cursor went stale.
+  ///
+  /// An explicit preference (the facts pill a detail open is about to
+  /// autofocus) wins even before it registers — its own autofocus provides the
+  /// focus, and [_activeChromeId] reconciles cursor and focus from then on.
+  /// Otherwise: whatever already holds focus, then the nearest control to the
+  /// viewport centre, then simply the first registered one.
+  String? _seedChromeId({String? preferId}) {
+    if (preferId != null) return preferId;
+    // A stored chrome id from an *earlier* UI-focus session is not a fresh
+    // seed: entering UI mode must land on the best control for now, not
+    // wherever the cursor was left last time. (Once inside chrome mode, the
+    // cursor is the source of truth for arrows and OK — [_activeChromeId].)
+    final focused = _primaryFocusedChromeId();
+    if (focused != null) return focused;
+    final size = viewportSize;
+    if (size != null && !size.isEmpty) {
+      final nearest = nearestToPoint(
+        origin: size.center(Offset.zero),
+        candidates: [
+          for (final target in _enabledChromeTargets)
+            (id: target.id, center: target.center),
+        ],
+      );
+      if (nearest != null) return nearest;
+    }
+    final first = _enabledChromeTargets;
+    return first.isEmpty ? null : first.first.id;
   }
 
   bool _chromeHasPrimaryFocus(TvRegisteredTarget chrome) {
@@ -413,29 +524,41 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     }
   }
 
-  /// Applies a spatial focus change: chrome requests Flutter focus (visible
-  /// ring follows the cursor); bodies mark/select through shared explorer
-  /// state — the same actions as mobile tap.
-  void _focusTarget(String id) {
-    state = state.copyWith(spatialFocusId: id);
-    final chrome = _chromeTargets[id];
-    if (chrome != null) {
-      // Re-entrant focus requests during a traversal callback can throw;
-      // the visible ring follows on the next frame regardless.
-      Future.microtask(() {
-        try {
-          chrome.focusNode?.requestFocus();
-        } catch (_) {}
-      });
+  /// Applies a discovery focus change: the highlight moves to a celestial
+  /// body through the shared explorer state — the same mark/select actions
+  /// as a mobile tap. Chrome is never touched here.
+  void _focusDiscovery(String id) {
+    final ui = _explorer.state;
+    // Re-focusing the same body must not toggle anything off: marking the
+    // marked body unmarks it, and selecting the selected body closes detail.
+    if (ui.selectedPlanetId == id || ui.markedTargetId == id) {
+      if (state.spatialFocusId != id) {
+        state = state.copyWith(spatialFocusId: id);
+      }
       return;
     }
+    state = state.copyWith(spatialFocusId: id, chromeFocused: false);
     _scene.cancelZoomFlight();
-    final ui = _explorer.state;
     if (ui.hasSelection) {
       _explorer.selectPlanet(id);
     } else {
       _explorer.markTarget(id);
     }
+  }
+
+  /// Applies a chrome focus change: requests Flutter focus so the visible
+  /// ring follows the cursor. Explorer bodies are never touched here.
+  void _focusChrome(String id) {
+    state = state.copyWith(spatialFocusId: id, chromeFocused: true);
+    final chrome = _chromeTargets[id];
+    if (chrome == null) return;
+    // Re-entrant focus requests during a traversal callback can throw;
+    // the visible ring follows on the next frame regardless.
+    Future.microtask(() {
+      try {
+        chrome.focusNode?.requestFocus();
+      } catch (_) {}
+    });
   }
 
   /// Moves the body cursor. In detail, LEFT/RIGHT switches the detailed body
@@ -447,47 +570,22 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     _navigateSpatial(directionKey ?? TvRemoteKey.right);
   }
 
-  /// Catalogue-order fallback for headless contexts and empty half-planes.
-  /// LEFT goes back, everything else forward — deterministic, never a no-op.
-  void _stepCatalogueOrder(TvRemoteKey directionKey) {
-    if (_bodyIds.isEmpty) return;
-    final ui = _explorer.state;
-    final delta = directionKey == TvRemoteKey.left ? -1 : 1;
-    if (ui.hasSelection) {
-      final current = _bodyIds.indexOf(ui.selectedPlanetId!);
-      final next = _bodyIds[(current + delta) % _bodyIds.length];
-      _scene.cancelZoomFlight();
-      _explorer.selectPlanet(next);
-      state = state.copyWith(spatialFocusId: next);
-      return;
-    }
-    final anchor = ui.markedTargetId;
-    if (anchor == null) {
-      // No cursor yet: land on the near end rather than skipping it.
-      _scene.cancelZoomFlight();
-      final first = delta > 0 ? _bodyIds.first : _bodyIds.last;
-      _explorer.markTarget(first);
-      state = state.copyWith(spatialFocusId: first);
-      return;
-    }
-    var index = _bodyIds.indexOf(anchor);
-    if (index < 0) index = 0;
-    final next = _bodyIds[(index + delta) % _bodyIds.length];
-    if (next == ui.markedTargetId) return;
-    _scene.cancelZoomFlight();
-    _explorer.markTarget(next);
-    state = state.copyWith(spatialFocusId: next);
-  }
-
-  /// OK: activate the spatially focused target.
+  /// OK: in UI focus mode, activate the focused control; otherwise visit the
+  /// discovery target.
   ///
-  /// Chrome target → its registered onActivate (same callback as tap).
-  /// Marked body → selectPlanet (same action as tapping it).
-  /// Selected body → re-speak; facts open via the "Show facts" pill.
+  /// Chrome activation is a direct [TvRegisteredTarget.onActivate] call and
+  /// deliberately *not* deferred to the focus system's `ActivateIntent`: the
+  /// remote handler sits between the focused button and the app-root
+  /// `Shortcuts` that map select → `ActivateIntent`, and it consumes the key
+  /// first — which is why OK used to do nothing on the very control the ring
+  /// was showing. One press, one activation: the debounce above plus the
+  /// handler consuming the key (so no shortcut layer can also fire) guarantee
+  /// it. Discovery presses never trigger chrome.
   ///
-  /// When a chrome node already owns Flutter focus, its ActivateIntent fires
-  /// the same callback through the focus system — skip the direct call so
-  /// one OK press produces exactly one activation.
+  /// When UI mode has nothing usable to act on — the focused control was
+  /// unregistered when the detail closed — the press re-seats the cursor on
+  /// the nearest live control instead of falling into discovery behind UI
+  /// mode. Only an entirely empty registry ends UI mode.
   void _select() {
     final now = DateTime.now();
     if (_lastSelectAt != null &&
@@ -495,12 +593,22 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
       return;
     }
     _lastSelectAt = now;
-    final focusedId = state.spatialFocusId;
-    final chrome = focusedId == null ? null : _chromeTargets[focusedId];
-    if (chrome != null) {
-      if (_chromeHasPrimaryFocus(chrome)) return;
-      chrome.onActivate?.call();
-      return;
+    if (state.chromeFocused) {
+      final activeId = _activeChromeId();
+      final chrome = activeId == null ? null : _chromeTargets[activeId];
+      if (chrome != null && chrome.enabled && chrome.onActivate != null) {
+        if (state.spatialFocusId != activeId) {
+          state = state.copyWith(spatialFocusId: activeId);
+        }
+        chrome.onActivate!.call();
+        return;
+      }
+      final reseat = _seedChromeId();
+      if (reseat != null) {
+        _focusChrome(reseat);
+        return;
+      }
+      state = state.copyWith(chromeFocused: false);
     }
     final ui = _explorer.state;
     if (ui.hasSelection) {
@@ -508,20 +616,34 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
       if (selectedId != null) replayNarration?.call(selectedId);
       return;
     }
-    final markedId = ui.markedTargetId;
-    if (markedId != null) {
-      _explorer.selectPlanet(markedId);
-      return;
+    final focusedId = state.spatialFocusId;
+    final targetId =
+        ui.markedTargetId ??
+        (focusedId != null && _discovery.knows(focusedId) ? focusedId : null) ??
+        (_discovery.primaries.isEmpty ? null : _discovery.primaries.first);
+    if (targetId == null) return;
+    state = state.copyWith(spatialFocusId: targetId);
+    if (!_scene.zoomFlightActive) {
+      try {
+        final camera = _scene.buildCamera(_explorer.state);
+        _scene.startZoomToDetail(targetId, camera);
+      } catch (_) {}
     }
-    if (_bodyIds.isNotEmpty) {
-      _explorer.markTarget(_bodyIds.first);
-      state = state.copyWith(spatialFocusId: _bodyIds.first);
+    if (ui.markedTargetId == targetId) {
+      _explorer.selectPlanet(targetId);
+    } else {
+      _explorer.markTarget(targetId);
     }
   }
 
   // -- back -------------------------------------------------------------------
 
-  /// Predictable BACK: quick select > celebration > detail > mark > missions > system.
+  /// Predictable BACK, one layer per press: quick select > celebration >
+  /// detail > UI focus mode > mark > missions > system.
+  ///
+  /// UI focus mode sits above the mark because that is how it is entered: a
+  /// detail auto-enters it, so leaving detail must hand back to UI mode (its
+  /// own layer) before the discovery mark underneath is unwound.
   TvBackOutcome handleBack(TvBackContext back) {
     if (state.quickSelectVisible) {
       dismissQuickSelect();
@@ -534,6 +656,10 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     if (_explorer.state.hasSelection) {
       _explorer.closeDetail();
       return TvBackOutcome.closedDetail;
+    }
+    if (state.chromeFocused) {
+      exitChrome();
+      return TvBackOutcome.exitedChrome;
     }
     if (_explorer.state.markedTargetId != null) {
       _scene.cancelZoomFlight();
@@ -626,6 +752,63 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     if (!state.homeVisible) state = state.copyWith(homeVisible: true);
   }
 
+  // -- secondary UI layer ------------------------------------------------------
+
+  /// Hands the D-pad to the quiet secondary controls (pause, help).
+  ///
+  /// Discovery navigation never enters this on its own: the solar system
+  /// owns the arrows until the child (or the BACK shuttle, or a detail open)
+  /// explicitly asks for UI. The first stop is seeded immediately — [preferId]
+  /// when the caller knows the control (a detail's facts pill), otherwise
+  /// whatever already holds focus, otherwise the nearest registered control to
+  /// the viewport centre — so the ring and OK both point at a real button the
+  /// instant UI mode begins. The focus request itself is deferred a microtask:
+  /// registration and focus live on the widgets, which settle after this
+  /// synchronous state change.
+  void enterChrome({String? preferId}) {
+    _chromeTimer?.cancel();
+    state = state.copyWith(chromeFocused: true, chromeVisible: true);
+    final seed = _seedChromeId(preferId: preferId);
+    if (seed == null) return;
+    state = state.copyWith(spatialFocusId: seed);
+    Future<void>.microtask(() {
+      try {
+        _focusChrome(seed);
+      } catch (_) {
+        // Unmounted target (tab switched under the seed): the next arrow or
+        // OK re-seats from the registry, which is the source of truth.
+      }
+    });
+  }
+
+  /// Returns the D-pad to the solar system.
+  ///
+  /// Flutter focus returns with it: the handler listens for this transition
+  /// and re-seats the scene scope, so no ring is left stranded on a chrome
+  /// button while discovery owns the arrows.
+  void exitChrome() {
+    if (!state.chromeFocused) return;
+    state = state.copyWith(chromeFocused: false);
+    _pokeChrome();
+  }
+
+  /// Briefly (re)shows the quiet controls; they fade on [chromeTimeout].
+  ///
+  /// They never fade while UI focus mode owns the D-pad: a control that is
+  /// navigable must be visible, and the registry drops hidden controls out of
+  /// the graph anyway.
+  void _pokeChrome() {
+    _chromeTimer?.cancel();
+    if (!state.chromeVisible) state = state.copyWith(chromeVisible: true);
+    if (state.chromeFocused) return;
+    _chromeTimer = Timer(chromeTimeout, () {
+      if (state.chromeFocused) return;
+      state = copyWithoutChrome();
+    });
+  }
+
+  TvExplorerUiState copyWithoutChrome() => state.copyWith(chromeVisible: false);
+
   void _showHintTemporarily() {
     _hintTimer?.cancel();
     state = state.copyWith(hintVisible: true);
@@ -639,6 +822,7 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
   @override
   void dispose() {
     _hintTimer?.cancel();
+    _chromeTimer?.cancel();
     super.dispose();
   }
 }

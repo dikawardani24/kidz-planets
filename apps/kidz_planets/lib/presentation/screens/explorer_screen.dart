@@ -11,10 +11,7 @@ import 'package:core/theme.dart';
 import 'package:kidz_planets/application/state/providers.dart';
 import 'package:kidz_planets/presentation/screens/avatar_screen.dart';
 import 'package:kidz_planets/presentation/tv/tv_controller_hint.dart';
-import 'package:kidz_planets/presentation/tv/tv_home_panel.dart';
-import 'package:kidz_planets/presentation/tv/tv_nav_bar.dart';
 import 'package:kidz_planets/presentation/tv/tv_providers.dart';
-import 'package:kidz_planets/presentation/tv/tv_quick_select_drawer.dart';
 import 'package:kidz_planets/presentation/tv/tv_remote_handler.dart';
 import 'package:kidz_planets/presentation/widgets/overlays/bottom_nav.dart';
 import 'package:kidz_planets/presentation/widgets/overlays/toast_overlay.dart';
@@ -58,7 +55,6 @@ class ExplorerScreen extends ConsumerWidget {
     // The TV controller itself is inert on touch devices, so watching it
     // unconditionally keeps the hook order stable across form factors.
     final isTv = ref.watch(isTelevisionProvider);
-    final tvUi = ref.watch(tvExplorerControllerProvider);
     final avatarPageVisible = ref.watch(
       appShellProvider.select((s) => s.avatarPageVisible),
     );
@@ -314,29 +310,37 @@ class ExplorerScreen extends ConsumerWidget {
                     ),
 
                   // Explore-mode zoom controls on the right edge, mirroring the
-                  // detail rails' camera buttons. Touch only: TV navigates with
-                  // its D-pad zoom chrome and would gain dead focus targets
-                  // from an on-screen rail.
-                  if (!ui.hasSelection && shell.tab == AppTab.explore && !isTv)
+                  // detail rails' camera buttons. The buttons register into
+                  // the TV spatial registry on TV, so zoom in/out/reset stay
+                  // real focusable, activatable TV controls.
+                  if (!ui.hasSelection && shell.tab == AppTab.explore)
                     Positioned.fill(
-                      child: ExploreZoomRail(viewSize: viewportSize),
+                      child: ExploreZoomRail(
+                        viewSize: viewportSize,
+                        onSpatialTarget: isTv
+                            ? ref
+                                  .read(tvExplorerControllerProvider.notifier)
+                                  .registerTarget
+                            : null,
+                        onUnregisterSpatialTarget: isTv
+                            ? ref
+                                  .read(tvExplorerControllerProvider.notifier)
+                                  .unregisterTarget
+                            : null,
+                      ),
                     ),
 
-                  // TV home: large remote-first cards over the explore tab
-                  // until the child picks a destination or a body.
-                  if (isTv &&
-                      shell.tab == AppTab.explore &&
-                      !ui.hasSelection &&
-                      tvUi.homeVisible)
-                    const Positioned.fill(child: TvHomePanel()),
-
-                  // TV controller chrome: mode pill + auto-hiding hints.
-                  if (isTv && shell.tab == AppTab.explore && !tvUi.homeVisible)
+                  // TV controller chrome: quiet pause/help pills that fade
+                  // while exploring. No category menus on TV: the solar
+                  // system itself is the navigation.
+                  if (isTv && shell.tab == AppTab.explore)
                     const TvControllerChrome(),
 
-                  if (isTv) const TvQuickSelectDrawer(),
-
-                  if (isTv) const TvNavBar() else const ExplorerBottomNav(),
+                  // The same tab bar remains the app's primary navigation on TV.
+                  // Its controls register into the TV chrome layer, so discovery
+                  // navigation never lands there accidentally, but BACK can enter
+                  // the chrome layer and the D-pad can move between its controls.
+                  const ExplorerBottomNav(),
 
                   if (progress.celebrationVisible)
                     Positioned.fill(
@@ -370,13 +374,12 @@ class ExplorerScreen extends ConsumerWidget {
   }
 }
 
-/// Jumps to a mission's target planet from the TV missions tab.
+/// Jumps to a mission's target planet.
 ///
 /// One shared selection path: the shell grades it, the explorer narrates it,
 /// the camera focuses it — identical to tapping the body in the scene.
 void _openMissionTarget(WidgetRef ref, String planetId) {
   ref.read(appShellProvider.notifier).setTab(AppTab.explore);
-  ref.read(tvExplorerControllerProvider.notifier).dismissHome();
   ref.read(explorerControllerProvider.notifier).selectPlanet(planetId);
 }
 

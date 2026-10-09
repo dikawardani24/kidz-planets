@@ -184,7 +184,7 @@ void main() {
     test('geometry cache census starts empty', () {
       expect(
         GeometryFactory().describeCache(),
-        'spheres=0 rings=0 tori=0',
+        'spheres=0 rings=0 tori=0 saturnSystems=0',
       );
     });
   });

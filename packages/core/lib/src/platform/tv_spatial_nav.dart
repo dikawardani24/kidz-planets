@@ -79,6 +79,28 @@ String? nearestInDirection({
   return bestId;
 }
 
+/// Picks the nearest candidate to a fixed [origin], regardless of direction.
+///
+/// Used when the spatial cursor needs a *seed* rather than a step: entering UI
+/// focus mode, or re-seating after the focused control disappeared. Ties break
+/// toward the candidate that appears first, which keeps the choice stable
+/// frame to frame.
+String? nearestToPoint({
+  required Offset origin,
+  required Iterable<TvSpatialCandidate> candidates,
+}) {
+  String? bestId;
+  var bestDistance = double.infinity;
+  for (final candidate in candidates) {
+    final distance = (candidate.center - origin).distance;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestId = candidate.id;
+    }
+  }
+  return bestId;
+}
+
 /// Unit screen-space direction for a D-pad arrow.
 Offset tvDirectionForKey(String keyName) => switch (keyName) {
   'left' => const Offset(-1, 0),

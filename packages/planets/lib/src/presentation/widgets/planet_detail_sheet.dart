@@ -287,14 +287,23 @@ class DetailSideRails extends ConsumerWidget {
 ///
 /// Detail mode gets its camera buttons from [DetailSideRails]; explore mode
 /// has nothing selected, so these drive the same scene APIs the pinch
-/// handlers use. Touch hosts only — TV has its own D-pad zoom chrome and would
-/// gain dead spatial targets from an on-screen rail.
+/// handlers use. The buttons publish themselves into the TV spatial registry
+/// when the host wires [onSpatialTarget], so on TV they are focusable TV
+/// controls whose OK does exactly what a tap does — no keyboard-only
+/// fallbacks.
 class ExploreZoomRail extends ConsumerWidget {
-  const ExploreZoomRail({super.key, required this.viewSize});
+  const ExploreZoomRail({
+    super.key,
+    required this.viewSize,
+    this.onSpatialTarget,
+    this.onUnregisterSpatialTarget,
+  });
 
   /// The current scene viewport, used as the zoom focal point when no body is
   /// marked, so a step zooms the whole system instead of approaching a body.
   final Size viewSize;
+  final ValueChanged<TvSpatialTarget>? onSpatialTarget;
+  final ValueChanged<String>? onUnregisterSpatialTarget;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -314,12 +323,16 @@ class ExploreZoomRail extends ConsumerWidget {
                 id: 'chrome:explore-zoom-in',
                 icon: Icons.add,
                 onTap: () => zoomExploreStep(ref, 1.18, viewSize: viewSize),
+                onSpatialTarget: onSpatialTarget,
+                onUnregisterSpatialTarget: onUnregisterSpatialTarget,
               ),
               const SizedBox(height: 7),
               _ZoomButton(
                 id: 'chrome:explore-zoom-out',
                 icon: Icons.remove,
                 onTap: () => zoomExploreStep(ref, 1 / 1.18, viewSize: viewSize),
+                onSpatialTarget: onSpatialTarget,
+                onUnregisterSpatialTarget: onUnregisterSpatialTarget,
               ),
               // A wider gap than the zoom cluster, matching the detail rail so
               // the two ways back to a known framing read as their own group.
@@ -329,6 +342,8 @@ class ExploreZoomRail extends ConsumerWidget {
                 icon: Icons.refresh,
                 onTap: scene.resetOverview,
                 small: true,
+                onSpatialTarget: onSpatialTarget,
+                onUnregisterSpatialTarget: onUnregisterSpatialTarget,
               ),
             ],
           ),
