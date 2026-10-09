@@ -113,11 +113,20 @@ final tvExplorerControllerProvider =
       // chrome Rotate control only. Selecting a planet keeps navigating.
       // Leaving detail returns an armed rotate mode to browse so arrows
       // navigate again instead of spinning an empty scene.
+      //
+      // A detail *does* hand the D-pad to UI focus mode: the detail chrome
+      // (facts pill, listen/sound, zoom rail, close) is registered UI, and
+      // without the hand-off the facts pill could autofocus while discovery
+      // still owned OK — the ring would say "button" while OK replayed the
+      // narration. UI mode is its own BACK layer, so leaving the detail does
+      // not take it with the detail.
       ref.listen<ExplorerState>(explorerControllerProvider, (prev, next) {
         final was = prev?.hasSelection ?? false;
         if (was == next.hasSelection) return;
         if (!next.hasSelection) {
           controller.exitDetailCleanup();
+        } else if (ref.read(isTelevisionProvider)) {
+          controller.enterChrome(preferId: 'chrome:show-facts');
         }
       });
       return controller;

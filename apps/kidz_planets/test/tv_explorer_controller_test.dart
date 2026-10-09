@@ -162,6 +162,20 @@ void main() {
     isRepeat: isRepeat,
   );
 
+  /// Runs the deferred focus call `enterChrome` schedules, without a widget
+  /// tree: an unattached FocusNode cannot actually hold focus, so
+  /// [TvExplorerController._focusChrome] must resolve to the same target it
+  /// seeded. Returns after the microtasks have run.
+  Future<void> pumpNothingThen(
+    TvExplorerController tv, {
+    required String expectSame,
+  }) async {
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(tv.state.chromeFocused, isTrue);
+    expect(tv.state.spatialFocusId, expectSame);
+  }
+
   group('object navigation (browse mode)', () {
     test('LEFT/RIGHT moves the mark and wraps around', () {
       final (explorer, _, tv) = setup();
@@ -512,7 +526,7 @@ void main() {
   });
 
   group('BACK hierarchy', () {
-    test('celebration > detail > mark > missions > unhandled', () {
+    test('celebration > detail > UI focus > mark > missions > unhandled', () {
       final (explorer, _, tv) = setup();
       var celebrations = 0;
       var exits = 0;
@@ -522,8 +536,14 @@ void main() {
       expect(tv.handleBack(quietBack()), TvBackOutcome.closedDetail);
       expect(explorer.state.hasSelection, isFalse);
 
-      // Then the mark.
+      // Then UI focus mode, entered explicitly above the mark.
+      tv.enterChrome(preferId: 'chrome:play-pause');
       explorer.markTarget('mars');
+      expect(tv.handleBack(quietBack()), TvBackOutcome.exitedChrome);
+      expect(tv.state.chromeFocused, isFalse);
+      expect(explorer.state.markedTargetId, 'mars');
+
+      // Then the mark.
       expect(tv.handleBack(quietBack()), TvBackOutcome.clearedMark);
       expect(explorer.state.markedTargetId, isNull);
 
@@ -663,6 +683,139 @@ void main() {
       expect(tv.state.quickSelectVisible, isTrue);
       expect(tv.handleBack(quietBack()), TvBackOutcome.closedDetail);
       expect(tv.state.quickSelectVisible, isFalse);
+    });
+
+    test('enterChrome seeds the nearest registered control', () {
+      final (_, _, tv) = setup();
+      tv.updateViewportSize(const Size(1000, 1000));
+      tv.registerTarget(
+        TvRegisteredTarget(
+          id: 'chrome:play-pause',
+          center: const Offset(100, 800),
+          focusNode: FocusNode(debugLabel: 't1'),
+          onActivate: () {},
+        ),
+      );
+      tv.registerTarget(
+        TvRegisteredTarget(
+          id: 'chrome:top-labels',
+          center: const Offset(800, 300),
+          focusNode: FocusNode(debugLabel: 't2'),
+          onActivate: () {},
+        ),
+      );
+      // Viewport centre is (500, 500): top-labels (360 away) beats play-pause
+      // (500 away), so the cursor lands there — never on nothing.
+      tv.enterChrome();
+      expect(tv.state.chromeFocused, isTrue);
+      expect(tv.state.chromeVisible, isTrue);
+      expect(tv.state.spatialFocusId, 'chrome:top-labels');
+      expect(
+        tv.registeredTargetIds,
+        containsAll(['chrome:play-pause', 'chrome:top-labels']),
+      );
+      // The deferred focus call re-seats the same target (an unattached node
+      // cannot hold focus), so the cursor survives it: real widget tests drive
+      // the ring end-to-end.
+      return pumpNothingThen(tv, expectSame: 'chrome:top-labels');
+    });
+
+    test('enterChrome prefers the caller-named control', () {
+      final (_, _, tv) = setup();
+      tv.updateViewportSize(const Size(1000, 1000));
+      tv.registerTarget(
+        TvRegisteredTarget(
+          id: 'chrome:play-pause',
+          center: const Offset(100, 800),
+          focusNode: FocusNode(debugLabel: 't3'),
+          onActivate: () {},
+        ),
+      );
+      tv.registerTarget(
+        TvRegisteredTarget(
+          id: 'chrome:show-facts',
+          center: const Offset(900, 900),
+          focusNode: FocusNode(debugLabel: 't4'),
+          onActivate: () {},
+        ),
+      );
+      // A detail names the facts pill even though it is not the nearest one:
+      // OK must land on the pill the child is looking at.
+      tv.enterChrome(preferId: 'chrome:show-facts');
+      expect(tv.state.chromeFocused, isTrue);
+      expect(tv.state.spatialFocusId, 'chrome:show-facts');
+    });
+
+    test('UI-mode arrows never touch celestial selection', () {
+      final (explorer, _, tv) = setup();
+      tv.updateViewportSize(const Size(1000, 1000));
+      tv.registerTarget(
+        TvRegisteredTarget(
+          id: 'chrome:play-pause',
+          center: const Offset(100, 800),
+          onActivate: () {},
+        ),
+      );
+      tv.registerTarget(
+        TvRegisteredTarget(
+          id: 'chrome:top-labels',
+          center: const Offset(800, 100),
+          onActivate: () {},
+        ),
+      );
+      tv.enterChrome();
+      down(tv, TvRemoteKey.left, TvInputLayer.explorer);
+      down(tv, TvRemoteKey.up, TvInputLayer.explorer);
+      down(tv, TvRemoteKey.down, TvInputLayer.explorer);
+      expect(tv.state.spatialFocusId, isNotNull);
+      expect(tv.state.spatialFocusId, startsWith('chrome:'));
+      expect(explorer.state.markedTargetId, isNull);
+      expect(explorer.state.selectedPlanetId, isNull);
+    });
+
+    test('UI-mode OK invokes the focused control exactly once', () {
+      final (_, _, tv) = setup();
+      var activations = 0;
+      tv.updateViewportSize(const Size(1000, 1000));
+      tv.registerTarget(
+        TvRegisteredTarget(
+          id: 'chrome:top-play',
+          center: const Offset(500, 100),
+          onActivate: () => activations++,
+        ),
+      );
+      tv.enterChrome();
+      down(tv, TvRemoteKey.center, TvInputLayer.explorer);
+      expect(activations, 1);
+    });
+
+    test('UI-mode OK re-seats instead of dropping to discovery', () {
+      final (_, _, tv) = setup();
+      tv.updateViewportSize(const Size(1000, 1000));
+      tv.registerTarget(
+        TvRegisteredTarget(
+          id: 'chrome:top-labels',
+          center: const Offset(800, 100),
+          onActivate: () {},
+        ),
+      );
+      tv.enterChrome();
+      // The cursor points at a control that just unregistered (a detail
+      // closing under it): OK must re-seat on the live one, not run the
+      // discovery visit behind UI mode.
+      tv.updateSpatialFocusForTest('chrome:show-facts');
+      down(tv, TvRemoteKey.center, TvInputLayer.explorer);
+      expect(tv.state.chromeFocused, isTrue);
+      expect(tv.state.spatialFocusId, 'chrome:top-labels');
+    });
+
+    test('quiet controls never fade while UI focus mode is active', () async {
+      final (_, _, tv) = setup(chromeTimeout: const Duration(milliseconds: 20));
+      tv.updateViewportSize(const Size(1000, 1000));
+      tv.enterChrome();
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      expect(tv.state.chromeFocused, isTrue);
+      expect(tv.state.chromeVisible, isTrue);
     });
   });
 }

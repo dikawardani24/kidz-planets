@@ -87,39 +87,40 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final item = GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: kNavItemVerticalPadding,
-        ),
-        decoration: BoxDecoration(
-          color: selected ? AppTheme.accentIndigo : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: selected
-              ? const [BoxShadow(color: Color(0x664F46E5), blurRadius: 10)]
-              : null,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: kNavItemIconSize, color: Colors.white),
-            const SizedBox(width: 7),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
+    // One gesture owner per platform: touch wraps the row in its own
+    // detector; on TV the TvNavTarget's focusable owns tap (a second nested
+    // detector would still work — the arena fires the inner one — but two
+    // owners for one button is how focus bugs hide).
+    final body = AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: kNavItemVerticalPadding,
+      ),
+      decoration: BoxDecoration(
+        color: selected ? AppTheme.accentIndigo : Colors.transparent,
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: selected
+            ? const [BoxShadow(color: Color(0x664F46E5), blurRadius: 10)]
+            : null,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: kNavItemIconSize, color: Colors.white),
+          const SizedBox(width: 7),
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
     return Expanded(
@@ -128,9 +129,9 @@ class _NavItem extends StatelessWidget {
               id: id,
               control: TvChromeControl.other,
               onSelect: onTap,
-              child: item,
+              child: body,
             )
-          : item,
+          : GestureDetector(onTap: onTap, child: body),
     );
   }
 }

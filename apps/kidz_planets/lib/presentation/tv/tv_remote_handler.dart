@@ -146,6 +146,9 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
 
     final shell = ref.read(appShellProvider);
     final explorer = ref.read(explorerControllerProvider);
+    final chromeFocused = ref.read(
+      tvExplorerControllerProvider.select((s) => s.chromeFocused),
+    );
     final celebrationVisible = ref.read(
       missionProgressProvider.select((s) => s.celebrationVisible),
     );
@@ -162,13 +165,35 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
       // in the explorer layer so the unified spatial navigator keeps working.
       // Selection alone must not block D-pad movement across bodies/controls.
       detailOpen: false,
-      avatarFocused: ref.read(tvAvatarFocusedProvider),
+      // The avatar layer only guards discovery: while UI focus mode owns the
+      // D-pad, a focused companion is simply the next spatial stop — blocking
+      // arrows there would strand the child on the rocket.
+      avatarFocused:
+          ref.read(tvAvatarFocusedProvider) && !chromeFocused,
     );
+
+    // BACK in UI focus mode unwinds through the controller directly: the mode
+    // is itself a layer (celebration > detail > UI mode > mark > missions) and
+    // gets no focus shuttle first — exiting it is the transition back to
+    // discovery, and the controller's exit listener re-seats the scene scope.
+    if (remoteKey == TvRemoteKey.back &&
+        layer == TvInputLayer.explorer &&
+        chromeFocused) {
+      final back = _backContext(
+        shellTab: shell.tab,
+        celebrationVisible: celebrationVisible,
+      );
+      final outcome = controller.handleBack(back);
+      final handled = outcome != TvBackOutcome.unhandled;
+      _log(remoteKey, layer, handled, 'ui-$outcome');
+      return handled ? KeyEventResult.handled : KeyEventResult.ignored;
+    }
 
     // BACK on the explore tab shuttles focus before unwinding state: chrome
     // (or the void) re-seats into the scene, and empty hands in the scene
     // offer the controller cluster — play/pause included — instead of dying
-    // at the system boundary.
+    // at the system boundary. UI focus mode is already handled above, so what
+    // remains here is discovery.
     if (remoteKey == TvRemoteKey.back && layer == TvInputLayer.explorer) {
       final back = _backContext(
         shellTab: shell.tab,
@@ -177,11 +202,12 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
       final focusAction = resolveBackFocus(
         focusInScene: _focusHolds(_scope),
         focusInChrome: _focusHolds(ref.read(tvChromeScopeProvider)),
+        // UI focus mode is unwound by its own branch above; what is left for
+        // the shuttle is discovery state: detail, mark, missions tab.
         canUnwind:
             back.celebrationVisible ||
             explorer.hasSelection ||
             explorer.markedTargetId != null ||
-            ref.read(tvExplorerControllerProvider).chromeFocused ||
             back.missionsOpen,
       );
       switch (focusAction) {
@@ -254,6 +280,25 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
 
   @override
   Widget build(BuildContext context) {
+    // Leaving UI focus mode returns focus with the mode: the scene scope
+    // re-seats so no ring is stranded on a chrome button while discovery owns
+    // the arrows, and the next OK is a discovery visit again.
+    ref.listen<bool>(
+      tvExplorerControllerProvider.select((s) => s.chromeFocused),
+      (previous, next) {
+        if (previous == true && next == false && mounted) {
+          _scope.requestFocus();
+        }
+      },
+    );
+    // UI focus mode belongs to the explore tab: switching to missions or
+    // playground ends it so those panel contexts start from their own focus
+    // (panel entry autofocus) instead of inheriting a hidden UI cursor.
+    ref.listen<AppTab>(appShellProvider.select((s) => s.tab), (previous, next) {
+      if (previous == AppTab.explore && next != AppTab.explore && mounted) {
+        ref.read(tvExplorerControllerProvider.notifier).exitChrome();
+      }
+    });
     return Focus(
       focusNode: _scope,
       autofocus: true,

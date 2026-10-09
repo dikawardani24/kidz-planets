@@ -371,6 +371,13 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     _chromeTargets.remove(id);
   }
 
+  /// Ids currently in the navigation graph — for tests asserting that every
+  /// visible, actionable control registers and that hidden or disposed
+  /// controls leave it.
+  @visibleForTesting
+  Iterable<String> get registeredTargetIds =>
+      List.unmodifiable(_chromeTargets.keys);
+
   /// Parks the body cursor on the first body when nothing is marked or
   /// selected, so the next OK always does something real.
   void ensureCursor() {
@@ -446,9 +453,65 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
   }
 
   Offset _originForChrome(Size size) {
-    final currentId = state.spatialFocusId;
+    // The control that *looks* focused (real Flutter focus) wins over the
+    // stored cursor: autofocus can move focus without the controller knowing
+    // (the facts pill on detail open), and the ring is what the child reads.
+    final currentId = _activeChromeId();
     final chrome = currentId == null ? null : _chromeTargets[currentId];
     return chrome?.center ?? Offset(size.width / 2, size.height / 2);
+  }
+
+  /// The chrome target OK must act on: the one holding real focus when it is
+  /// registered and enabled, otherwise the stored spatial cursor.
+  String? _activeChromeId() {
+    final focused = _primaryFocusedChromeId();
+    if (focused != null) return focused;
+    final stored = state.spatialFocusId;
+    if (stored == null) return null;
+    final target = _chromeTargets[stored];
+    return (target != null && target.enabled) ? stored : null;
+  }
+
+  /// The registered chrome target that currently owns Flutter focus, if any.
+  String? _primaryFocusedChromeId() {
+    for (final target in _chromeTargets.values) {
+      if (target.enabled && _chromeHasPrimaryFocus(target)) return target.id;
+    }
+    return null;
+  }
+
+  /// Candidates the chrome layer may currently navigate to.
+  Iterable<TvRegisteredTarget> get _enabledChromeTargets =>
+      _chromeTargets.values.where((target) => target.enabled);
+
+  /// Best first stop when UI focus mode begins or the cursor went stale.
+  ///
+  /// An explicit preference (the facts pill a detail open is about to
+  /// autofocus) wins even before it registers — its own autofocus provides the
+  /// focus, and [_activeChromeId] reconciles cursor and focus from then on.
+  /// Otherwise: whatever already holds focus, then the nearest control to the
+  /// viewport centre, then simply the first registered one.
+  String? _seedChromeId({String? preferId}) {
+    if (preferId != null) return preferId;
+    // A stored chrome id from an *earlier* UI-focus session is not a fresh
+    // seed: entering UI mode must land on the best control for now, not
+    // wherever the cursor was left last time. (Once inside chrome mode, the
+    // cursor is the source of truth for arrows and OK — [_activeChromeId].)
+    final focused = _primaryFocusedChromeId();
+    if (focused != null) return focused;
+    final size = viewportSize;
+    if (size != null && !size.isEmpty) {
+      final nearest = nearestToPoint(
+        origin: size.center(Offset.zero),
+        candidates: [
+          for (final target in _enabledChromeTargets)
+            (id: target.id, center: target.center),
+        ],
+      );
+      if (nearest != null) return nearest;
+    }
+    final first = _enabledChromeTargets;
+    return first.isEmpty ? null : first.first.id;
   }
 
   bool _chromeHasPrimaryFocus(TvRegisteredTarget chrome) {
@@ -507,21 +570,22 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     _navigateSpatial(directionKey ?? TvRemoteKey.right);
   }
 
-  /// OK: visit the discovery target.
+  /// OK: in UI focus mode, activate the focused control; otherwise visit the
+  /// discovery target.
   ///
-  /// One press does the whole journey: the target is marked internally (the
-  /// mark stays an explorer-internal zoom session, never a child-facing
-  /// two-step) and the smooth zoom-to-detail flight starts toward it. The
-  /// scene tick finishes the flight by opening detail at the reached
-  /// distance with the existing narration — the same flight a touch
-  /// double-tap starts, so TV and mobile share one camera path.
+  /// Chrome activation is a direct [TvRegisteredTarget.onActivate] call and
+  /// deliberately *not* deferred to the focus system's `ActivateIntent`: the
+  /// remote handler sits between the focused button and the app-root
+  /// `Shortcuts` that map select → `ActivateIntent`, and it consumes the key
+  /// first — which is why OK used to do nothing on the very control the ring
+  /// was showing. One press, one activation: the debounce above plus the
+  /// handler consuming the key (so no shortcut layer can also fire) guarantee
+  /// it. Discovery presses never trigger chrome.
   ///
-  /// Chrome targets only activate here while the UI layer owns the D-pad
-  /// ([chromeFocused]); discovery presses never trigger chrome.
-  ///
-  /// When a chrome node already owns Flutter focus, its ActivateIntent fires
-  /// the same callback through the focus system — skip the direct call so
-  /// one OK press produces exactly one activation.
+  /// When UI mode has nothing usable to act on — the focused control was
+  /// unregistered when the detail closed — the press re-seats the cursor on
+  /// the nearest live control instead of falling into discovery behind UI
+  /// mode. Only an entirely empty registry ends UI mode.
   void _select() {
     final now = DateTime.now();
     if (_lastSelectAt != null &&
@@ -530,15 +594,20 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
     }
     _lastSelectAt = now;
     if (state.chromeFocused) {
-      final focusedId = state.spatialFocusId;
-      final chrome = focusedId == null ? null : _chromeTargets[focusedId];
-      if (chrome != null) {
-        if (_chromeHasPrimaryFocus(chrome)) return;
-        chrome.onActivate?.call();
+      final activeId = _activeChromeId();
+      final chrome = activeId == null ? null : _chromeTargets[activeId];
+      if (chrome != null && chrome.enabled && chrome.onActivate != null) {
+        if (state.spatialFocusId != activeId) {
+          state = state.copyWith(spatialFocusId: activeId);
+        }
+        chrome.onActivate!.call();
         return;
       }
-      // Focused UI layer with no chrome target: drop back to discovery
-      // instead of doing nothing with the child's press.
+      final reseat = _seedChromeId();
+      if (reseat != null) {
+        _focusChrome(reseat);
+        return;
+      }
       state = state.copyWith(chromeFocused: false);
     }
     final ui = _explorer.state;
@@ -569,8 +638,12 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
 
   // -- back -------------------------------------------------------------------
 
-  /// Predictable BACK: quick select > celebration > detail > mark >
-  /// secondary UI focus > missions > system.
+  /// Predictable BACK, one layer per press: quick select > celebration >
+  /// detail > UI focus mode > mark > missions > system.
+  ///
+  /// UI focus mode sits above the mark because that is how it is entered: a
+  /// detail auto-enters it, so leaving detail must hand back to UI mode (its
+  /// own layer) before the discovery mark underneath is unwound.
   TvBackOutcome handleBack(TvBackContext back) {
     if (state.quickSelectVisible) {
       dismissQuickSelect();
@@ -584,14 +657,14 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
       _explorer.closeDetail();
       return TvBackOutcome.closedDetail;
     }
+    if (state.chromeFocused) {
+      exitChrome();
+      return TvBackOutcome.exitedChrome;
+    }
     if (_explorer.state.markedTargetId != null) {
       _scene.cancelZoomFlight();
       _explorer.clearMarkedTarget();
       return TvBackOutcome.clearedMark;
-    }
-    if (state.chromeFocused) {
-      exitChrome();
-      return TvBackOutcome.exitedChrome;
     }
     if (back.missionsOpen) {
       back.exitMissions();
@@ -684,14 +757,35 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
   /// Hands the D-pad to the quiet secondary controls (pause, help).
   ///
   /// Discovery navigation never enters this on its own: the solar system
-  /// owns the arrows until the child (or the BACK shuttle offering the
-  /// cluster) explicitly asks for UI.
-  void enterChrome() {
+  /// owns the arrows until the child (or the BACK shuttle, or a detail open)
+  /// explicitly asks for UI. The first stop is seeded immediately — [preferId]
+  /// when the caller knows the control (a detail's facts pill), otherwise
+  /// whatever already holds focus, otherwise the nearest registered control to
+  /// the viewport centre — so the ring and OK both point at a real button the
+  /// instant UI mode begins. The focus request itself is deferred a microtask:
+  /// registration and focus live on the widgets, which settle after this
+  /// synchronous state change.
+  void enterChrome({String? preferId}) {
     _chromeTimer?.cancel();
     state = state.copyWith(chromeFocused: true, chromeVisible: true);
+    final seed = _seedChromeId(preferId: preferId);
+    if (seed == null) return;
+    state = state.copyWith(spatialFocusId: seed);
+    Future<void>.microtask(() {
+      try {
+        _focusChrome(seed);
+      } catch (_) {
+        // Unmounted target (tab switched under the seed): the next arrow or
+        // OK re-seats from the registry, which is the source of truth.
+      }
+    });
   }
 
   /// Returns the D-pad to the solar system.
+  ///
+  /// Flutter focus returns with it: the handler listens for this transition
+  /// and re-seats the scene scope, so no ring is left stranded on a chrome
+  /// button while discovery owns the arrows.
   void exitChrome() {
     if (!state.chromeFocused) return;
     state = state.copyWith(chromeFocused: false);
@@ -699,10 +793,16 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
   }
 
   /// Briefly (re)shows the quiet controls; they fade on [chromeTimeout].
+  ///
+  /// They never fade while UI focus mode owns the D-pad: a control that is
+  /// navigable must be visible, and the registry drops hidden controls out of
+  /// the graph anyway.
   void _pokeChrome() {
     _chromeTimer?.cancel();
     if (!state.chromeVisible) state = state.copyWith(chromeVisible: true);
+    if (state.chromeFocused) return;
     _chromeTimer = Timer(chromeTimeout, () {
+      if (state.chromeFocused) return;
       state = copyWithoutChrome();
     });
   }

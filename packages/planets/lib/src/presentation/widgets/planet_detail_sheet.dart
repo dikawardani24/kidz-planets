@@ -287,8 +287,10 @@ class DetailSideRails extends ConsumerWidget {
 ///
 /// Detail mode gets its camera buttons from [DetailSideRails]; explore mode
 /// has nothing selected, so these drive the same scene APIs the pinch
-/// handlers use. Touch hosts only — TV has its own D-pad zoom chrome and would
-/// gain dead spatial targets from an on-screen rail.
+/// handlers use. The buttons publish themselves into the TV spatial registry
+/// when the host wires [onSpatialTarget], so on TV they are focusable TV
+/// controls whose OK does exactly what a tap does — no keyboard-only
+/// fallbacks.
 class ExploreZoomRail extends ConsumerWidget {
   const ExploreZoomRail({
     super.key,

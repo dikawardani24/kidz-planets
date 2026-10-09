@@ -310,18 +310,22 @@ class ExplorerScreen extends ConsumerWidget {
                     ),
 
                   // Explore-mode zoom controls on the right edge, mirroring the
-                  // detail rails' camera buttons. Touch only: TV navigates with
-                  // its D-pad zoom chrome and would gain dead focus targets
-                  // from an on-screen rail.
+                  // detail rails' camera buttons. The buttons register into
+                  // the TV spatial registry on TV, so zoom in/out/reset stay
+                  // real focusable, activatable TV controls.
                   if (!ui.hasSelection && shell.tab == AppTab.explore)
                     Positioned.fill(
                       child: ExploreZoomRail(
                         viewSize: viewportSize,
                         onSpatialTarget: isTv
-                            ? ref.read(tvExplorerControllerProvider.notifier).registerTarget
+                            ? ref
+                                  .read(tvExplorerControllerProvider.notifier)
+                                  .registerTarget
                             : null,
                         onUnregisterSpatialTarget: isTv
-                            ? ref.read(tvExplorerControllerProvider.notifier).unregisterTarget
+                            ? ref
+                                  .read(tvExplorerControllerProvider.notifier)
+                                  .unregisterTarget
                             : null,
                       ),
                     ),

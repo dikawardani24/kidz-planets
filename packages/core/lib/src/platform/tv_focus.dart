@@ -113,7 +113,10 @@ class _TvFocusableState extends State<TvFocusable> {
         ),
       },
       child: GestureDetector(
-        onTap: _invoke,
+        // Inert when there is no callback: a focus wrapper around someone
+        // else's tappable (the language picker's PopupMenuButton child, for
+        // one) must not join the gesture arena and swallow the parent's tap.
+        onTap: widget.onSelect == null ? null : _invoke,
         child: Builder(
           builder: (context) => frame(context, _focused, widget.child),
         ),
