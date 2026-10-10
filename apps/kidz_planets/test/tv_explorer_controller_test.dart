@@ -406,6 +406,19 @@ void main() {
   });
 
   group('rotation', () {
+    test('idle frames cost nothing: no held keys, no scene calls', () {
+      // The remote handler ticks advance() every vsync; with no held keys
+      // and settled velocities it must return before touching the scene, so
+      // the always-on ticker stays a no-op an idle optimization would only
+      // complicate.
+      final (_, scene, tv) = setup();
+      tv.advance(1 / 60);
+      tv.advance(1.0);
+      expect(scene.viewRotations, isEmpty);
+      expect(scene.objectRotations, isEmpty);
+      expect(scene.pinches, isEmpty);
+    });
+
     test('browse arrows never rotate', () {
       final (_, scene, tv) = setup();
       down(tv, TvRemoteKey.left, TvInputLayer.explorer);

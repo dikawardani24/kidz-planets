@@ -232,7 +232,15 @@ class ExplorerScreen extends ConsumerWidget {
               return Stack(
                 fit: StackFit.expand,
                 children: [
-                  const SolarSystemSceneView(),
+                  // The scene ticker pauses while the opaque avatar page
+                  // covers it (see [sceneViewTicksWhile]): no repaint, no
+                  // per-frame logic, no GPU raster for unseen pixels. Scene
+                  // graph, rig and clock resume untouched when it closes.
+                  SolarSystemSceneView(
+                    autoTick: sceneViewTicksWhile(
+                      avatarPageVisible: avatarPageVisible,
+                    ),
+                  ),
                   Positioned(
                     top: 0,
                     left: 0,

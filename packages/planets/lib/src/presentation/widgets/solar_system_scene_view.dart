@@ -13,11 +13,31 @@ import 'package:core/theme.dart';
 
 /// True 3D solar system rendered with flutter_scene (no WebView).
 class SolarSystemSceneView extends ConsumerStatefulWidget {
-  const SolarSystemSceneView({super.key});
+  const SolarSystemSceneView({super.key, this.autoTick = true});
+
+  /// Whether the view drives per-frame rendering, forwarded to
+  /// [SceneView.autoTick].
+  ///
+  /// Set false while a fully opaque overlay covers the scene (see
+  /// [sceneViewTicksWhile]): the view's ticker stops, so no repaint is
+  /// scheduled, no per-frame app logic runs, and the GPU rasterizes nothing
+  /// — while the scene graph, camera rig and simulation clock resume
+  /// untouched. Defaults to true.
+  final bool autoTick;
+
   @override
   ConsumerState<SolarSystemSceneView> createState() =>
       _SolarSystemSceneViewState();
 }
+
+/// Whether the scene view should drive per-frame rendering right now.
+///
+/// A mounted [SceneView] repaints every frame even when fully occluded, so an
+/// opaque cover means paying the whole scene raster for zero visible pixels.
+/// Only fully occluding overlays qualify: translucent dialogs and partial
+/// panels still show the live scene behind them and must keep it ticking.
+bool sceneViewTicksWhile({required bool avatarPageVisible}) =>
+    !avatarPageVisible;
 
 class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
   bool _buildStarted = false;
@@ -127,13 +147,23 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
             children: [
               SceneView(
                 controller.scene,
+                // Paused under opaque overlays (see [sceneViewTicksWhile]):
+                // the ticker stops and resumes through didUpdateWidget, and
+                // the clamped delta below absorbs the resume gap.
+                autoTick: widget.autoTick,
                 cameraBuilder: (elapsed) {
                   final camera = controller.buildCamera(ui);
                   _lastCamera = camera;
                   return camera;
                 },
                 onTick: (elapsed, deltaSeconds) {
-                  controller.tick(deltaSeconds, ui);
+                  // Clamp the frame delta: a hitch (or a resume after the
+                  // ticker paused under an overlay) must advance the clock by
+                  // at most one frame instead of teleporting orbits, spins
+                  // and flights forward by the whole gap. Ambient motion is
+                  // rate-based, so dropping the excess is invisible.
+                  final dt = deltaSeconds.clamp(0.0, 0.05);
+                  controller.tick(dt, ui);
                   // The scene just presented a frame with built content: the
                   // startup handover may now reveal the Explorer.
                   if (_ready && !_presentedReported) {
@@ -141,8 +171,8 @@ class _SolarSystemSceneViewState extends ConsumerState<SolarSystemSceneView> {
                     ref.read(explorerScenePresentedProvider.notifier).state =
                         true;
                   }
-                  _driveZoomFlight(controller, deltaSeconds);
-                  _applyZoomGlide(controller, deltaSeconds);
+                  _driveZoomFlight(controller, dt);
+                  _applyZoomGlide(controller, dt);
                   _refreshLabels(controller, size);
                 },
               ),
@@ -830,25 +860,29 @@ class _PlanetLabelsOverlay extends StatelessWidget {
         opacity: showLabels ? 1.0 : 0.0,
         duration: const Duration(milliseconds: 240),
         curve: Curves.easeOutCubic,
+        // Labels off means zero chips, not invisible ones: an opacity-0 chip
+        // still lays out, composites and repaints every frame while the
+        // camera moves, for pixels nobody can see.
         child: Stack(
           children: [
-            for (final frame in frames)
-              if (frame.visible &&
-                  frame.id != selectedId &&
-                  byId.containsKey(frame.id))
-                Positioned(
-                  left: frame.screenX - halfW,
-                  top: frame.screenY - 18,
-                  width: halfW * 2,
-                  child: _LabelChip(
-                    name: byId[frame.id]!.name,
-                    colorValue: byId[frame.id]!.colorValue,
-                    selected: frame.id == selectedId,
-                    marked: frame.id == markedId,
-                    planetId: frame.id,
-                    onMarkedTap: onMarkedTap,
+            if (showLabels)
+              for (final frame in frames)
+                if (frame.visible &&
+                    frame.id != selectedId &&
+                    byId.containsKey(frame.id))
+                  Positioned(
+                    left: frame.screenX - halfW,
+                    top: frame.screenY - 18,
+                    width: halfW * 2,
+                    child: _LabelChip(
+                      name: byId[frame.id]!.name,
+                      colorValue: byId[frame.id]!.colorValue,
+                      selected: frame.id == selectedId,
+                      marked: frame.id == markedId,
+                      planetId: frame.id,
+                      onMarkedTap: onMarkedTap,
+                    ),
                   ),
-                ),
           ],
         ),
       ),
