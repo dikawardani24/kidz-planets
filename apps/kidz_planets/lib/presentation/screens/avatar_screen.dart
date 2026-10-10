@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:avatar/state.dart';
@@ -9,6 +10,22 @@ import 'package:core/layout.dart';
 import 'package:core/platform.dart';
 import 'package:core/theme.dart';
 import 'package:kidz_planets/application/state/providers.dart';
+import 'package:kidz_planets/presentation/tv/tv_providers.dart';
+
+/// Maps the remote OK button to [ActivateIntent] inside the avatar page.
+///
+/// The app-root shortcuts live *above* the TV remote handler, which consumes
+/// select first — so without this inner mapping OK would fall through to the
+/// Explore controller behind the overlay instead of activating the focused
+/// avatar control. Arrows need no mapping: each [TvFocusable] already handles
+/// framework traversal. Mirrors the key set [tvRemoteKeyFor] recognizes.
+const _avatarSelectShortcuts = <ShortcutActivator, Intent>{
+  SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+  SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+  SingleActivator(LogicalKeyboardKey.numpadEnter): ActivateIntent(),
+  SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+  SingleActivator(LogicalKeyboardKey.gameButtonA): ActivateIntent(),
+};
 
 /// The dedicated avatar selection page: a 3D stage to meet the avatars, a
 /// choice between them, and one big button that saves the choice.
@@ -59,109 +76,135 @@ class _AvatarScreenState extends ConsumerState<AvatarScreen> {
     final ds = DesignScale.sharedOf(context);
     final isTv = ref.watch(isTelevisionProvider);
 
-    return Container(
-      color: AppTheme.space950,
-      child: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: ds.insets(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  _RoundButton(
-                    icon: Icons.arrow_back_rounded,
-                    tooltip: t.avatarBack,
-                    autofocus: isTv,
-                    onTap: () =>
-                        ref.read(appShellProvider.notifier).closeAvatarPage(),
-                  ),
-                  Expanded(
-                    child: Text(
-                      t.avatarPageTitle,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: ds.font(18),
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
+    // The page owns the D-pad while open: its own focus scope keeps
+    // traversal inside (never the app bar, scene or zoom behind it) and the
+    // inner OK mapping activates the focused control before the key can
+    // bubble to the remote handler's Explore fallthrough. Touch and mouse
+    // taps travel the same detectors as before.
+    return TvFocusContainer(
+      autofocusFirst: false,
+      // Shared identity with the remote handler: the void guard re-seats
+      // focus here while the page is open instead of the scene behind it.
+      scopeNode: ref.watch(tvAvatarScopeProvider),
+      child: Shortcuts(
+        shortcuts: _avatarSelectShortcuts,
+        child: Container(
+          color: AppTheme.space950,
+          child: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: ds.insets(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      _RoundButton(
+                        icon: Icons.arrow_back_rounded,
+                        tooltip: t.avatarBack,
+                        onTap: () => ref
+                            .read(appShellProvider.notifier)
+                            .closeAvatarPage(),
                       ),
-                    ),
-                  ),
-                  // Balances the back button so the title stays centred.
-                  SizedBox(width: ds.px(44)),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: ds.insets(horizontal: 16),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppTheme.space800.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(ds.radius(24)),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.08),
-                    ),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: AvatarPreview(
-                    avatarType: preview,
-                    controllerFactory: widget.controllerFactory,
+                      Expanded(
+                        child: Text(
+                          t.avatarPageTitle,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: ds.font(18),
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      // Balances the back button so the title stays centred.
+                      SizedBox(width: ds.px(44)),
+                    ],
                   ),
                 ),
-              ),
-            ),
-            SizedBox(height: ds.px(8)),
-            Text(
-              t.avatarPreviewHint,
-              style: TextStyle(
-                fontSize: ds.font(11),
-                fontWeight: FontWeight.w600,
-                color: Colors.white70,
-              ),
-            ),
-            SizedBox(height: ds.px(10)),
-            Padding(
-              padding: ds.insets(horizontal: 16),
-              child: Row(
-                children: [
-                  for (final type in AvatarType.values)
-                    Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.only(
-                          right: type == AvatarType.values.first ? ds.px(6) : 0,
-                          left: type == AvatarType.values.first ? 0 : ds.px(6),
-                        ),
-                        child: _AvatarCard(
-                          type: type,
-                          name: type == AvatarType.rocket
-                              ? t.avatarRocketName
-                              : t.avatarAstronautName,
-                          emoji: type == AvatarType.rocket ? '🚀' : '👨‍🚀',
-                          previewed: type == preview,
-                          current: type == saved,
-                          currentLabel: t.avatarCurrentBadge,
-                          onTap: () {
-                            if (type != preview) {
-                              setState(() => _previewType = type);
-                            }
-                          },
+                Expanded(
+                  child: Padding(
+                    padding: ds.insets(horizontal: 16),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppTheme.space800.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(ds.radius(24)),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.08),
                         ),
                       ),
+                      clipBehavior: Clip.antiAlias,
+                      child: AvatarPreview(
+                        avatarType: preview,
+                        controllerFactory: widget.controllerFactory,
+                      ),
                     ),
-                ],
-              ),
+                  ),
+                ),
+                SizedBox(height: ds.px(8)),
+                Text(
+                  t.avatarPreviewHint,
+                  style: TextStyle(
+                    fontSize: ds.font(11),
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white70,
+                  ),
+                ),
+                SizedBox(height: ds.px(10)),
+                Padding(
+                  padding: ds.insets(horizontal: 16),
+                  // Built from the enum, not hardcoded for two: a new
+                  // AvatarType appears here with no traversal changes, and
+                  // left/right walks the row in catalogue order.
+                  child: Row(
+                    children: [
+                      for (final type in AvatarType.values)
+                        Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.only(
+                              right: type == AvatarType.values.first
+                                  ? ds.px(6)
+                                  : 0,
+                              left: type == AvatarType.values.first
+                                  ? 0
+                                  : ds.px(6),
+                            ),
+                            child: _AvatarCard(
+                              type: type,
+                              name: type == AvatarType.rocket
+                                  ? t.avatarRocketName
+                                  : t.avatarAstronautName,
+                              emoji: type == AvatarType.rocket ? '🚀' : '👨‍🚀',
+                              previewed: type == preview,
+                              current: type == saved,
+                              currentLabel: t.avatarCurrentBadge,
+                              // Entering the page focuses the equipped avatar
+                              // (always a valid choice: it comes from the
+                              // same enum), so one OK previews nothing new
+                              // and arrows start from a meaningful place.
+                              autofocus: isTv && type == saved,
+                              onTap: () {
+                                if (type != preview) {
+                                  setState(() => _previewType = type);
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: ds.px(12)),
+                Padding(
+                  padding: ds.insets(horizontal: 16),
+                  child: _SelectButton(
+                    label: t.avatarSelectCta,
+                    busy: _saving,
+                    onTap: _selectAndClose,
+                  ),
+                ),
+                SizedBox(height: ds.px(12)),
+              ],
             ),
-            SizedBox(height: ds.px(12)),
-            Padding(
-              padding: ds.insets(horizontal: 16),
-              child: _SelectButton(
-                label: t.avatarSelectCta,
-                busy: _saving,
-                onTap: _selectAndClose,
-              ),
-            ),
-            SizedBox(height: ds.px(12)),
-          ],
+          ),
         ),
       ),
     );
@@ -183,6 +226,7 @@ class _AvatarCard extends StatelessWidget {
     required this.current,
     required this.currentLabel,
     required this.onTap,
+    this.autofocus = false,
   });
 
   final AvatarType type;
@@ -193,10 +237,14 @@ class _AvatarCard extends StatelessWidget {
   final String currentLabel;
   final VoidCallback onTap;
 
+  /// Grabs initial focus on TV when this is the equipped avatar.
+  final bool autofocus;
+
   @override
   Widget build(BuildContext context) {
     final ds = DesignScale.sharedOf(context);
     return TvFocusable(
+      autofocus: autofocus,
       onSelect: onTap,
       child: GestureDetector(
         onTap: onTap,
@@ -346,13 +394,11 @@ class _RoundButton extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.onTap,
-    this.autofocus = false,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback onTap;
-  final bool autofocus;
 
   @override
   Widget build(BuildContext context) {
@@ -361,7 +407,6 @@ class _RoundButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: TvFocusable(
-        autofocus: autofocus,
         onSelect: onTap,
         child: GestureDetector(
           onTap: onTap,

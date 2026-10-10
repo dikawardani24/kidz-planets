@@ -36,11 +36,7 @@ void main() {
               Positioned(
                 top: 100,
                 left: 200,
-                child: ancestor == null
-                    ? widget
-                    : ancestor is! Widget
-                    ? widget
-                    : _wrap(widget, ancestor),
+              child: ancestor == null ? widget : _wrap(widget, ancestor),
               ),
             ],
           ),

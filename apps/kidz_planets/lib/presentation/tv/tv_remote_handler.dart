@@ -107,12 +107,18 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
   /// Dismissing whatever held focus (home cards, detail pill) can orphan the
   /// focus tree; without this the remote goes silent until something happens
   /// to autofocus again. Dialogs and chrome scopes hold their own focus, so
-  /// this only ever fires from the void — never steals.
+  /// this only ever fires from the void — never steals. While the avatar
+  /// page is open the page's own scope is the seat, never the scene behind
+  /// the overlay.
   void _refocusFromVoid() {
     if (!mounted) return;
     final primary = FocusManager.instance.primaryFocus;
     if (primary == null || primary == FocusManager.instance.rootScope) {
-      _scope.requestFocus();
+      if (ref.read(appShellProvider).avatarPageVisible) {
+        ref.read(tvAvatarScopeProvider).requestFocus();
+      } else {
+        _scope.requestFocus();
+      }
     }
   }
 
@@ -158,6 +164,21 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
       ref.read(appShellProvider.notifier).closeAvatarPage();
       return KeyEventResult.handled;
     }
+    // The avatar page owns the D-pad while open. Arrows and OK already had
+    // their chance below: the page's own traversal moves focus and its inner
+    // shortcuts activate the focused control before keys bubble here. What
+    // arrives here was left alone down there — falling through would drive
+    // the Explore scene behind the overlay — so it is consumed without
+    // touching explorer state. BACK (above) keeps closing the page and
+    // play/pause (below) keeps the simulation clock.
+    if (shell.avatarPageVisible &&
+        (remoteKey == TvRemoteKey.up ||
+            remoteKey == TvRemoteKey.down ||
+            remoteKey == TvRemoteKey.left ||
+            remoteKey == TvRemoteKey.right ||
+            remoteKey == TvRemoteKey.center)) {
+      return KeyEventResult.handled;
+    }
     final layer = resolveTvInputLayer(
       modalOpen: celebrationVisible,
       missionOpen: shell.tab != AppTab.explore,
@@ -168,8 +189,7 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
       // The avatar layer only guards discovery: while UI focus mode owns the
       // D-pad, a focused companion is simply the next spatial stop — blocking
       // arrows there would strand the child on the rocket.
-      avatarFocused:
-          ref.read(tvAvatarFocusedProvider) && !chromeFocused,
+      avatarFocused: ref.read(tvAvatarFocusedProvider) && !chromeFocused,
     );
 
     // BACK in UI focus mode unwinds through the controller directly: the mode
@@ -298,6 +318,34 @@ class _TvRemoteHandlerState extends ConsumerState<TvRemoteHandler>
       if (previous == AppTab.explore && next != AppTab.explore && mounted) {
         ref.read(tvExplorerControllerProvider.notifier).exitChrome();
       }
+    });
+    // Closing the avatar page restores Explore focus for the active focus
+    // mode, whichever close path ran (remote BACK, Back button, Select).
+    // Menu Mode re-enters its chrome on the opener control — the top-bar
+    // avatar button that is still registered behind the overlay — while
+    // Planet Mode falls back to the scene scope through the void guard once
+    // the overlay releases focus. Explorer selection is never touched.
+    ref.listen<bool>(appShellProvider.select((s) => s.avatarPageVisible), (
+      previous,
+      next,
+    ) {
+      if (previous != true || next != false || !mounted) return;
+      final menuMode = ref.read(
+        tvExplorerControllerProvider.select((s) => s.chromeFocused),
+      );
+      if (!menuMode) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        try {
+          ref
+              .read(tvExplorerControllerProvider.notifier)
+              .enterChrome(preferId: 'chrome:avatar');
+        } catch (_) {
+          // The opener unregistered under us (tab switched behind the
+          // page): the next arrow or OK re-seats from the registry, which
+          // is the source of truth.
+        }
+      });
     });
     return Focus(
       focusNode: _scope,

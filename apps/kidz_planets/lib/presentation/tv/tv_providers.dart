@@ -89,6 +89,17 @@ final tvChromeScopeProvider = Provider<FocusScopeNode>((ref) {
   return node;
 });
 
+/// Identity of the avatar selection page's focus scope.
+///
+/// Owned here so the remote handler can re-seat focus into the open page
+/// (instead of the Explore scene behind it) and restore Explore focus on
+/// close, without either side reaching into the other's widget tree.
+final tvAvatarScopeProvider = Provider<FocusScopeNode>((ref) {
+  final node = FocusScopeNode(debugLabel: 'tvAvatarPage');
+  ref.onDispose(node.dispose);
+  return node;
+});
+
 /// The remote-first explorer driver, in catalogue order.
 ///
 /// One instance per container, like the explorer itself; the touch UI never
