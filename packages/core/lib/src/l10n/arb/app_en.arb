@@ -370,5 +370,13 @@
   "avatarBack": "Back",
   "@avatarBack": {
     "description": "Button that leaves the avatar page without saving."
+  },
+  "tooltipSwitchToMenu": "Switch to Menu Mode",
+  "@tooltipSwitchToMenu": {
+    "description": "Tooltip of the Explore top-bar button that hands the TV remote from planets to UI controls."
+  },
+  "tooltipSwitchToPlanet": "Switch to Planet Mode",
+  "@tooltipSwitchToPlanet": {
+    "description": "Tooltip of the Explore top-bar button that hands the TV remote from UI controls back to planets."
   }
 }

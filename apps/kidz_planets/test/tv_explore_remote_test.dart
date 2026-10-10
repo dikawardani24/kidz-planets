@@ -55,9 +55,6 @@ class _FakeScene implements TvSceneOps {
   ) => null;
 }
 
-
-
-
 /// Widget-test overrides: every TV provider the Explore chrome touches, so the
 /// input chain runs without a device, a remote or a 3D scene.
 List<Override> tvOverrides({
@@ -97,8 +94,8 @@ Future<ProviderContainer> pumpExplore(
   required List<Override> overrides,
   required List<Widget> Function() chrome,
 }) async {
-  tester.view.physicalSize = const Size(800, 1200) *
-      tester.view.devicePixelRatio;
+  tester.view.physicalSize =
+      const Size(800, 1200) * tester.view.devicePixelRatio;
   addTearDown(tester.view.reset);
   final container = ProviderContainer(overrides: overrides);
   addTearDown(container.dispose);
@@ -106,7 +103,9 @@ Future<ProviderContainer> pumpExplore(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
-        home: TvRemoteHandler(child: Scaffold(body: Stack(children: chrome()))),
+        home: TvRemoteHandler(
+          child: Scaffold(body: Stack(children: chrome())),
+        ),
       ),
     ),
   );
@@ -140,11 +139,7 @@ Future<ProviderContainer> pumpExplore(
 /// One focusable button for the harness, exactly like the Explore icons:
 /// registered target + real callback counter.
 class _Probe extends StatelessWidget {
-  _Probe({
-    required this.id,
-    required this.rect,
-    required this.counter,
-  });
+  const _Probe({required this.id, required this.rect, required this.counter});
 
   final String id;
   final Rect rect;
@@ -195,9 +190,14 @@ void main() {
       if (id.startsWith('chrome:explore-')) return zoomCalls;
       return tabCalls;
     }
+
     return [
       for (final entry in exploreRects().entries)
-        _Probe(id: entry.key, rect: entry.value, counter: counterFor(entry.key)),
+        _Probe(
+          id: entry.key,
+          rect: entry.value,
+          counter: counterFor(entry.key),
+        ),
     ];
   }
 
@@ -247,7 +247,8 @@ void main() {
                   ? LogicalKeyboardKey.arrowDown
                   : LogicalKeyboardKey.arrowUp);
         if (cur != null && recent.contains(cur)) {
-          key = primary == LogicalKeyboardKey.arrowLeft ||
+          key =
+              primary == LogicalKeyboardKey.arrowLeft ||
                   primary == LogicalKeyboardKey.arrowRight
               ? (d.dy > 0
                     ? LogicalKeyboardKey.arrowDown
@@ -285,6 +286,12 @@ void main() {
       ),
     );
     final tv = container.read(tvExplorerControllerProvider.notifier);
+    // Planet Mode (the default) admits only the mode toggle: the UI controls
+    // below join the graph once Menu Mode owns the D-pad.
+    expect(tv.state.focusMode, TvFocusMode.planet);
+    tv.switchToMenu();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     expect(
       tv.registeredTargetIds,
       containsAll(const [
@@ -301,54 +308,48 @@ void main() {
     await flushTimers(tester);
   });
 
-  testWidgets(
-    'BACK enters UI focus, arrows reach the top row, OK fires it',
-    (tester) async {
-      final topCalls = <int>[];
-      final zoomCalls = <int>[];
-      final tabCalls = <int>[];
-      final container = await pumpExplore(
-        tester,
-        overrides: tvOverrides(television: true),
-        chrome: () => exploreChrome(
-          topCalls: topCalls,
-          zoomCalls: zoomCalls,
-          tabCalls: tabCalls,
-        ),
-      );
-      final tv = container.read(tvExplorerControllerProvider.notifier);
-      // Discovery owns the D-pad first: arrows move celestial, never chrome.
-      await press(tester, LogicalKeyboardKey.arrowRight);
-      expect(tv.state.chromeFocused, isFalse);
-      expect(tv.state.spatialFocusId, isNot(startsWith('chrome:')));
+  testWidgets('BACK enters UI focus, arrows reach the top row, OK fires it', (
+    tester,
+  ) async {
+    final topCalls = <int>[];
+    final zoomCalls = <int>[];
+    final tabCalls = <int>[];
+    final container = await pumpExplore(
+      tester,
+      overrides: tvOverrides(television: true),
+      chrome: () => exploreChrome(
+        topCalls: topCalls,
+        zoomCalls: zoomCalls,
+        tabCalls: tabCalls,
+      ),
+    );
+    final tv = container.read(tvExplorerControllerProvider.notifier);
+    // Discovery owns the D-pad first: arrows move celestial, never chrome.
+    await press(tester, LogicalKeyboardKey.arrowRight);
+    expect(tv.state.chromeFocused, isFalse);
+    expect(tv.state.spatialFocusId, isNot(startsWith('chrome:')));
 
-      // BACK with empty hands offers UI focus; arrows reach the top strip.
-      // (The opening arrow may leave a discovery mark behind; the first BACK
-      // then unwinds exactly one layer — the mark — and the second offers UI.)
+    // BACK with empty hands offers UI focus; arrows reach the top strip.
+    // (The opening arrow may leave a discovery mark behind; the first BACK
+    // then unwinds exactly one layer — the mark — and the second offers UI.)
+    await press(tester, LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 50));
+    if (!tv.state.chromeFocused) {
       await press(tester, LogicalKeyboardKey.escape);
       await tester.pump(const Duration(milliseconds: 50));
-      if (!tv.state.chromeFocused) {
-        await press(tester, LogicalKeyboardKey.escape);
-        await tester.pump(const Duration(milliseconds: 50));
-      }
-      expect(tv.state.chromeFocused, isTrue);
-      await reachId(
-        tester,
-        tv,
-        'chrome:top-language',
-        exploreRects(),
-      );
-      expect(
-        FocusManager.instance.primaryFocus?.debugLabel,
-        'tvTarget:chrome:top-language',
-      );
-      // OK activates the focused control through the real callback.
-      await press(tester, LogicalKeyboardKey.select);
-      await tester.pump(const Duration(milliseconds: 50));
-      expect(topCalls, hasLength(1));
-      await flushTimers(tester);
-    },
-  );
+    }
+    expect(tv.state.chromeFocused, isTrue);
+    await reachId(tester, tv, 'chrome:top-language', exploreRects());
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'tvTarget:chrome:top-language',
+    );
+    // OK activates the focused control through the real callback.
+    await press(tester, LogicalKeyboardKey.select);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(topCalls, hasLength(1));
+    await flushTimers(tester);
+  });
 
   testWidgets('arrows walk the whole top row and OK hits each button', (
     tester,
@@ -543,6 +544,11 @@ void main() {
 
     final container = await pump(banner: true);
     final tv = container.read(tvExplorerControllerProvider.notifier);
+    // Registration follows the focus mode: parked-out Planet Mode controls
+    // are invisible to the graph until Menu Mode re-admits them.
+    tv.switchToMenu();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     expect(tv.registeredTargetIds, contains('chrome:mission-banner'));
     await pump(banner: false);
     await tester.pump();

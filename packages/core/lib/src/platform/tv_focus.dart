@@ -24,6 +24,7 @@ class TvFocusable extends StatefulWidget {
     this.onFocusChange,
     this.builder,
     this.scaleOnFocus = true,
+    this.focusable = true,
     this.consumeDirectionalKeys = true,
   });
 
@@ -48,6 +49,15 @@ class TvFocusable extends StatefulWidget {
 
   /// Slightly grows the control while focused. Off for full-bleed cards.
   final bool scaleOnFocus;
+
+  /// Whether this control may take D-pad focus right now.
+  ///
+  /// When false the child is wrapped in [ExcludeFocus] (no traversal, no
+  /// autofocus, no OK-via-focus-system) while the touch/mouse tap keeps
+  /// working through the [GestureDetector] below. The Explore screen sets
+  /// this false for chrome controls while Planet Mode owns the D-pad, and
+  /// for nothing else: it is focus isolation, not a visual or tap change.
+  final bool focusable;
 
   /// When false, arrow keys bubble to the Explorer spatial navigator instead
   /// of Flutter's [DirectionalFocusIntent] traversal. OK/Activate still works.
@@ -84,10 +94,10 @@ class _TvFocusableState extends State<TvFocusable> {
           scale: widget.scaleOnFocus,
           child: child,
         );
-    return FocusableActionDetector(
+    final detector = FocusableActionDetector(
       focusNode: _node,
-      autofocus: widget.autofocus,
-      enabled: widget.onSelect != null,
+      autofocus: widget.autofocus && widget.focusable,
+      enabled: widget.onSelect != null && widget.focusable,
       onFocusChange: (focused) {
         if (mounted && focused != _focused) setState(() => _focused = focused);
         widget.onFocusChange?.call(focused);
@@ -122,6 +132,10 @@ class _TvFocusableState extends State<TvFocusable> {
         ),
       ),
     );
+    // Unfocusable keeps every tap identical while dropping out of D-pad
+    // focus traversal entirely: the mode gate, not a disabled button.
+    if (!widget.focusable) return ExcludeFocus(child: detector);
+    return detector;
   }
 }
 

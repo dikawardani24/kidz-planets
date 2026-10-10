@@ -138,3 +138,29 @@ extension TvControlModeX on TvControlMode {
       ? TvControlMode.rotate
       : TvControlMode.browse;
 }
+
+/// Which half of the Explore screen owns the TV D-pad right now.
+///
+/// The two modes are exclusive: exactly one group of targets participates in
+/// D-pad focus traversal at a time, plus the single mode-toggle button which
+/// is reachable in both. This is independent from [TvControlMode] (camera
+/// browse vs rotate): the focus mode decides *which* targets the arrows may
+/// reach, the control mode decides *what* the arrows do once there.
+enum TvFocusMode {
+  /// Planets and moons (following the discovery graph) plus the toggle.
+  ///
+  /// App-bar buttons, settings, avatar controls, zoom buttons and every
+  /// other UI control sit out D-pad focus traversal. Touch interaction is
+  /// unaffected: tapping anything still works exactly as before.
+  planet,
+
+  /// Interactive UI buttons, app-bar actions, zoom controls, the avatar and
+  /// the toggle. Planet and moon objects take no D-pad input.
+  menu,
+}
+
+extension TvFocusModeX on TvFocusMode {
+  /// The other mode. Used by the single on-screen mode-toggle button.
+  TvFocusMode get toggled =>
+      this == TvFocusMode.planet ? TvFocusMode.menu : TvFocusMode.planet;
+}

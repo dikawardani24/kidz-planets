@@ -16,6 +16,13 @@ import 'package:planets/state.dart';
 
 import 'tv_discovery_graph.dart';
 
+/// Registry id of the single Planet/Menu mode-toggle button.
+///
+/// The toggle participates in D-pad focus traversal in *both* focus modes
+/// while every other chrome control sits out Planet Mode (see [TvFocusMode]).
+/// Exactly one widget may use this id: the toggle in the Explore top bar.
+const tvModeToggleTargetId = 'chrome:mode-toggle';
+
 /// What BACK needs from the shell, which the explorer must not know about.
 ///
 /// The controller decides the order (celebration > detail > mark > missions);
@@ -108,6 +115,15 @@ class TvExplorerUiState extends Equatable {
   /// Null means nothing selected yet. Always visible via mark/focus visuals.
   final String? spatialFocusId;
 
+  /// Which half of the Explore screen owns the TV D-pad right now.
+  ///
+  /// Derived from [chromeFocused] — the single source of truth — so the two
+  /// names can never disagree and no duplicate mode state exists. Planet Mode
+  /// is the default ([chromeFocused] starts false): the child lands directly
+  /// in the solar system.
+  TvFocusMode get focusMode =>
+      chromeFocused ? TvFocusMode.menu : TvFocusMode.planet;
+
   TvExplorerUiState copyWith({
     TvControlMode? mode,
     bool? hintVisible,
@@ -198,6 +214,17 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
   /// Relationship-first navigation model (primaries sideways, moons via
   /// their parent). Derived from the planet catalogue, never hardcoded.
   final TvDiscoveryGraph _discovery;
+
+  /// Last celestial target seen while Planet Mode owned the D-pad.
+  ///
+  /// Restoration memory for the mode toggle only — never a second cursor:
+  /// [_navigateSpatial] and [ensureCursor] keep steering the live cursor, and
+  /// switching back to Planet Mode re-seats it here when still valid.
+  String? _lastPlanetId;
+
+  /// Last chrome control seen while Menu Mode owned the D-pad (toggle
+  /// excluded: it needs no restoration, it is reachable in both modes).
+  String? _lastMenuId;
 
   final Set<TvRemoteKey> _held = {};
   double _velX = 0;
@@ -408,24 +435,40 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
   ///
   /// Two separated layers share one remote but never one step:
   ///
-  /// - Discovery (default): the D-pad walks the [TvDiscoveryGraph] —
-  ///   primaries sideways, moons through their parent. Chrome controls are
-  ///   never candidates here, so ordinary exploring cannot land on zoom,
-  ///   settings, or any other UI.
-  /// - UI ([chromeFocused]): the D-pad walks the registered chrome controls
-  ///   only, entered explicitly via [enterChrome] and left with BACK.
+  /// - Discovery (Planet Mode, default): the D-pad walks the
+  ///   [TvDiscoveryGraph] — primaries sideways, moons through their parent.
+  ///   Chrome controls are never candidates here, so ordinary exploring
+  ///   cannot land on zoom, settings, or any other UI. The single exception
+  ///   is the mode toggle: a step with no meaningful related object offers
+  ///   it (instead of staying silent) so Menu Mode stays D-pad-reachable,
+  ///   and arrows while it holds focus hand the D-pad back to the system.
+  /// - UI (Menu Mode, [chromeFocused]): the D-pad walks the registered
+  ///   chrome controls only, entered explicitly via [enterChrome] (or the
+  ///   mode toggle) and left with BACK or the toggle.
   void _navigateSpatial(TvRemoteKey directionKey) {
     if (state.chromeFocused) {
       _navigateChrome(directionKey);
+      return;
+    }
+    // The toggle is the only chrome target reachable in Planet Mode: arrows
+    // while it holds focus return the D-pad to the solar system instead of
+    // stepping anywhere, so focus can never strand on UI while discovery
+    // owns the arrows. Mark and selection are untouched.
+    if (_primaryFocusedChromeId() == tvModeToggleTargetId) {
+      _abandonToggleFocus();
       return;
     }
     final ui = _explorer.state;
     final currentId =
         ui.selectedPlanetId ?? ui.markedTargetId ?? state.spatialFocusId;
     final nextId = _discovery.step(currentId, directionKey);
-    // No meaningful related object: stay put. Never jump to unrelated UI
-    // just to make every press do something.
-    if (nextId == null) return;
+    // No meaningful related object: offer the mode toggle rather than going
+    // quiet, so Menu Mode is always a press or two away. Only the D-pad
+    // cursor moves — the explorer mark and selection never change here.
+    if (nextId == null) {
+      _focusToggle();
+      return;
+    }
     _focusDiscovery(nextId);
   }
 
@@ -489,13 +532,19 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
   /// An explicit preference (the facts pill a detail open is about to
   /// autofocus) wins even before it registers — its own autofocus provides the
   /// focus, and [_activeChromeId] reconciles cursor and focus from then on.
-  /// Otherwise: whatever already holds focus, then the nearest control to the
-  /// viewport centre, then simply the first registered one.
+  /// Next wins the Menu Mode target remembered by the previous visit, when it
+  /// is still registered and enabled: toggling back lands where the child
+  /// left off. Otherwise: whatever already holds focus, then the nearest
+  /// control to the viewport centre, then simply the first registered one.
   String? _seedChromeId({String? preferId}) {
     if (preferId != null) return preferId;
-    // A stored chrome id from an *earlier* UI-focus session is not a fresh
-    // seed: entering UI mode must land on the best control for now, not
-    // wherever the cursor was left last time. (Once inside chrome mode, the
+    final last = _lastMenuId;
+    final lastTarget = last == null ? null : _chromeTargets[last];
+    if (lastTarget != null && lastTarget.enabled) return last;
+    // Otherwise the cursor from an earlier session is ignored on purpose:
+    // entering UI mode must land on the best control for now, not wherever
+    // it was left last time — except the remembered toggle-visit target
+    // above, which is an explicit restore. (Once inside chrome mode, the
     // cursor is the source of truth for arrows and OK — [_activeChromeId].)
     final focused = _primaryFocusedChromeId();
     if (focused != null) return focused;
@@ -535,14 +584,88 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
       if (state.spatialFocusId != id) {
         state = state.copyWith(spatialFocusId: id);
       }
+      _lastPlanetId = id;
       return;
     }
     state = state.copyWith(spatialFocusId: id, chromeFocused: false);
+    _lastPlanetId = id;
     _scene.cancelZoomFlight();
     if (ui.hasSelection) {
       _explorer.selectPlanet(id);
     } else {
       _explorer.markTarget(id);
+    }
+  }
+
+  /// Offers the mode toggle from Planet Mode: the D-pad cursor parks on it
+  /// (requesting real Flutter focus so the ring follows) while the explorer
+  /// mark, selection and detail state stay exactly as they were. No button
+  /// is activated and no detail opens — the next OK simply switches modes
+  /// (see [_select]).
+  void _focusToggle() {
+    state = state.copyWith(spatialFocusId: tvModeToggleTargetId);
+    final node = _chromeTargets[tvModeToggleTargetId]?.focusNode;
+    if (node == null) return;
+    // Re-entrant focus requests during a traversal callback can throw;
+    // the visible ring follows on the next frame regardless.
+    Future.microtask(() {
+      try {
+        node.requestFocus();
+      } catch (_) {}
+    });
+  }
+
+  /// Returns the D-pad from the toggle to the solar system.
+  ///
+  /// Re-seats the cursor on the last Planet Mode target when still valid
+  /// (safe fallback otherwise) and releases Flutter focus: the remote
+  /// handler reseats the scene scope once focus dies, so no ring is left
+  /// stranded on the toggle while discovery owns the arrows.
+  void _abandonToggleFocus() {
+    final restore = _restorablePlanetId();
+    if (restore != null && state.spatialFocusId != restore) {
+      state = state.copyWith(spatialFocusId: restore);
+    }
+    try {
+      _chromeTargets[tvModeToggleTargetId]?.focusNode?.unfocus();
+    } catch (_) {}
+  }
+
+  /// Best Planet Mode cursor for a mode return: the remembered target while
+  /// the discovery graph still knows it, otherwise the live selection/mark,
+  /// otherwise the stored cursor, otherwise the first primary. Never null
+  /// while the catalogue is non-empty.
+  String? _restorablePlanetId() {
+    final ui = _explorer.state;
+    final last = _lastPlanetId;
+    if (last != null && _discovery.knows(last)) return last;
+    final live = ui.selectedPlanetId ?? ui.markedTargetId;
+    if (live != null && _discovery.knows(live)) return live;
+    final cursor = state.spatialFocusId;
+    if (cursor != null && _discovery.knows(cursor)) return cursor;
+    return _discovery.primaries.isEmpty ? null : _discovery.primaries.first;
+  }
+
+  /// Snapshots the Planet Mode side before Menu Mode takes the D-pad, so the
+  /// toggle back can restore it. The toggle id itself is never remembered.
+  void _rememberPlanetSide() {
+    final ui = _explorer.state;
+    final current =
+        ui.selectedPlanetId ?? ui.markedTargetId ?? state.spatialFocusId;
+    if (current != null &&
+        current != tvModeToggleTargetId &&
+        _discovery.knows(current)) {
+      _lastPlanetId = current;
+    }
+  }
+
+  /// Snapshots the Menu Mode side before Planet Mode takes the D-pad.
+  void _rememberMenuSide() {
+    final current = state.spatialFocusId;
+    if (current != null &&
+        current != tvModeToggleTargetId &&
+        _chromeTargets.containsKey(current)) {
+      _lastMenuId = current;
     }
   }
 
@@ -571,7 +694,9 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
   }
 
   /// OK: in UI focus mode, activate the focused control; otherwise visit the
-  /// discovery target.
+  /// discovery target. The mode toggle is reachable (and really focused) in
+  /// both modes, so OK while it holds focus always switches modes — it never
+  /// visits a body or fires a chrome control behind it.
   ///
   /// Chrome activation is a direct [TvRegisteredTarget.onActivate] call and
   /// deliberately *not* deferred to the focus system's `ActivateIntent`: the
@@ -593,6 +718,14 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
       return;
     }
     _lastSelectAt = now;
+    // The toggle owns real Flutter focus in both modes: OK on it switches
+    // modes and nothing else. Checked before either layer so a focused
+    // toggle in Planet Mode toggles instead of visiting a body.
+    if (_primaryFocusedChromeId() == tvModeToggleTargetId) {
+      final toggle = _chromeTargets[tvModeToggleTargetId];
+      toggle?.onActivate?.call();
+      return;
+    }
     if (state.chromeFocused) {
       final activeId = _activeChromeId();
       final chrome = activeId == null ? null : _chromeTargets[activeId];
@@ -765,8 +898,12 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
   /// instant UI mode begins. The focus request itself is deferred a microtask:
   /// registration and focus live on the widgets, which settle after this
   /// synchronous state change.
+  ///
+  /// Entering Menu Mode snapshots the Planet Mode cursor first, so
+  /// [switchToPlanet] (and BACK out of chrome) can restore it.
   void enterChrome({String? preferId}) {
     _chromeTimer?.cancel();
+    _rememberPlanetSide();
     state = state.copyWith(chromeFocused: true, chromeVisible: true);
     final seed = _seedChromeId(preferId: preferId);
     if (seed == null) return;
@@ -785,11 +922,55 @@ class TvExplorerController extends StateNotifier<TvExplorerUiState> {
   ///
   /// Flutter focus returns with it: the handler listens for this transition
   /// and re-seats the scene scope, so no ring is left stranded on a chrome
-  /// button while discovery owns the arrows.
+  /// button while discovery owns the arrows. The Menu Mode cursor is
+  /// snapshotted first and the Planet Mode cursor restored, so a later
+  /// [switchToMenu] lands where the child left off and Planet Mode resumes
+  /// on its previous body. Explorer selection and detail state are untouched.
   void exitChrome() {
     if (!state.chromeFocused) return;
+    _rememberMenuSide();
     state = state.copyWith(chromeFocused: false);
+    final restore = _restorablePlanetId();
+    if (restore != null && state.spatialFocusId != restore) {
+      state = state.copyWith(spatialFocusId: restore);
+    }
     _pokeChrome();
+  }
+
+  // -- Planet/Menu focus modes -------------------------------------------------
+
+  /// Hands the D-pad to Menu Mode: UI controls, zoom, avatar and the toggle.
+  ///
+  /// Planets and moons take no D-pad input until [switchToPlanet]. Focus
+  /// lands on the previously used UI control when still available, otherwise
+  /// on the seeded control from [enterChrome]. Activates nothing.
+  void switchToMenu({String? preferId}) {
+    if (state.chromeFocused) return;
+    enterChrome(preferId: preferId);
+  }
+
+  /// Hands the D-pad back to Planet Mode: planets/moons plus the toggle.
+  ///
+  /// Restores the last Planet Mode target when still valid (safe fallback
+  /// otherwise) and releases chrome focus with it, so the next directional
+  /// key walks the discovery graph only. Clears no selection and closes no
+  /// detail view.
+  void switchToPlanet() {
+    if (!state.chromeFocused) return;
+    exitChrome();
+  }
+
+  /// Flips between [TvFocusMode.planet] and [TvFocusMode.menu].
+  ///
+  /// The single on-screen mode-toggle button drives this. No-ops are safe:
+  /// repeated presses while a transition settles cannot stack duplicate
+  /// mode changes or activations.
+  void toggleFocusMode() {
+    if (state.chromeFocused) {
+      switchToPlanet();
+    } else {
+      switchToMenu();
+    }
   }
 
   /// Briefly (re)shows the quiet controls; they fade on [chromeTimeout].

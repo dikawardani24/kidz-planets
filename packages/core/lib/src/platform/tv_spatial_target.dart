@@ -44,6 +44,7 @@ class TvSpatialTargetWidget extends StatefulWidget {
     this.scaleOnFocus = true,
     this.focusNode,
     this.onFocusChange,
+    this.participates = true,
   });
 
   final String id;
@@ -63,6 +64,16 @@ class TvSpatialTargetWidget extends StatefulWidget {
 
   /// Notified when focus arrives at or leaves this target.
   final ValueChanged<bool>? onFocusChange;
+
+  /// Whether this control takes part in TV D-pad navigation right now.
+  ///
+  /// When false the target leaves (or never joins) the spatial registry and
+  /// renders unfocusable, while touch and mouse taps keep working unchanged.
+  /// The Explore screen drives this from its Planet/Menu focus mode: chrome
+  /// controls sit out Planet Mode and rejoin Menu Mode, except the single
+  /// mode-toggle button which participates in both. Defaults to true so
+  /// standalone hosts keep today's behavior without passing anything.
+  final bool participates;
 
   @override
   State<TvSpatialTargetWidget> createState() => _TvSpatialTargetWidgetState();
@@ -135,6 +146,10 @@ class _TvSpatialTargetWidgetState extends State<TvSpatialTargetWidget> {
 
   void _report() {
     if (!mounted) return;
+    if (!widget.participates) {
+      _unregister();
+      return;
+    }
     final box = _key.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize || !_usable(box)) {
       _unregister();
@@ -170,6 +185,7 @@ class _TvSpatialTargetWidgetState extends State<TvSpatialTargetWidget> {
         onFocusChange: widget.onFocusChange,
         builder: widget.builder,
         scaleOnFocus: widget.scaleOnFocus,
+        focusable: widget.participates,
         consumeDirectionalKeys: false,
         child: widget.child,
       ),

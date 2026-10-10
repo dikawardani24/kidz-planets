@@ -42,6 +42,7 @@ class DetailDescriptionToggle extends ConsumerWidget {
     required this.planet,
     this.onSpatialTarget,
     this.onUnregisterSpatialTarget,
+    this.spatialTargetsParticipate = true,
   });
 
   final Planet planet;
@@ -50,6 +51,13 @@ class DetailDescriptionToggle extends ConsumerWidget {
   /// standalone hosts). Arrows bubble to the unified spatial navigator.
   final ValueChanged<TvSpatialTarget>? onSpatialTarget;
   final ValueChanged<String>? onUnregisterSpatialTarget;
+
+  /// Whether the pill takes part in TV D-pad navigation right now.
+  ///
+  /// Mode-agnostic bool driven by the host (the Explore screen passes its
+  /// Menu Mode state): false leaves the registry and D-pad traversal while
+  /// taps keep working. Defaults to true so standalone hosts are unchanged.
+  final bool spatialTargetsParticipate;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -61,6 +69,7 @@ class DetailDescriptionToggle extends ConsumerWidget {
     return TvSpatialTargetWidget(
       id: 'chrome:show-facts',
       control: TvChromeControl.other,
+      participates: spatialTargetsParticipate,
       onTarget: onSpatialTarget ?? (_) {},
       onUnregister: onUnregisterSpatialTarget ?? (_) {},
       autofocus: isTv,
@@ -131,6 +140,7 @@ class DetailSideRails extends ConsumerWidget {
     super.key,
     this.onSpatialTarget,
     this.onUnregisterSpatialTarget,
+    this.spatialTargetsParticipate = true,
   });
 
   /// Publishes one control into the app's TV spatial registry.
@@ -139,6 +149,10 @@ class DetailSideRails extends ConsumerWidget {
   /// keep their touch behavior and shared focus treatment either way.
   final ValueChanged<TvSpatialTarget>? onSpatialTarget;
   final ValueChanged<String>? onUnregisterSpatialTarget;
+
+  /// Whether the rail controls take part in TV D-pad navigation right now.
+  /// See [DetailDescriptionToggle.spatialTargetsParticipate].
+  final bool spatialTargetsParticipate;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -166,6 +180,7 @@ class DetailSideRails extends ConsumerWidget {
               TvSpatialTargetWidget(
                 id: 'chrome:listen',
                 control: TvChromeControl.playPause,
+                participates: spatialTargetsParticipate,
                 onTarget: onSpatialTarget ?? (_) {},
                 onUnregister: onUnregisterSpatialTarget ?? (_) {},
                 onSelect: () =>
@@ -199,6 +214,7 @@ class DetailSideRails extends ConsumerWidget {
               TvSpatialTargetWidget(
                 id: 'chrome:sound',
                 control: TvChromeControl.playPause,
+                participates: spatialTargetsParticipate,
                 onTarget: onSpatialTarget ?? (_) {},
                 onUnregister: onUnregisterSpatialTarget ?? (_) {},
                 onSelect: () =>
@@ -232,6 +248,7 @@ class DetailSideRails extends ConsumerWidget {
               TvSpatialTargetWidget(
                 id: 'chrome:play-mode',
                 control: TvChromeControl.other,
+                participates: spatialTargetsParticipate,
                 onTarget: onSpatialTarget ?? (_) {},
                 onUnregister: onUnregisterSpatialTarget ?? (_) {},
                 onSelect: notifier.toggleDetailCard,
@@ -276,6 +293,7 @@ class DetailSideRails extends ConsumerWidget {
             onClose: notifier.closeDetail,
             onSpatialTarget: onSpatialTarget,
             onUnregisterSpatialTarget: onUnregisterSpatialTarget,
+            spatialTargetsParticipate: spatialTargetsParticipate,
           ),
         ),
       ],
@@ -297,6 +315,7 @@ class ExploreZoomRail extends ConsumerWidget {
     required this.viewSize,
     this.onSpatialTarget,
     this.onUnregisterSpatialTarget,
+    this.spatialTargetsParticipate = true,
   });
 
   /// The current scene viewport, used as the zoom focal point when no body is
@@ -304,6 +323,10 @@ class ExploreZoomRail extends ConsumerWidget {
   final Size viewSize;
   final ValueChanged<TvSpatialTarget>? onSpatialTarget;
   final ValueChanged<String>? onUnregisterSpatialTarget;
+
+  /// Whether the rail buttons take part in TV D-pad navigation right now.
+  /// See [DetailDescriptionToggle.spatialTargetsParticipate].
+  final bool spatialTargetsParticipate;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -325,6 +348,7 @@ class ExploreZoomRail extends ConsumerWidget {
                 onTap: () => zoomExploreStep(ref, 1.18, viewSize: viewSize),
                 onSpatialTarget: onSpatialTarget,
                 onUnregisterSpatialTarget: onUnregisterSpatialTarget,
+                spatialTargetsParticipate: spatialTargetsParticipate,
               ),
               const SizedBox(height: 7),
               _ZoomButton(
@@ -333,6 +357,7 @@ class ExploreZoomRail extends ConsumerWidget {
                 onTap: () => zoomExploreStep(ref, 1 / 1.18, viewSize: viewSize),
                 onSpatialTarget: onSpatialTarget,
                 onUnregisterSpatialTarget: onUnregisterSpatialTarget,
+                spatialTargetsParticipate: spatialTargetsParticipate,
               ),
               // A wider gap than the zoom cluster, matching the detail rail so
               // the two ways back to a known framing read as their own group.
@@ -344,6 +369,7 @@ class ExploreZoomRail extends ConsumerWidget {
                 small: true,
                 onSpatialTarget: onSpatialTarget,
                 onUnregisterSpatialTarget: onUnregisterSpatialTarget,
+                spatialTargetsParticipate: spatialTargetsParticipate,
               ),
             ],
           ),
@@ -549,6 +575,7 @@ class _DetailZoomBar extends StatelessWidget {
     this.vertical = false,
     this.onSpatialTarget,
     this.onUnregisterSpatialTarget,
+    this.spatialTargetsParticipate = true,
   });
 
   final double zoom;
@@ -568,6 +595,7 @@ class _DetailZoomBar extends StatelessWidget {
 
   final ValueChanged<TvSpatialTarget>? onSpatialTarget;
   final ValueChanged<String>? onUnregisterSpatialTarget;
+  final bool spatialTargetsParticipate;
 
   @override
   Widget build(BuildContext context) {
@@ -579,6 +607,7 @@ class _DetailZoomBar extends StatelessWidget {
       onTap: onZoomOut,
       onSpatialTarget: onSpatialTarget,
       onUnregisterSpatialTarget: onUnregisterSpatialTarget,
+      spatialTargetsParticipate: spatialTargetsParticipate,
     );
     final badge = AppTheme.glass(
       pill: true,
@@ -599,6 +628,7 @@ class _DetailZoomBar extends StatelessWidget {
       onTap: onZoomIn,
       onSpatialTarget: onSpatialTarget,
       onUnregisterSpatialTarget: onUnregisterSpatialTarget,
+      spatialTargetsParticipate: spatialTargetsParticipate,
     );
     final reset = _ZoomButton(
       id: 'chrome:detail-reset',
@@ -607,6 +637,7 @@ class _DetailZoomBar extends StatelessWidget {
       small: true,
       onSpatialTarget: onSpatialTarget,
       onUnregisterSpatialTarget: onUnregisterSpatialTarget,
+      spatialTargetsParticipate: spatialTargetsParticipate,
     );
     final close = _ZoomButton(
       id: 'chrome:detail-close',
@@ -616,6 +647,7 @@ class _DetailZoomBar extends StatelessWidget {
       color: const Color(0xFFC7D2FE),
       onSpatialTarget: onSpatialTarget,
       onUnregisterSpatialTarget: onUnregisterSpatialTarget,
+      spatialTargetsParticipate: spatialTargetsParticipate,
     );
 
     if (vertical) {
@@ -664,6 +696,7 @@ class _ZoomButton extends ConsumerWidget {
     this.color = Colors.white,
     this.onSpatialTarget,
     this.onUnregisterSpatialTarget,
+    this.spatialTargetsParticipate = true,
   });
 
   final String id;
@@ -673,6 +706,7 @@ class _ZoomButton extends ConsumerWidget {
   final Color color;
   final ValueChanged<TvSpatialTarget>? onSpatialTarget;
   final ValueChanged<String>? onUnregisterSpatialTarget;
+  final bool spatialTargetsParticipate;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -685,6 +719,7 @@ class _ZoomButton extends ConsumerWidget {
                 ? TvChromeControl.zoomIn
                 : TvChromeControl.zoomOut)
           : TvChromeControl.other,
+      participates: spatialTargetsParticipate,
       onTarget: onSpatialTarget ?? (_) {},
       onUnregister: onUnregisterSpatialTarget ?? (_) {},
       onSelect: onTap,

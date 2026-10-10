@@ -613,14 +613,18 @@ class _MissionCompanionState extends ConsumerState<MissionCompanion>
     // instead of unreachable. Post-frame so the freshly mounted facts pill
     // (which autofocuses on every selection) loses deterministically rather
     // than racing it. Directly in build — listeners cannot live in the
-    // LayoutBuilder below.
+    // LayoutBuilder below. Menu Mode only: in Planet Mode the companion sits
+    // out D-pad focus, so focus must not be pulled onto an excluded target
+    // (touch encouragement still works there).
     ref.listen<AvatarMood>(appShellProvider.select((s) => s.avatarMood), (
       previous,
       next,
     ) {
       if (next == AvatarMood.wrong && previous != AvatarMood.wrong) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && ref.read(isTelevisionProvider)) {
+          if (mounted &&
+              ref.read(isTelevisionProvider) &&
+              ref.read(tvExplorerControllerProvider).chromeFocused) {
             _tvFocus.requestFocus();
           }
         });

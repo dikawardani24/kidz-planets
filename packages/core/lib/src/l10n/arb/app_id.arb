@@ -128,5 +128,7 @@
   "avatarSelectCta": "Pilih Avatar",
   "avatarCurrentBadge": "Aktif",
   "tooltipAvatar": "Pilih avatarmu",
-  "avatarBack": "Kembali"
+  "avatarBack": "Kembali",
+  "tooltipSwitchToMenu": "Beralih ke Mode Menu",
+  "tooltipSwitchToPlanet": "Beralih ke Mode Planet"
 }

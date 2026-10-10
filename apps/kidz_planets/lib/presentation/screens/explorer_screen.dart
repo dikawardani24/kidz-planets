@@ -55,6 +55,13 @@ class ExplorerScreen extends ConsumerWidget {
     // The TV controller itself is inert on touch devices, so watching it
     // unconditionally keeps the hook order stable across form factors.
     final isTv = ref.watch(isTelevisionProvider);
+    // Menu Mode admits the detail pills and zoom rails into D-pad traversal;
+    // Planet Mode parks them out (taps unaffected). Off-TV this is always
+    // true so touch and mouse behavior never changes.
+    final tvMenuMode = ref.watch(
+      tvExplorerControllerProvider.select((s) => s.chromeFocused),
+    );
+    final menuMode = !isTv || tvMenuMode;
     final avatarPageVisible = ref.watch(
       appShellProvider.select((s) => s.avatarPageVisible),
     );
@@ -279,6 +286,7 @@ class ExplorerScreen extends ConsumerWidget {
                           planet: ref.watch(
                             planetByIdProvider(ui.selectedPlanetId!),
                           ),
+                          spatialTargetsParticipate: menuMode,
                           onSpatialTarget: isTv
                               ? ref
                                     .read(tvExplorerControllerProvider.notifier)
@@ -296,6 +304,7 @@ class ExplorerScreen extends ConsumerWidget {
                   if (ui.hasSelection && shell.tab == AppTab.explore)
                     Positioned.fill(
                       child: DetailSideRails(
+                        spatialTargetsParticipate: menuMode,
                         onSpatialTarget: isTv
                             ? ref
                                   .read(tvExplorerControllerProvider.notifier)
@@ -317,6 +326,7 @@ class ExplorerScreen extends ConsumerWidget {
                     Positioned.fill(
                       child: ExploreZoomRail(
                         viewSize: viewportSize,
+                        spatialTargetsParticipate: menuMode,
                         onSpatialTarget: isTv
                             ? ref
                                   .read(tvExplorerControllerProvider.notifier)

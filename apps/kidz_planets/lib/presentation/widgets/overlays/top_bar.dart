@@ -6,7 +6,9 @@ import 'package:core/layout.dart';
 import 'package:core/platform.dart';
 import 'package:core/theme.dart';
 import 'package:kidz_planets/application/state/providers.dart';
+import 'package:kidz_planets/presentation/tv/tv_explorer_controller.dart';
 import 'package:kidz_planets/presentation/tv/tv_nav_target.dart';
+import 'package:kidz_planets/presentation/tv/tv_providers.dart';
 import 'package:kidz_planets/presentation/widgets/panels/mission_guide.dart';
 import 'package:planets/state.dart';
 
@@ -154,8 +156,46 @@ class ExplorerTopBar extends ConsumerWidget {
                 onTap: notifier.toggleOrbits,
               ),
             ),
+            // The single Planet/Menu focus-mode toggle. TV + Explore tab
+            // only: it hands the D-pad between planets and UI controls, so it
+            // has no meaning on other tabs (which reset to their own focus).
+            // Icon and label always name the *destination* mode.
+            if (isTv && isExploreTab) ...[
+              SizedBox(width: ds.px(6)),
+              _ModeToggleButton(),
+            ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The one button that switches the TV remote between Planet Mode (planets
+/// and moons own the D-pad) and Menu Mode (UI controls own it).
+///
+/// Always participates in D-pad traversal — in both modes — while every
+/// other chrome control sits out Planet Mode. Focus ring, sizing and tap
+/// behavior come from [_CircleButton], so it looks and feels like the
+/// neighbouring top-bar actions.
+class _ModeToggleButton extends ConsumerWidget {
+  const _ModeToggleButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppLocalizations.of(context);
+    final menuMode = ref.watch(
+      tvExplorerControllerProvider.select((s) => s.chromeFocused),
+    );
+    return Tooltip(
+      message: menuMode ? t.tooltipSwitchToPlanet : t.tooltipSwitchToMenu,
+      child: _CircleButton(
+        id: tvModeToggleTargetId,
+        modeToggle: true,
+        icon: menuMode ? Icons.public : Icons.menu,
+        color: AppTheme.accentAmber,
+        onTap: () =>
+            ref.read(tvExplorerControllerProvider.notifier).toggleFocusMode(),
       ),
     );
   }
@@ -242,6 +282,7 @@ class _CircleButton extends ConsumerWidget {
     required this.color,
     this.onTap,
     this.badge = false,
+    this.modeToggle = false,
   });
 
   final String id;
@@ -251,6 +292,10 @@ class _CircleButton extends ConsumerWidget {
 
   /// Draws a small marker in the corner, used to show the active language.
   final bool badge;
+
+  /// Whether this is the single Planet/Menu mode-toggle button: the only
+  /// chrome control that keeps D-pad focus in both focus modes.
+  final bool modeToggle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -307,6 +352,7 @@ class _CircleButton extends ConsumerWidget {
       id: id,
       control: TvChromeControl.other,
       onSelect: onTap,
+      modeToggle: modeToggle,
       child: circle,
     );
   }

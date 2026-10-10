@@ -13,6 +13,11 @@ import 'tv_providers.dart';
 /// no focus system of its own — the [TvSpatialTargetWidget] below it holds the
 /// single [FocusNode] and the single focus ring, so there is exactly one owner
 /// of registration, rendering, directional handling and OK activation.
+///
+/// Focus-mode gating: in Planet Mode every target except the single
+/// mode-toggle button ([modeToggle]) sits out D-pad focus traversal and the
+/// spatial registry, while touch and mouse taps keep working unchanged. Menu
+/// Mode re-admits them. The toggle participates in both modes.
 class TvNavTarget extends ConsumerWidget {
   const TvNavTarget({
     super.key,
@@ -25,6 +30,7 @@ class TvNavTarget extends ConsumerWidget {
     this.scaleOnFocus = true,
     this.focusNode,
     this.onFocusChange,
+    this.modeToggle = false,
   });
 
   final String id;
@@ -43,9 +49,20 @@ class TvNavTarget extends ConsumerWidget {
   /// Notified when focus arrives at or leaves this target.
   final ValueChanged<bool>? onFocusChange;
 
+  /// Whether this is the single Planet/Menu mode-toggle button: the only
+  /// target that participates in D-pad navigation in both focus modes.
+  final bool modeToggle;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(tvExplorerControllerProvider.notifier);
+    // Menu Mode (chromeFocused) admits every target; Planet Mode admits only
+    // the toggle. Watching (not reading) rebuilds the target on every mode
+    // switch so registration and traversal follow the active mode.
+    final menuMode = ref.watch(
+      tvExplorerControllerProvider.select((s) => s.chromeFocused),
+    );
+    final participates = modeToggle || menuMode;
     return TvSpatialTargetWidget(
       id: id,
       onSelect: onSelect,
@@ -55,6 +72,7 @@ class TvNavTarget extends ConsumerWidget {
       scaleOnFocus: scaleOnFocus,
       focusNode: focusNode,
       onFocusChange: onFocusChange,
+      participates: participates,
       onTarget: notifier.registerTarget,
       onUnregister: notifier.unregisterTarget,
       child: child,
